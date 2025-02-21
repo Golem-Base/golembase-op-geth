@@ -1200,6 +1200,27 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
 		result.AuthorizationList = tx.SetCodeAuthorizations()
+
+	case types.GolemBaseUpdateStorageTxType:
+		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			// price = min(gasTipCap + baseFee, gasFeeCap)
+			result.GasPrice = (*hexutil.Big)(effectiveGasPrice(tx, baseFee))
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+	case types.GolemBaseHousekeepingTxType:
+		// if a legacy transaction has an EIP-155 chain id, include it explicitly
+		if id := tx.ChainId(); id.Sign() != 0 {
+			result.ChainID = (*hexutil.Big)(id)
+		}
 	}
 	return result
 }

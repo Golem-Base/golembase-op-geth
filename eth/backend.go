@@ -402,6 +402,10 @@ func (s *Ethereum) APIs() []rpc.API {
 			Namespace: "net",
 			Service:   s.netRPCService,
 		},
+		{
+			Namespace: "golembase",
+			Service:   NewGolemBaseAPI(s),
+		},
 	}...)
 }
 

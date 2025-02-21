@@ -76,6 +76,8 @@ func (w *World) CreateEntity(
 	// Use the London signer since we're using a dynamic fee transaction
 	signer := types.LatestSignerForChainID(chainID)
 
+	// return nil, fmt.Errorf("signer: %#v", signer)
+
 	// Create and sign the transaction
 	signedTx, err := types.SignNewTx(w.FundedAccount.PrivateKey, signer, txdata)
 	if err != nil {
