@@ -171,8 +171,7 @@ func createMiner(t *testing.T) *Miner {
 	return miner
 }
 
-// Golem: test disabled
-func XTestRejectedConditionalTx(t *testing.T) {
+func TestRejectedConditionalTx(t *testing.T) {
 	miner := createMiner(t)
 	timestamp := uint64(time.Now().Unix())
 	uint64Ptr := func(num uint64) *uint64 { return &num }

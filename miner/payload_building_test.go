@@ -157,8 +157,7 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	return w, backend
 }
 
-// Golem: test disabled
-func XTestBuildPayload(t *testing.T) {
+func TestBuildPayload(t *testing.T) {
 	t.Run("no-tx-pool", func(t *testing.T) { testBuildPayload(t, true, false, nil) })
 	// no-tx-pool case with interrupt not interesting because no-tx-pool doesn't run
 	// the builder routine
@@ -176,8 +175,7 @@ func XTestBuildPayload(t *testing.T) {
 	t.Run("with-zero-params", func(t *testing.T) { testBuildPayload(t, true, false, zeroParams) })
 }
 
-// Golem: test disabled
-func XTestDAFilters(t *testing.T) {
+func TestDAFilters(t *testing.T) {
 	// Each test case inserts one pending small (DA cost 100) transaction followed by
 	// numDAFilterTxs transactions that have random calldata (min DA size >> 100)
 	totalTxs := numDAFilterTxs + 1

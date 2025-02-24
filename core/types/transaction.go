@@ -45,13 +45,11 @@ var (
 
 // Transaction types.
 const (
-	LegacyTxType                 = 0x00
-	AccessListTxType             = 0x01
-	DynamicFeeTxType             = 0x02
-	BlobTxType                   = 0x03
-	SetCodeTxType                = 0x04
-	GolemBaseUpdateStorageTxType = 0x07
-	GolemBaseHousekeepingTxType  = 0x7b
+	LegacyTxType     = 0x00
+	AccessListTxType = 0x01
+	DynamicFeeTxType = 0x02
+	BlobTxType       = 0x03
+	SetCodeTxType    = 0x04
 )
 
 // Transaction is an Ethereum transaction.
@@ -223,10 +221,6 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(SetCodeTx)
 	case DepositTxType:
 		inner = new(DepositTx)
-	case GolemBaseUpdateStorageTxType:
-		inner = new(GolemBaseUpdateStorageTx)
-	case GolemBaseHousekeepingTxType:
-		inner = new(GolemBaseHousekeepingTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}

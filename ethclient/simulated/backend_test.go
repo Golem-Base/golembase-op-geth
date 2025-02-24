@@ -158,8 +158,7 @@ func TestAdjustTime(t *testing.T) {
 	}
 }
 
-// Golem: test disabled
-func XTestSendTransaction(t *testing.T) {
+func TestSendTransaction(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 

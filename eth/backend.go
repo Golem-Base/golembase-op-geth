@@ -48,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/golem-base/wal"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/sequencerapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
@@ -230,7 +229,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
-
 	if config.OverrideOptimismCanyon != nil {
 		overrides.OverrideOptimismCanyon = config.OverrideOptimismCanyon
 	}
@@ -254,16 +252,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	overrides.ApplySuperchainUpgrades = config.ApplySuperchainUpgrades
 
-	walDir := stack.Config().GolemBaseWriteAheadLogDir
-
-	if walDir != "" {
-		eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, func(block *types.Block, receipts []*types.Receipt) error {
-			return wal.WriteLogForBlock(walDir, block, receipts)
-		})
-	} else {
-		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory)
-	}
-
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory)
 	if err != nil {
 		return nil, err
 	}
@@ -412,10 +401,6 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "net",
 			Service:   s.netRPCService,
-		},
-		{
-			Namespace: "golembase",
-			Service:   NewGolemBaseAPI(s),
 		},
 	}...)
 }

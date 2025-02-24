@@ -330,34 +330,25 @@ func NewLondonSigner(chainId *big.Int) Signer {
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
-
-	switch tx.Type() {
-	case GolemBaseHousekeepingTxType:
-		return common.HexToAddress("0xdeadbeef"), nil
-	case DepositTxType:
+	if tx.Type() == DepositTxType {
 		switch tx.inner.(type) {
 		case *DepositTx:
 			return tx.inner.(*DepositTx).From, nil
 		case *depositTxWithNonce:
 			return tx.inner.(*depositTxWithNonce).From, nil
-
-		default:
-			return common.Address{}, ErrTxTypeNotSupported
 		}
-
-	case DynamicFeeTxType, GolemBaseUpdateStorageTxType:
-		V, R, S := tx.RawSignatureValues()
-		// DynamicFee txs are defined to use 0 and 1 as their recovery
-		// id, add 27 to become equivalent to unprotected Homestead signatures.
-		V = new(big.Int).Add(V, big.NewInt(27))
-		if tx.ChainId().Cmp(s.chainId) != 0 {
-			return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
-		}
-		return recoverPlain(s.Hash(tx), R, S, V, true)
-
-	default:
+	}
+	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
+	V, R, S := tx.RawSignatureValues()
+	// DynamicFee txs are defined to use 0 and 1 as their recovery
+	// id, add 27 to become equivalent to unprotected Homestead signatures.
+	V = new(big.Int).Add(V, big.NewInt(27))
+	if tx.ChainId().Cmp(s.chainId) != 0 {
+		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
+	}
+	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
 func (s londonSigner) Equal(s2 Signer) bool {
@@ -366,93 +357,45 @@ func (s londonSigner) Equal(s2 Signer) bool {
 }
 
 func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-
-	switch tx.Type() {
-	case DepositTxType:
+	if tx.Type() == DepositTxType {
 		return nil, nil, nil, fmt.Errorf("deposits do not have a signature")
-	case DynamicFeeTxType:
-		txdata, ok := tx.inner.(*DynamicFeeTx)
-		if !ok {
-			return s.eip2930Signer.SignatureValues(tx, sig)
-		}
-		// Check that chain ID of tx matches the signer. We also accept ID zero here,
-		// because it indicates that the chain ID was not specified in the tx.
-		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
-			return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
-		}
-		R, S, _ = decodeSignature(sig)
-		V = big.NewInt(int64(sig[64]))
-		return R, S, V, nil
-	case GolemBaseUpdateStorageTxType:
-		txdata, ok := tx.inner.(*GolemBaseUpdateStorageTx)
-		if !ok {
-			return s.eip2930Signer.SignatureValues(tx, sig)
-		}
-		// Check that chain ID of tx matches the signer. We also accept ID zero here,
-		// because it indicates that the chain ID was not specified in the tx.
-		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
-			return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
-		}
-		R, S, _ = decodeSignature(sig)
-		V = big.NewInt(int64(sig[64]))
-		return R, S, V, nil
-	case GolemBaseHousekeepingTxType:
-		zero := big.NewInt(0)
-		return zero, zero, zero, nil
-	default:
+	}
+	txdata, ok := tx.inner.(*DynamicFeeTx)
+	if !ok {
 		return s.eip2930Signer.SignatureValues(tx, sig)
 	}
-
+	// Check that chain ID of tx matches the signer. We also accept ID zero here,
+	// because it indicates that the chain ID was not specified in the tx.
+	if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
+	}
+	R, S, _ = decodeSignature(sig)
+	V = big.NewInt(int64(sig[64]))
+	return R, S, V, nil
 }
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s londonSigner) Hash(tx *Transaction) common.Hash {
-	switch tx.Type() {
-	case GolemBaseUpdateStorageTxType:
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				s.chainId,
-				tx.Nonce(),
-				tx.GasTipCap(),
-				tx.GasFeeCap(),
-				tx.Gas(),
-				tx.To(),
-				tx.Value(),
-				tx.Data(),
-				tx.AccessList(),
-			})
-	case GolemBaseHousekeepingTxType:
-		return rlpHash([]interface{}{
+	if tx.Type() == DepositTxType {
+		panic("deposits cannot be signed and do not have a signing hash")
+	}
+	if tx.Type() != DynamicFeeTxType {
+		return s.eip2930Signer.Hash(tx)
+	}
+	return prefixedRlpHash(
+		tx.Type(),
+		[]interface{}{
+			s.chainId,
 			tx.Nonce(),
-			tx.GasPrice(),
+			tx.GasTipCap(),
+			tx.GasFeeCap(),
 			tx.Gas(),
 			tx.To(),
 			tx.Value(),
 			tx.Data(),
-			s.chainId, uint(0), uint(0),
+			tx.AccessList(),
 		})
-	case DepositTxType:
-		panic("deposits cannot be signed and do not have a signing hash")
-	case DynamicFeeTxType:
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				s.chainId,
-				tx.Nonce(),
-				tx.GasTipCap(),
-				tx.GasFeeCap(),
-				tx.Gas(),
-				tx.To(),
-				tx.Value(),
-				tx.Data(),
-				tx.AccessList(),
-			})
-	default:
-		return s.eip2930Signer.Hash(tx)
-	}
-
 }
 
 type eip2930Signer struct{ EIP155Signer }

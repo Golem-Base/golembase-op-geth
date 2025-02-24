@@ -71,8 +71,7 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis, period 
 
 // send 20 transactions, >10 withdrawals and ensure they are included in order
 // send enough transactions to fill multiple blocks
-// Golem: test disabled
-func XTestSimulatedBeaconSendWithdrawals(t *testing.T) {
+func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	var withdrawals []types.Withdrawal
 	txs := make(map[common.Hash]*types.Transaction)
 
@@ -143,8 +142,7 @@ func XTestSimulatedBeaconSendWithdrawals(t *testing.T) {
 
 // Tests that zero-period dev mode can handle a lot of simultaneous
 // transactions/withdrawals
-// Golem: test disabled
-func XTestOnDemandSpam(t *testing.T) {
+func TestOnDemandSpam(t *testing.T) {
 	var (
 		withdrawals     []types.Withdrawal
 		txs                    = make(map[common.Hash]*types.Transaction)

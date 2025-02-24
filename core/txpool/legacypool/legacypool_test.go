@@ -1266,8 +1266,7 @@ func TestPendingGlobalLimiting(t *testing.T) {
 // Test the limit on transaction size is enforced correctly.
 // This test verifies every transaction having allowed size
 // is added to the pool, and longer transactions are rejected.
-// Golembase: disabled
-func XTestAllowedTxSize(t *testing.T) {
+func TestAllowedTxSize(t *testing.T) {
 	t.Parallel()
 
 	// Create a test account and fund it

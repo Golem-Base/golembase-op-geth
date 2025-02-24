@@ -257,8 +257,7 @@ func TestEthClientHistoricalBackend(t *testing.T) {
 	testHistoricalRPC(t, client)
 }
 
-// Golem: test disabled
-func XTestEthClient(t *testing.T) {
+func TestEthClient(t *testing.T) {
 	backend, chain, err := newTestBackend(t, nil, false)
 	if err != nil {
 		t.Fatal(err)

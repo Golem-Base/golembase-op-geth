@@ -495,24 +495,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
-
-	{
-		addr := common.HexToAddress("0xdeadbeef")
-		nonce := env.state.GetNonce(addr)
-		tx := types.NewGolemBaseHousekeepingTransaction(
-			nonce,
-			common.HexToAddress("0xdeadbeef"),
-			big.NewInt(0), 21000, big.NewInt(0), []byte{})
-
-		env.state.SetTxContext(tx.Hash(), env.tcount)
-
-		err := miner.commitTransaction(env, tx)
-		if err != nil {
-			log.Error("Failed to commit housekeeping transaction", "err", err)
-		}
-
-	}
-
 	blockDABytes := new(big.Int)
 	for {
 		// Check interruption signal and abort building if it's fired.

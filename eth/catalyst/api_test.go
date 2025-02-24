@@ -107,8 +107,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	return genesis, blocks
 }
 
-// Golem: test disabled
-func XTestEth2AssembleBlock(t *testing.T) {
+func TestEth2AssembleBlock(t *testing.T) {
 	genesis, blocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
@@ -147,8 +146,7 @@ func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params 
 	return nil, err
 }
 
-// Golem: test disabled
-func XTestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
+func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	genesis, blocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
@@ -186,8 +184,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 	}
 }
 
-// Golem: test disabled
-func XTestEth2PrepareAndGetPayload(t *testing.T) {
+func TestEth2PrepareAndGetPayload(t *testing.T) {
 	genesis, blocks := generateMergeChain(10, false)
 	// We need to properly set the terminal total difficulty
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[9].Difficulty())
@@ -297,8 +294,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 	}
 }
 
-// Golem: test disabled
-func XTestEth2NewBlock(t *testing.T) {
+func TestEth2NewBlock(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -1733,8 +1729,7 @@ func waitForApiPayloadToBuild(api *ConsensusAPI, id engine.PayloadID) error {
 	return api.localBlocks.waitFull(id)
 }
 
-// Golem: test disabled
-func XTestWitnessCreationAndConsumption(t *testing.T) {
+func TestWitnessCreationAndConsumption(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), log.LevelTrace, true)))
 
 	genesis, blocks := generateMergeChain(10, true)
