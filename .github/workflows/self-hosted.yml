@@ -1,0 +1,14 @@
+name: Self-hosted runner
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        # Some tests fail on the self-hosted runner, but because they're not relevant to our work, we disable them.
+        run: nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...

@@ -9,6 +9,7 @@
 *un~
 .DS_Store
 */**/.DS_Store
+.direnv
 
 #*
 .#*
@@ -38,8 +39,5 @@ profile.cov
 # IdeaIDE
 .idea
 *.iml
-
-# VS Code
-.vscode
 
 tests/spec-tests/
