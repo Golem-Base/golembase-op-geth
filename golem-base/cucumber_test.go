@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/repr"
 	"github.com/cucumber/godog"
@@ -93,12 +94,15 @@ func TestMain(m *testing.M) {
 					return ctx, fmt.Errorf("failed to start geth instance: %w", err)
 				}
 
+				timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+
 				sctx.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 					world.Shutdown()
+					cancel()
 					return ctx, world.AddLogsToTestError(err)
 				})
 
-				return testutil.WithWorld(ctx, world), nil
+				return testutil.WithWorld(timeoutCtx, world), nil
 
 			})
 
