@@ -27,6 +27,15 @@ func (q *Queries) DeleteNumericAnnotations(ctx context.Context, entityKey string
 	return err
 }
 
+const deleteProcessingStatus = `-- name: DeleteProcessingStatus :exec
+DELETE FROM processing_status WHERE network = ?
+`
+
+func (q *Queries) DeleteProcessingStatus(ctx context.Context, network string) error {
+	_, err := q.db.ExecContext(ctx, deleteProcessingStatus, network)
+	return err
+}
+
 const deleteStringAnnotations = `-- name: DeleteStringAnnotations :exec
 DELETE FROM string_annotations WHERE entity_key = ?
 `
@@ -84,6 +93,17 @@ func (q *Queries) GetNumericAnnotations(ctx context.Context, entityKey string) (
 	return items, nil
 }
 
+const getProcessingStatus = `-- name: GetProcessingStatus :one
+SELECT last_processed_block FROM processing_status WHERE network = ?
+`
+
+func (q *Queries) GetProcessingStatus(ctx context.Context, network string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getProcessingStatus, network)
+	var last_processed_block int64
+	err := row.Scan(&last_processed_block)
+	return last_processed_block, err
+}
+
 const getStringAnnotations = `-- name: GetStringAnnotations :many
 SELECT annotation_key, value FROM string_annotations WHERE entity_key = ?
 `
@@ -116,6 +136,17 @@ func (q *Queries) GetStringAnnotations(ctx context.Context, entityKey string) ([
 	return items, nil
 }
 
+const hasProcessingStatus = `-- name: HasProcessingStatus :one
+SELECT COUNT(*) > 1 FROM processing_status WHERE network = ?
+`
+
+func (q *Queries) HasProcessingStatus(ctx context.Context, network string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasProcessingStatus, network)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const insertEntity = `-- name: InsertEntity :exec
 INSERT INTO entities (key, expires_at, payload) VALUES (?, ?, ?)
 `
@@ -146,6 +177,20 @@ func (q *Queries) InsertNumericAnnotation(ctx context.Context, arg InsertNumeric
 	return err
 }
 
+const insertProcessingStatus = `-- name: InsertProcessingStatus :exec
+INSERT INTO processing_status (network, last_processed_block) VALUES (?, ?)
+`
+
+type InsertProcessingStatusParams struct {
+	Network            string
+	LastProcessedBlock int64
+}
+
+func (q *Queries) InsertProcessingStatus(ctx context.Context, arg InsertProcessingStatusParams) error {
+	_, err := q.db.ExecContext(ctx, insertProcessingStatus, arg.Network, arg.LastProcessedBlock)
+	return err
+}
+
 const insertStringAnnotation = `-- name: InsertStringAnnotation :exec
 INSERT INTO string_annotations (entity_key, annotation_key, value) VALUES (?, ?, ?)
 `
@@ -158,5 +203,19 @@ type InsertStringAnnotationParams struct {
 
 func (q *Queries) InsertStringAnnotation(ctx context.Context, arg InsertStringAnnotationParams) error {
 	_, err := q.db.ExecContext(ctx, insertStringAnnotation, arg.EntityKey, arg.AnnotationKey, arg.Value)
+	return err
+}
+
+const updateProcessingStatus = `-- name: UpdateProcessingStatus :exec
+UPDATE processing_status SET last_processed_block = ? WHERE network = ?
+`
+
+type UpdateProcessingStatusParams struct {
+	LastProcessedBlock int64
+	Network            string
+}
+
+func (q *Queries) UpdateProcessingStatus(ctx context.Context, arg UpdateProcessingStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateProcessingStatus, arg.LastProcessedBlock, arg.Network)
 	return err
 }

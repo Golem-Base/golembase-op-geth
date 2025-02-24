@@ -24,3 +24,18 @@ DELETE FROM string_annotations WHERE entity_key = ?;
 
 -- name: DeleteNumericAnnotations :exec
 DELETE FROM numeric_annotations WHERE entity_key = ?;
+
+-- name: GetProcessingStatus :one
+SELECT last_processed_block FROM processing_status WHERE network = ?;
+
+-- name: UpdateProcessingStatus :exec
+UPDATE processing_status SET last_processed_block = ? WHERE network = ?;
+
+-- name: InsertProcessingStatus :exec
+INSERT INTO processing_status (network, last_processed_block) VALUES (?, ?);
+
+-- name: HasProcessingStatus :one
+SELECT COUNT(*) > 1 FROM processing_status WHERE network = ?;
+
+-- name: DeleteProcessingStatus :exec
+DELETE FROM processing_status WHERE network = ?;

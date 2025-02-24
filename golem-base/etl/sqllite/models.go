@@ -6,6 +6,7 @@ package main
 
 type Entity struct {
 	Key       string
+	CreatedAt int64
 	ExpiresAt int64
 	Payload   []byte
 }
@@ -14,6 +15,11 @@ type NumericAnnotation struct {
 	EntityKey     string
 	AnnotationKey string
 	Value         int64
+}
+
+type ProcessingStatus struct {
+	Network            string
+	LastProcessedBlock int64
 }
 
 type StringAnnotation struct {

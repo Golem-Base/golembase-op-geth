@@ -1,5 +1,11 @@
+CREATE TABLE processing_status (
+  network TEXT NOT NULL PRIMARY KEY,
+  last_processed_block INTEGER NOT NULL
+);
+
 CREATE TABLE entities (
   key TEXT NOT NULL PRIMARY KEY,
+  created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
   payload BLOB NOT NULL
 );
