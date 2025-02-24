@@ -68,3 +68,8 @@ Here we will keep track of the changes to the stock [go-ethereum](https://github
 
 ## 2025-02-18
     - Added writing of the write-ahead log to be picked up by ETLs.
+
+## 2025-02-24
+    - Ported code to op-geth
+
+
