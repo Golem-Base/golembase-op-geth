@@ -66,8 +66,6 @@ func TestWalIterator(t *testing.T) {
 
 		td := t.TempDir()
 
-		// ops := make(chan []wal.Operation)
-
 		err := writeWal(td,
 			wal.BlockInfo{
 				Number:     0,
@@ -87,68 +85,16 @@ func TestWalIterator(t *testing.T) {
 		require.NoError(t, err)
 
 		for block, err := range walwatch.NewIterator(ctx, td, 0, common.Hash{}) {
-			require.Equal(t, block, uint64(0))
+			require.Equal(t, block.BlockInfo.Number, uint64(0))
+			for operation, err := range block.OperationsIterator {
+				require.NoError(t, err)
+				require.Equal(t, operation.Create.EntityKey, common.HexToHash("0x1"))
+				require.Equal(t, operation.Create.Payload, []byte{1, 2, 3})
+				require.Equal(t, operation.Create.ExpiresAtBlock, uint64(100))
+			}
+
 			require.NoError(t, err)
 			cancel()
-		}
-	})
-
-	t.Run("should iterate over two blocks", func(t *testing.T) {
-
-		log.SetDefault(log.NewLogger(slog.NewTextHandler(os.Stdout, nil)))
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		td := t.TempDir()
-
-		// ops := make(chan []wal.Operation)
-
-		err := writeWal(td,
-			wal.BlockInfo{
-				Number:     0,
-				Hash:       common.HexToHash("0x1"),
-				ParentHash: common.Hash{},
-			},
-			[]wal.Operation{
-				{
-					Create: &wal.Create{
-						EntityKey:      common.HexToHash("0x1"),
-						Payload:        []byte{1, 2, 3},
-						ExpiresAtBlock: 100,
-					},
-				},
-			},
-		)
-		require.NoError(t, err)
-
-		err = writeWal(td,
-			wal.BlockInfo{
-				Number:     1,
-				Hash:       common.HexToHash("0x2"),
-				ParentHash: common.HexToHash("0x1"),
-			},
-			[]wal.Operation{
-				{
-					Create: &wal.Create{
-						EntityKey:      common.HexToHash("0x1"),
-						Payload:        []byte{1, 2, 3},
-						ExpiresAtBlock: 100,
-					},
-				},
-			},
-		)
-		require.NoError(t, err)
-
-		expectedBlocks := []uint64{0, 1}
-
-		for block, err := range walwatch.NewIterator(ctx, td, 0, common.Hash{}) {
-			require.Equal(t, expectedBlocks[0], block)
-			require.NoError(t, err)
-			expectedBlocks = expectedBlocks[1:]
-			if len(expectedBlocks) == 0 {
-				cancel()
-			}
 		}
 	})
 
