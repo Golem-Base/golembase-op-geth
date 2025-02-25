@@ -15,6 +15,12 @@ import (
 	"github.com/holiman/uint256"
 )
 
+type BlockInfo struct {
+	Number     uint64      `json:"number,string"`
+	Hash       common.Hash `json:"hash"`
+	ParentHash common.Hash `json:"parentHash"`
+}
+
 type Operation struct {
 	Create *Create      `json:"create,omitempty"`
 	Update *Update      `json:"update,omitempty"`
@@ -58,6 +64,12 @@ func WriteLogForBlock(dir string, block *types.Block, receipts []*types.Receipt)
 	}()
 
 	enc := json.NewEncoder(tf)
+
+	enc.Encode(BlockInfo{
+		Number:     block.NumberU64(),
+		Hash:       block.Hash(),
+		ParentHash: block.ParentHash(),
+	})
 
 	txns := block.Transactions()
 

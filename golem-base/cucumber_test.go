@@ -1026,6 +1026,13 @@ func readWriteaheadLog(path string) ([]wal.Operation, error) {
 
 	dec := json.NewDecoder(f)
 
+	bi := wal.BlockInfo{}
+
+	err = dec.Decode(&bi)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode block info: %w", err)
+	}
+
 	ops := []wal.Operation{}
 
 	for {
