@@ -11,16 +11,30 @@ import (
 //go:generate sqlc generate
 
 func main() {
+	cfg := struct {
+		dbFile string
+		walDir string
+	}{}
 	app := &cli.App{
 		Name: "sqllite-etl",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "db",
-				Value: "golem.db",
-				Usage: "database file",
+				Name:        "db",
+				Usage:       "database file",
+				EnvVars:     []string{"DB_FILE"},
+				Destination: &cfg.dbFile,
+				Required:    true,
+			},
+			&cli.PathFlag{
+				Name:        "wal",
+				Usage:       "wal dir",
+				EnvVars:     []string{"WAL_DIR"},
+				Required:    true,
+				Destination: &cfg.walDir,
 			},
 		},
 		Action: func(c *cli.Context) error {
+
 			fmt.Println("Hello, World!")
 			return nil
 		},

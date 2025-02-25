@@ -94,14 +94,19 @@ func (q *Queries) GetNumericAnnotations(ctx context.Context, entityKey string) (
 }
 
 const getProcessingStatus = `-- name: GetProcessingStatus :one
-SELECT last_processed_block FROM processing_status WHERE network = ?
+SELECT last_processed_block_number, last_processed_block_hash FROM processing_status WHERE network = ?
 `
 
-func (q *Queries) GetProcessingStatus(ctx context.Context, network string) (int64, error) {
+type GetProcessingStatusRow struct {
+	LastProcessedBlockNumber int64
+	LastProcessedBlockHash   string
+}
+
+func (q *Queries) GetProcessingStatus(ctx context.Context, network string) (GetProcessingStatusRow, error) {
 	row := q.db.QueryRowContext(ctx, getProcessingStatus, network)
-	var last_processed_block int64
-	err := row.Scan(&last_processed_block)
-	return last_processed_block, err
+	var i GetProcessingStatusRow
+	err := row.Scan(&i.LastProcessedBlockNumber, &i.LastProcessedBlockHash)
+	return i, err
 }
 
 const getStringAnnotations = `-- name: GetStringAnnotations :many
@@ -178,16 +183,17 @@ func (q *Queries) InsertNumericAnnotation(ctx context.Context, arg InsertNumeric
 }
 
 const insertProcessingStatus = `-- name: InsertProcessingStatus :exec
-INSERT INTO processing_status (network, last_processed_block) VALUES (?, ?)
+INSERT INTO processing_status (network, last_processed_block_number, last_processed_block_hash) VALUES (?, ?, ?)
 `
 
 type InsertProcessingStatusParams struct {
-	Network            string
-	LastProcessedBlock int64
+	Network                  string
+	LastProcessedBlockNumber int64
+	LastProcessedBlockHash   string
 }
 
 func (q *Queries) InsertProcessingStatus(ctx context.Context, arg InsertProcessingStatusParams) error {
-	_, err := q.db.ExecContext(ctx, insertProcessingStatus, arg.Network, arg.LastProcessedBlock)
+	_, err := q.db.ExecContext(ctx, insertProcessingStatus, arg.Network, arg.LastProcessedBlockNumber, arg.LastProcessedBlockHash)
 	return err
 }
 
@@ -207,15 +213,16 @@ func (q *Queries) InsertStringAnnotation(ctx context.Context, arg InsertStringAn
 }
 
 const updateProcessingStatus = `-- name: UpdateProcessingStatus :exec
-UPDATE processing_status SET last_processed_block = ? WHERE network = ?
+UPDATE processing_status SET last_processed_block_number = ?, last_processed_block_hash = ? WHERE network = ?
 `
 
 type UpdateProcessingStatusParams struct {
-	LastProcessedBlock int64
-	Network            string
+	LastProcessedBlockNumber int64
+	LastProcessedBlockHash   string
+	Network                  string
 }
 
 func (q *Queries) UpdateProcessingStatus(ctx context.Context, arg UpdateProcessingStatusParams) error {
-	_, err := q.db.ExecContext(ctx, updateProcessingStatus, arg.LastProcessedBlock, arg.Network)
+	_, err := q.db.ExecContext(ctx, updateProcessingStatus, arg.LastProcessedBlockNumber, arg.LastProcessedBlockHash, arg.Network)
 	return err
 }

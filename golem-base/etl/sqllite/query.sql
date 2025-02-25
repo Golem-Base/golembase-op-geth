@@ -26,13 +26,13 @@ DELETE FROM string_annotations WHERE entity_key = ?;
 DELETE FROM numeric_annotations WHERE entity_key = ?;
 
 -- name: GetProcessingStatus :one
-SELECT last_processed_block FROM processing_status WHERE network = ?;
+SELECT last_processed_block_number, last_processed_block_hash FROM processing_status WHERE network = ?;
 
 -- name: UpdateProcessingStatus :exec
-UPDATE processing_status SET last_processed_block = ? WHERE network = ?;
+UPDATE processing_status SET last_processed_block_number = ?, last_processed_block_hash = ? WHERE network = ?;
 
 -- name: InsertProcessingStatus :exec
-INSERT INTO processing_status (network, last_processed_block) VALUES (?, ?);
+INSERT INTO processing_status (network, last_processed_block_number, last_processed_block_hash) VALUES (?, ?, ?);
 
 -- name: HasProcessingStatus :one
 SELECT COUNT(*) > 1 FROM processing_status WHERE network = ?;

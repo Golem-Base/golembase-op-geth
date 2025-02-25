@@ -18,8 +18,9 @@ type NumericAnnotation struct {
 }
 
 type ProcessingStatus struct {
-	Network            string
-	LastProcessedBlock int64
+	Network                  string
+	LastProcessedBlockNumber int64
+	LastProcessedBlockHash   string
 }
 
 type StringAnnotation struct {
