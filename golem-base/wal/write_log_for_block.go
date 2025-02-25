@@ -75,7 +75,7 @@ func WriteLogForBlock(dir string, block *types.Block, receipts []*types.Receipt)
 	}()
 
 	tempFilename := BlockNumberToFilename(block.NumberU64()) + ".temp"
-	finalFilename := BlockNumberToFilename(block.NumberU64()) + ".temp"
+	finalFilename := BlockNumberToFilename(block.NumberU64())
 
 	tf, err := os.OpenFile(filepath.Join(dir, tempFilename), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
