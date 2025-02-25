@@ -2,9 +2,12 @@ package wal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -43,6 +46,26 @@ type Update struct {
 	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
 }
 
+func BlockNumberToFilename(blockNumber uint64) string {
+	return fmt.Sprintf("block-%020d.json", blockNumber)
+}
+
+var ErrInvalidFilename = errors.New("invalid filename")
+
+var re = regexp.MustCompile(`^block-(\d+)\.json$`)
+
+func PathToBlockNumber(path string) (uint64, error) {
+
+	fn := filepath.Base(path)
+
+	matches := re.FindStringSubmatch(fn)
+	if len(matches) != 2 {
+		return 0, ErrInvalidFilename
+	}
+
+	return strconv.ParseUint(matches[1], 10, 64)
+}
+
 func WriteLogForBlock(dir string, block *types.Block, receipts []*types.Receipt) (err error) {
 
 	defer func() {
@@ -51,8 +74,8 @@ func WriteLogForBlock(dir string, block *types.Block, receipts []*types.Receipt)
 		}
 	}()
 
-	tempFilename := fmt.Sprintf("block-%020d.json.temp", block.NumberU64())
-	finalFilename := fmt.Sprintf("block-%020d.json", block.NumberU64())
+	tempFilename := BlockNumberToFilename(block.NumberU64()) + ".temp"
+	finalFilename := BlockNumberToFilename(block.NumberU64()) + ".temp"
 
 	tf, err := os.OpenFile(filepath.Join(dir, tempFilename), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
