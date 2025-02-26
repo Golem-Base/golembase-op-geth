@@ -1,4 +1,4 @@
-package walwatch
+package wal
 
 import (
 	"context"
@@ -6,12 +6,11 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/golem-base/wal"
 )
 
 type BlockWal struct {
-	BlockInfo          wal.BlockInfo
-	OperationsIterator wal.BlockOperationsIterator
+	BlockInfo          BlockInfo
+	OperationsIterator BlockOperationsIterator
 }
 
 func NewIterator(
@@ -27,9 +26,9 @@ func NewIterator(
 
 		for ctx.Err() == nil {
 
-			filename := filepath.Join(walDir, wal.BlockNumberToFilename(blockNumber))
+			filename := filepath.Join(walDir, BlockNumberToFilename(blockNumber))
 
-			bi, operationsIterator, err := wal.NewBlockOperationsIterator(ctx, filename)
+			bi, operationsIterator, err := NewBlockOperationsIterator(ctx, filename)
 			if err != nil {
 				if !yield(BlockWal{}, fmt.Errorf("failed to create block operations iterator: %w", err)) {
 					return

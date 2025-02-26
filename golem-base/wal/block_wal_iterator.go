@@ -6,15 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/ethereum/go-ethereum/common"
 )
-
-type BlockWalIterator struct {
-	blockNumber uint64
-	blockHash   common.Hash
-	operations  []Operation
-}
 
 type BlockOperationsIterator func(yield func(operation Operation, err error) bool)
 

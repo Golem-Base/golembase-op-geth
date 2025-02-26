@@ -1,4 +1,4 @@
-package walwatch_test
+package wal_test
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/golem-base/etl/walwatch"
 	"github.com/ethereum/go-ethereum/golem-base/wal"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/stretchr/testify/require"
@@ -84,7 +83,7 @@ func TestWalIterator(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		for block, err := range walwatch.NewIterator(ctx, td, 0, common.Hash{}) {
+		for block, err := range wal.NewIterator(ctx, td, 0, common.Hash{}) {
 			require.Equal(t, block.BlockInfo.Number, uint64(0))
 			for operation, err := range block.OperationsIterator {
 				require.NoError(t, err)
