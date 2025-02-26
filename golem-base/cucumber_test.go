@@ -3,18 +3,14 @@ package golembase_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -934,34 +930,7 @@ func theExpiredEntityShouldBeDeleted(ctx context.Context) error {
 func theWriteaheadLogForTheCreateShouldBeCreated(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	walDir := w.GethInstance.WALDir
-
-	if walDir == "" {
-		return fmt.Errorf("write-ahead log directory is not set")
-	}
-
-	files, err := os.ReadDir(walDir)
-	if err != nil {
-		return fmt.Errorf("failed to read write-ahead log directory: %w", err)
-	}
-
-	blocks := []string{}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		if strings.HasPrefix(file.Name(), "block-") {
-			blocks = append(blocks, filepath.Join(walDir, file.Name()))
-		}
-	}
-
-	slices.Sort(blocks)
-
-	lastBlock := blocks[len(blocks)-1]
-
-	wl, err := readWriteaheadLog(lastBlock)
+	wl, err := w.ReadWAL(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read write-ahead log: %w", err)
 	}
@@ -1016,81 +985,15 @@ func checkIfEqual(actual, expected []wal.Operation) error {
 	return nil
 }
 
-func readWriteaheadLog(path string) ([]wal.Operation, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read write-ahead log: %w", err)
-	}
-
-	defer f.Close()
-
-	dec := json.NewDecoder(f)
-
-	bi := wal.BlockInfo{}
-
-	err = dec.Decode(&bi)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode block info: %w", err)
-	}
-
-	ops := []wal.Operation{}
-
-	for {
-		var op wal.Operation
-		err := dec.Decode(&op)
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode write-ahead log: %w", err)
-		}
-
-		ops = append(ops, op)
-	}
-
-	return ops, nil
-
-}
-
 func theWriteaheadLogForTheUpdateShouldBeCreated(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	walDir := w.GethInstance.WALDir
-
-	if walDir == "" {
-		return fmt.Errorf("write-ahead log directory is not set")
-	}
-
-	files, err := os.ReadDir(walDir)
-	if err != nil {
-		return fmt.Errorf("failed to read write-ahead log directory: %w", err)
-	}
-
-	blocks := []string{}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		if strings.HasPrefix(file.Name(), "block-") {
-			blocks = append(blocks, filepath.Join(walDir, file.Name()))
-		}
-	}
-
-	slices.Sort(blocks)
-	if len(blocks) != 3 {
-		return fmt.Errorf("expected 3 blocks in write-ahead log but got %d", len(blocks))
-	}
-
-	wl, err := readWriteaheadLog(blocks[2])
+	wl, err := w.ReadWAL(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read write-ahead log: %w", err)
 	}
 
-	err = checkIfEqual(wl,
+	err = checkIfEqual(wl[1:],
 		[]wal.Operation{
 			{
 				Update: &wal.Update{
@@ -1119,37 +1022,13 @@ func theWriteaheadLogForTheUpdateShouldBeCreated(ctx context.Context) error {
 func theWriteaheadLogForTheDeleteShouldBeCreated(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	walDir := w.GethInstance.WALDir
-
-	if walDir == "" {
-		return fmt.Errorf("write-ahead log directory is not set")
-	}
-
-	files, err := os.ReadDir(walDir)
-	if err != nil {
-		return fmt.Errorf("failed to read write-ahead log directory: %w", err)
-	}
-
-	blocks := []string{}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		if strings.HasPrefix(file.Name(), "block-") {
-			blocks = append(blocks, filepath.Join(walDir, file.Name()))
-		}
-	}
-
-	slices.Sort(blocks)
-
-	wl, err := readWriteaheadLog(blocks[len(blocks)-1])
+	wl, err := w.ReadWAL(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read write-ahead log: %w", err)
 	}
 
-	err = checkIfEqual(wl,
+	err = checkIfEqual(
+		wl[1:],
 		[]wal.Operation{
 			{
 				Delete: &w.CreatedEntityKey,

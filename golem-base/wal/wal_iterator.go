@@ -2,7 +2,9 @@ package wal
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -18,6 +20,7 @@ func NewIterator(
 	walDir string,
 	nextBlockNumber uint64,
 	prevBlockHash common.Hash,
+	waitForNewBlocks bool,
 ) func(yield func(blockWal BlockWal, err error) bool) {
 
 	blockNumber := nextBlockNumber
@@ -29,6 +32,13 @@ func NewIterator(
 			filename := filepath.Join(walDir, BlockNumberToFilename(blockNumber))
 
 			bi, operationsIterator, err := NewBlockOperationsIterator(ctx, filename)
+
+			if errors.Is(err, os.ErrNotExist) {
+				if !waitForNewBlocks {
+					return
+				}
+			}
+
 			if err != nil {
 				if !yield(BlockWal{}, fmt.Errorf("failed to create block operations iterator: %w", err)) {
 					return
