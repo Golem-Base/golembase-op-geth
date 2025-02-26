@@ -3,13 +3,16 @@ package main
 import (
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
 	"os"
 	"os/signal"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/golem-base/wal"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/urfave/cli/v2"
 )
@@ -88,12 +91,12 @@ func main() {
 				return fmt.Errorf("failed to get network id: %w", err)
 			}
 
-			processingStatus, err := autocommit.HasProcessingStatus(ctx, networkID.String())
+			hasProcessingStatus, err := autocommit.HasProcessingStatus(ctx, networkID.String())
 			if err != nil {
 				return fmt.Errorf("failed to check if processing status exists: %w", err)
 			}
 
-			if !processingStatus {
+			if !hasProcessingStatus {
 				log.Info("no processing status found, inserting genesis block")
 
 				genesisHeade, err := ec.HeaderByNumber(ctx, big.NewInt(0))
@@ -111,8 +114,45 @@ func main() {
 				}
 			}
 
-			// for blockWal, err := range wal.NewIterator(ctx, cfg.walDir, 0, common.Hash{}, false) {
-			// }
+			processingStatus, err := autocommit.GetProcessingStatus(ctx, networkID.String())
+			if err != nil {
+				return fmt.Errorf("failed to get processing status: %w", err)
+			}
+
+			blockNumber := processingStatus.LastProcessedBlockNumber
+			blockHash := processingStatus.LastProcessedBlockHash
+
+			for blockWal, err := range wal.NewIterator(ctx, cfg.walDir, uint64(blockNumber)+1, common.HexToHash(blockHash), true) {
+				if err != nil {
+					return fmt.Errorf("failed to iterate over wal: %w", err)
+				}
+
+				err = func() (err error) {
+					log.Info("processing block", "block", blockWal.BlockInfo.Number)
+					tx, err := db.BeginTx(ctx, nil)
+					if err != nil {
+						return fmt.Errorf("failed to begin transaction: %w", err)
+					}
+
+					defer func() {
+						if err != nil {
+							err = errors.Join(err, tx.Rollback())
+						}
+					}()
+
+					for op, err := range blockWal.OperationsIterator {
+						if err != nil {
+							return fmt.Errorf("failed to iterate over operations: %w", err)
+						}
+
+						log.Info("operation", "operation", op)
+					}
+
+					return nil
+
+				}()
+
+			}
 
 			return nil
 		},
