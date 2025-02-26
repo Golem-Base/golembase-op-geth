@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -37,6 +39,13 @@ func NewIterator(
 				if !waitForNewBlocks {
 					return
 				}
+				bo := backoff.WithContext(backoff.NewConstantBackOff(time.Second), ctx)
+				backoff.Retry(func() error {
+					_, err := os.Stat(filename)
+					return err
+				}, bo)
+
+				continue
 			}
 
 			if err != nil {

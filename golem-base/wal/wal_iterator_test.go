@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/wal"
@@ -94,6 +95,46 @@ func TestWalIterator(t *testing.T) {
 
 			require.NoError(t, err)
 			cancel()
+		}
+	})
+
+	t.Run("should stop waiting for new blocks when context is cancelled", func(t *testing.T) {
+
+		log.SetDefault(log.NewLogger(slog.NewTextHandler(os.Stdout, nil)))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		td := t.TempDir()
+
+		err := writeWal(td,
+			wal.BlockInfo{
+				Number:     0,
+				Hash:       common.HexToHash("0x1"),
+				ParentHash: common.Hash{},
+			},
+			[]wal.Operation{
+				{
+					Create: &wal.Create{
+						EntityKey:      common.HexToHash("0x1"),
+						Payload:        []byte{1, 2, 3},
+						ExpiresAtBlock: 100,
+					},
+				},
+			},
+		)
+		require.NoError(t, err)
+
+		go func() {
+			time.Sleep(time.Second)
+			cancel()
+		}()
+
+		for block, err := range wal.NewIterator(ctx, td, 0, common.Hash{}, true) {
+			require.NoError(t, err)
+			for range block.OperationsIterator {
+			}
+
 		}
 	})
 
