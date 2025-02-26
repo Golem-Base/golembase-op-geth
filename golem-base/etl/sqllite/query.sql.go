@@ -142,7 +142,7 @@ func (q *Queries) GetStringAnnotations(ctx context.Context, entityKey string) ([
 }
 
 const hasProcessingStatus = `-- name: HasProcessingStatus :one
-SELECT COUNT(*) > 1 FROM processing_status WHERE network = ?
+SELECT COUNT(*) > 0 FROM processing_status WHERE network = ?
 `
 
 func (q *Queries) HasProcessingStatus(ctx context.Context, network string) (bool, error) {

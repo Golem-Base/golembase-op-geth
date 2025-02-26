@@ -35,7 +35,7 @@ UPDATE processing_status SET last_processed_block_number = ?, last_processed_blo
 INSERT INTO processing_status (network, last_processed_block_number, last_processed_block_hash) VALUES (?, ?, ?);
 
 -- name: HasProcessingStatus :one
-SELECT COUNT(*) > 1 FROM processing_status WHERE network = ?;
+SELECT COUNT(*) > 0 FROM processing_status WHERE network = ?;
 
 -- name: DeleteProcessingStatus :exec
 DELETE FROM processing_status WHERE network = ?;

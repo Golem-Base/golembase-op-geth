@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
-	"log"
+	"log/slog"
+	"math/big"
 	"os"
 	"os/signal"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/urfave/cli/v2"
 )
@@ -18,9 +20,11 @@ import (
 var schema string
 
 func main() {
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	cfg := struct {
-		dbFile string
-		walDir string
+		dbFile      string
+		walDir      string
+		rpcEndpoint string
 	}{}
 	app := &cli.App{
 		Name: "sqllite-etl",
@@ -38,6 +42,13 @@ func main() {
 				EnvVars:     []string{"WAL_DIR"},
 				Required:    true,
 				Destination: &cfg.walDir,
+			},
+			&cli.StringFlag{
+				Name:        "rpc-endpoint",
+				Usage:       "RPC Endpoint for op-geth",
+				EnvVars:     []string{"RPC_ENDPOINT"},
+				Required:    true,
+				Destination: &cfg.rpcEndpoint,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -58,15 +69,50 @@ func main() {
 			`).Scan(&tableName)
 
 			if err == sql.ErrNoRows {
+				log.Info("could not find 'entities' table, applying schema")
 				_, err := db.ExecContext(ctx, schema)
 				if err != nil {
 					return fmt.Errorf("failed to apply schema table: %w", err)
 				}
 			}
 
+			autocommit := New(db)
+
+			ec, err := ethclient.Dial(cfg.rpcEndpoint)
 			if err != nil {
-				return fmt.Errorf("failed to check if table exists: %w", err)
+				return fmt.Errorf("failed to dial rpc endpoint: %w", err)
 			}
+
+			networkID, err := ec.NetworkID(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get network id: %w", err)
+			}
+
+			processingStatus, err := autocommit.HasProcessingStatus(ctx, networkID.String())
+			if err != nil {
+				return fmt.Errorf("failed to check if processing status exists: %w", err)
+			}
+
+			if !processingStatus {
+				log.Info("no processing status found, inserting genesis block")
+
+				genesisHeade, err := ec.HeaderByNumber(ctx, big.NewInt(0))
+				if err != nil {
+					return fmt.Errorf("failed to get genesis header: %w", err)
+				}
+
+				err = autocommit.InsertProcessingStatus(ctx, InsertProcessingStatusParams{
+					Network:                  networkID.String(),
+					LastProcessedBlockNumber: 0,
+					LastProcessedBlockHash:   genesisHeade.Hash().String(),
+				})
+				if err != nil {
+					return fmt.Errorf("failed to insert processing status: %w", err)
+				}
+			}
+
+			// for blockWal, err := range wal.NewIterator(ctx, cfg.walDir, 0, common.Hash{}, false) {
+			// }
 
 			return nil
 		},
@@ -74,6 +120,7 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("failed to run app", "error", err)
+		os.Exit(1)
 	}
 }
