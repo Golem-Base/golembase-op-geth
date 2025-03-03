@@ -150,6 +150,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the annotations of the entity should be updated in the SQLite database$`, theAnnotationsOfTheEntityShouldBeUpdatedInTheSQLiteDatabase)
 	ctx.Step(`^the entity should be updated in the SQLite database$`, theEntityShouldBeUpdatedInTheSQLiteDatabase)
 	ctx.Step(`^update the entity in Golembase$`, updateTheEntityInGolembase)
+	ctx.Step(`^delete the entity in Golembase$`, deleteTheEntityInGolembase)
+	ctx.Step(`^the annotations of the entity should be deleted in the SQLite database$`, theAnnotationsOfTheEntityShouldBeDeletedInTheSQLiteDatabase)
+	ctx.Step(`^the entity should be deleted in the SQLite database$`, theEntityShouldBeDeletedInTheSQLiteDatabase)
 
 }
 
@@ -410,5 +413,84 @@ func updateTheEntityInGolembase(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create entity: %w", err)
 	}
+	return nil
+}
+
+func deleteTheEntityInGolembase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	_, err := w.DeleteEntity(ctx, w.CreatedEntityKey)
+	if err != nil {
+		return fmt.Errorf("failed to delete entity: %w", err)
+	}
+	return nil
+}
+
+func theAnnotationsOfTheEntityShouldBeDeletedInTheSQLiteDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+
+	err := w.WithDB(ctx, func(db *sql.DB) error {
+		gl := sqlitegolem.New(db)
+
+		exists, err := gl.StringAnnotationsForEntityExists(ctx, w.CreatedEntityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to check string annotations for entity in database: %w", err)
+		}
+		if exists {
+			return fmt.Errorf("entity string annotations should not exist in database")
+		}
+
+		exists, err = gl.NumericAnnotationsForEntityExists(ctx, w.CreatedEntityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to check numeric annotations for entity in database: %w", err)
+		}
+		if exists {
+			return fmt.Errorf("entity numeric annotations should not exist in database")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check string and numeric annotations for entity in database: %w", err)
+	}
+	return nil
+}
+
+func theEntityShouldBeDeletedInTheSQLiteDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	bo := backoff.WithContext(backoff.NewConstantBackOff(100*time.Millisecond), ctx)
+
+	var lastErr error
+
+	err := backoff.RetryNotify(
+		func() error {
+			err := w.WithDB(ctx, func(db *sql.DB) error {
+				gl := sqlitegolem.New(db)
+				exists, err := gl.EntityExists(ctx, w.CreatedEntityKey.Hex())
+				if err != nil {
+					return fmt.Errorf("failed to check entity in database: %w", err)
+				}
+				if exists {
+					return fmt.Errorf("entity should not exist in database")
+				}
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("failed to check entity in database: %w", err)
+			}
+			return nil
+		},
+		bo,
+		func(err error, d time.Duration) {
+			lastErr = err
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to check entity in database: %w", lastErr)
+	}
+
 	return nil
 }

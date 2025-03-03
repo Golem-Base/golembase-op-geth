@@ -8,7 +8,6 @@ Feature: ETL to SQLite
     And the annotations of the entity should be existing in the SQLite database
 
   
-@wip
    Scenario: ETL Update to SQLite
     Given A running Golembase node with WAL enabled
     And A running ETL to SQLite
@@ -16,3 +15,11 @@ Feature: ETL to SQLite
     When update the entity in Golembase
     Then the entity should be updated in the SQLite database
     And the annotations of the entity should be updated in the SQLite database
+
+   Scenario: ETL Delete to SQLite
+    Given A running Golembase node with WAL enabled
+    And A running ETL to SQLite
+    And an existing entity in the SQLite database
+    When delete the entity in Golembase
+    Then the entity should be deleted in the SQLite database
+    And the annotations of the entity should be deleted in the SQLite database

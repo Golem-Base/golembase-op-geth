@@ -212,7 +212,20 @@ func main() {
 								}
 							}
 						case op.Delete != nil:
-							log.Info("delete", "entity", op.Delete.Hex())
+							err = txDB.DeleteEntity(ctx, op.Delete.Hex())
+							if err != nil {
+								return fmt.Errorf("failed to delete entity: %w", err)
+							}
+
+							err = txDB.DeleteNumericAnnotations(ctx, op.Delete.Hex())
+							if err != nil {
+								return fmt.Errorf("failed to delete numeric annotations: %w", err)
+							}
+
+							err = txDB.DeleteStringAnnotations(ctx, op.Delete.Hex())
+							if err != nil {
+								return fmt.Errorf("failed to delete string annotations: %w", err)
+							}
 						}
 
 						log.Info("operation", "operation", op)

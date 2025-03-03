@@ -45,6 +45,17 @@ func (q *Queries) DeleteStringAnnotations(ctx context.Context, entityKey string)
 	return err
 }
 
+const entityExists = `-- name: EntityExists :one
+SELECT COUNT(*) > 0 FROM entities WHERE key = ?
+`
+
+func (q *Queries) EntityExists(ctx context.Context, key string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, entityExists, key)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getEntity = `-- name: GetEntity :one
 SELECT expires_at, payload FROM entities WHERE key = ?
 `
@@ -210,6 +221,28 @@ type InsertStringAnnotationParams struct {
 func (q *Queries) InsertStringAnnotation(ctx context.Context, arg InsertStringAnnotationParams) error {
 	_, err := q.db.ExecContext(ctx, insertStringAnnotation, arg.EntityKey, arg.AnnotationKey, arg.Value)
 	return err
+}
+
+const numericAnnotationsForEntityExists = `-- name: NumericAnnotationsForEntityExists :one
+SELECT COUNT(*) > 0 FROM numeric_annotations WHERE entity_key = ?
+`
+
+func (q *Queries) NumericAnnotationsForEntityExists(ctx context.Context, entityKey string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, numericAnnotationsForEntityExists, entityKey)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const stringAnnotationsForEntityExists = `-- name: StringAnnotationsForEntityExists :one
+SELECT COUNT(*) > 0 FROM string_annotations WHERE entity_key = ?
+`
+
+func (q *Queries) StringAnnotationsForEntityExists(ctx context.Context, entityKey string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, stringAnnotationsForEntityExists, entityKey)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const updateProcessingStatus = `-- name: UpdateProcessingStatus :exec

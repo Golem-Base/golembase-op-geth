@@ -6,7 +6,6 @@ package sqlitegolem
 
 type Entity struct {
 	Key       string
-	CreatedAt int64
 	ExpiresAt int64
 	Payload   []byte
 }

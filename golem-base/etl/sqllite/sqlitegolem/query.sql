@@ -39,3 +39,13 @@ SELECT COUNT(*) > 0 FROM processing_status WHERE network = ?;
 
 -- name: DeleteProcessingStatus :exec
 DELETE FROM processing_status WHERE network = ?;
+
+-- name: EntityExists :one
+SELECT COUNT(*) > 0 FROM entities WHERE key = ?;
+
+-- name: StringAnnotationsForEntityExists :one
+SELECT COUNT(*) > 0 FROM string_annotations WHERE entity_key = ?;
+
+-- name: NumericAnnotationsForEntityExists :one
+SELECT COUNT(*) > 0 FROM numeric_annotations WHERE entity_key = ?;
+
