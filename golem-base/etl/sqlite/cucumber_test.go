@@ -15,8 +15,8 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
-	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/etlworld"
-	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/sqlitegolem"
+	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/etlworld"
+	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
@@ -63,24 +63,24 @@ func compileGeth() (string, func(), error) {
 	}, nil
 }
 
-func compileSqlliteETL() (string, func(), error) {
-	td, err := os.MkdirTemp("", "sqllite-etl")
+func compileSqliteETL() (string, func(), error) {
+	td, err := os.MkdirTemp("", "sqlite-etl")
 	if err != nil {
 		panic(fmt.Errorf("failed to create temp dir: %w", err))
 	}
 
-	sqlliteETLBinaryPath := filepath.Join(td, "sqllite-etl")
+	sqliteETLBinaryPath := filepath.Join(td, "sqlite-etl")
 
-	cmd := exec.Command("go", "build", "-o", sqlliteETLBinaryPath, ".")
+	cmd := exec.Command("go", "build", "-o", sqliteETLBinaryPath, ".")
 	out := &bytes.Buffer{}
 	cmd.Stdout = out
 	cmd.Stderr = out
 	err = cmd.Run()
 	if err != nil {
-		return "", func() {}, fmt.Errorf("failed to compile sqllite-etl: %w\n%s", err, out.String())
+		return "", func() {}, fmt.Errorf("failed to compile sqlite-etl: %w\n%s", err, out.String())
 	}
 
-	return sqlliteETLBinaryPath, func() {
+	return sqliteETLBinaryPath, func() {
 		os.RemoveAll(td)
 	}, nil
 }
@@ -94,7 +94,7 @@ func TestMain(m *testing.M) {
 		log.Fatal(fmt.Errorf("failed to compile geth: %w", err))
 	}
 
-	sqlliteETLPath, cleanupCompiledSQLLiteETL, err := compileSqlliteETL()
+	sqliteETLPath, cleanupCompiledSQLiteETL, err := compileSqliteETL()
 	if err != nil {
 		log.Fatal(fmt.Errorf("failed to compile geth: %w", err))
 	}
@@ -105,7 +105,7 @@ func TestMain(m *testing.M) {
 			InitializeScenario(sctx)
 			sctx.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 
-				world, err := etlworld.NewETLWorld(ctx, gethPath, sqlliteETLPath)
+				world, err := etlworld.NewETLWorld(ctx, gethPath, sqliteETLPath)
 				if err != nil {
 					return ctx, fmt.Errorf("failed to start geth instance: %w", err)
 				}
@@ -135,7 +135,7 @@ func TestMain(m *testing.M) {
 	// }
 
 	cleanupCompiled()
-	cleanupCompiledSQLLiteETL()
+	cleanupCompiledSQLiteETL()
 
 	os.Exit(status)
 }

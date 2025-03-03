@@ -72,4 +72,7 @@ Here we will keep track of the changes to the stock [go-ethereum](https://github
 ## 2025-02-24
     - Ported code to op-geth
 
+## 2025-03-03
+    - Implemented ETL from WAL to SQLite
+
 

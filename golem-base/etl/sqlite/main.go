@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/sqlitegolem"
+	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/wal"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/urfave/cli/v2"
@@ -29,7 +29,7 @@ func main() {
 		rpcEndpoint string
 	}{}
 	app := &cli.App{
-		Name: "sqllite-etl",
+		Name: "sqlite-etl",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "db",

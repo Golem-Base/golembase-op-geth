@@ -26,7 +26,7 @@ func startETLProcess(
 ) (_ *etlProcess, err error) {
 	// Start geth in dev mode
 
-	td, err := os.MkdirTemp("", "sqllite-etl")
+	td, err := os.MkdirTemp("", "sqlite-etl")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
@@ -61,7 +61,7 @@ func startETLProcess(
 
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("failed to start sqllite-etl: %w", err)
+		return nil, fmt.Errorf("failed to start sqlite-etl: %w", err)
 	}
 
 	defer func() {
