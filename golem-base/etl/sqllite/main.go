@@ -12,14 +12,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/wal"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/urfave/cli/v2"
 )
 
-//go:generate sqlc generate
-
-//go:embed schema.sql
+//go:embed sqlitegolem/schema.sql
 var schema string
 
 func main() {
@@ -79,7 +78,7 @@ func main() {
 				}
 			}
 
-			autocommit := New(db)
+			autocommit := sqlitegolem.New(db)
 
 			ec, err := ethclient.Dial(cfg.rpcEndpoint)
 			if err != nil {
@@ -104,7 +103,7 @@ func main() {
 					return fmt.Errorf("failed to get genesis header: %w", err)
 				}
 
-				err = autocommit.InsertProcessingStatus(ctx, InsertProcessingStatusParams{
+				err = autocommit.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
 					Network:                  networkID.String(),
 					LastProcessedBlockNumber: 0,
 					LastProcessedBlockHash:   genesisHeade.Hash().String(),
@@ -140,17 +139,40 @@ func main() {
 						}
 					}()
 
+					txDB := sqlitegolem.New(tx)
+
 					for op, err := range blockWal.OperationsIterator {
 						if err != nil {
 							return fmt.Errorf("failed to iterate over operations: %w", err)
 						}
 
+						switch {
+						case op.Create != nil:
+							log.Info("create", "entity", op.Create.EntityKey.Hex())
+							err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
+								Key:       op.Create.EntityKey.Hex(),
+								ExpiresAt: int64(op.Create.ExpiresAtBlock),
+								Payload:   op.Create.Payload,
+							})
+							if err != nil {
+								return fmt.Errorf("failed to insert entity: %w", err)
+							}
+						case op.Update != nil:
+							log.Info("update", "entity", op.Update.EntityKey.Hex())
+						case op.Delete != nil:
+							log.Info("delete", "entity", op.Delete.Hex())
+						}
+
 						log.Info("operation", "operation", op)
 					}
 
-					return nil
+					return tx.Commit()
 
 				}()
+
+				if err != nil {
+					return fmt.Errorf("failed to process block: %w", err)
+				}
 
 			}
 

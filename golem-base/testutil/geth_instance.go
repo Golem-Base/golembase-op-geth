@@ -28,10 +28,11 @@ import (
 
 type GethInstance struct {
 	*gethProcess
-	shutdown  func()
-	ETHClient *ethclient.Client
-	RPCClient *rpc.Client
-	WALDir    string
+	shutdown    func()
+	ETHClient   *ethclient.Client
+	RPCClient   *rpc.Client
+	RPCEndpoint string
+	WALDir      string
 }
 
 type gethProcess struct {
@@ -115,6 +116,7 @@ func startGethInstance(ctx context.Context, gethPath string) (_ *GethInstance, e
 		gethProcess: geth,
 		ETHClient:   client,
 		RPCClient:   rpcClient,
+		RPCEndpoint: endpoint,
 		shutdown:    cleanup,
 		WALDir:      walDir,
 	}

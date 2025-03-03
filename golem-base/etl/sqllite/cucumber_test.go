@@ -3,6 +3,7 @@ package main_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -11,9 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/etlworld"
+	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/sqlitegolem"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
 )
 
@@ -136,5 +140,66 @@ func TestMain(m *testing.M) {
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
+	ctx.Step(`^A running ETL to SQLite$`, aRunningETLToSQLite)
+	ctx.Step(`^A running Golembase node with WAL enabled$`, aRunningGolembaseNodeWithWALEnabled)
+	ctx.Step(`^I create a new entity in Golebase$`, iCreateANewEntityInGolebase)
+	ctx.Step(`^the entity should be created in the SQLite database$`, theEntityShouldBeCreatedInTheSQLiteDatabase)
 
+}
+
+func aRunningETLToSQLite() error {
+	// this is a default when starting etlworld.World, so we don't need to do anything here
+	return nil
+}
+
+func aRunningGolembaseNodeWithWALEnabled() error {
+	// this is a default when starting testutil.World, so we don't need to do anything here
+	return nil
+}
+
+func iCreateANewEntityInGolebase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	_, err := w.CreateEntity(ctx,
+		1000,
+		[]byte("test"),
+		[]storageutil.StringAnnotation{},
+		[]storageutil.NumericAnnotation{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create entity: %w", err)
+	}
+
+	return nil
+}
+
+func theEntityShouldBeCreatedInTheSQLiteDatabase(ctx context.Context) error {
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	w := etlworld.GetWorld(ctx)
+
+	bo := backoff.WithContext(backoff.NewConstantBackOff(100*time.Millisecond), ctx)
+
+	backoff.Retry(func() error {
+		err := w.WithDB(ctx, func(db *sql.DB) error {
+			gl := sqlitegolem.New(db)
+			entity, err := gl.GetEntity(ctx, w.CreatedEntityKey.Hex())
+			if err != nil {
+				return fmt.Errorf("failed to get entity: %w", err)
+			}
+
+			if entity.Payload == nil {
+				return fmt.Errorf("entity payload is nil")
+			}
+
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to check entity in database: %w", err)
+		}
+		return nil
+	}, bo)
+
+	return nil
 }
