@@ -6,7 +6,6 @@ CREATE TABLE processing_status (
 
 CREATE TABLE entities (
   key TEXT NOT NULL PRIMARY KEY,
-  created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
   payload BLOB NOT NULL
 );

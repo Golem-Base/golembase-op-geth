@@ -157,6 +157,28 @@ func main() {
 							if err != nil {
 								return fmt.Errorf("failed to insert entity: %w", err)
 							}
+
+							for _, annotation := range op.Create.NumericAnnotations {
+								err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
+									EntityKey:     op.Create.EntityKey.Hex(),
+									AnnotationKey: annotation.Key,
+									Value:         int64(annotation.Value),
+								})
+								if err != nil {
+									return fmt.Errorf("failed to insert numeric annotation: %w", err)
+								}
+							}
+
+							for _, annotation := range op.Create.StringAnnotations {
+								err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+									EntityKey:     op.Create.EntityKey.Hex(),
+									AnnotationKey: annotation.Key,
+									Value:         annotation.Value,
+								})
+								if err != nil {
+									return fmt.Errorf("failed to insert string annotation: %w", err)
+								}
+							}
 						case op.Update != nil:
 							log.Info("update", "entity", op.Update.EntityKey.Hex())
 						case op.Delete != nil:

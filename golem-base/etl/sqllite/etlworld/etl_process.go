@@ -54,15 +54,15 @@ func startETLProcess(
 		rpcEndpoint,
 	)
 
-	err = cmd.Start()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start sqllite-etl: %w", err)
-	}
-
 	output := &bytes.Buffer{}
 
 	cmd.Stdout = output
 	cmd.Stderr = output
+
+	err = cmd.Start()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start sqllite-etl: %w", err)
+	}
 
 	defer func() {
 		if err != nil {

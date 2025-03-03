@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/etlworld"
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqllite/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
 )
 
@@ -144,6 +145,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^A running Golembase node with WAL enabled$`, aRunningGolembaseNodeWithWALEnabled)
 	ctx.Step(`^I create a new entity in Golebase$`, iCreateANewEntityInGolebase)
 	ctx.Step(`^the entity should be created in the SQLite database$`, theEntityShouldBeCreatedInTheSQLiteDatabase)
+	ctx.Step(`^the annotations of the entity should be existing in the SQLite database$`, theAnnotationsOfTheEntityShouldBeExistingInTheSQLiteDatabase)
 
 }
 
@@ -162,8 +164,18 @@ func iCreateANewEntityInGolebase(ctx context.Context) error {
 	_, err := w.CreateEntity(ctx,
 		1000,
 		[]byte("test"),
-		[]storageutil.StringAnnotation{},
-		[]storageutil.NumericAnnotation{},
+		[]storageutil.StringAnnotation{
+			{
+				Key:   "stringTest",
+				Value: "stringTest",
+			},
+		},
+		[]storageutil.NumericAnnotation{
+			{
+				Key:   "numericTest",
+				Value: 1234567890,
+			},
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create entity: %w", err)
@@ -181,7 +193,7 @@ func theEntityShouldBeCreatedInTheSQLiteDatabase(ctx context.Context) error {
 
 	bo := backoff.WithContext(backoff.NewConstantBackOff(100*time.Millisecond), ctx)
 
-	backoff.Retry(func() error {
+	err := backoff.Retry(func() error {
 		err := w.WithDB(ctx, func(db *sql.DB) error {
 			gl := sqlitegolem.New(db)
 			entity, err := gl.GetEntity(ctx, w.CreatedEntityKey.Hex())
@@ -200,6 +212,59 @@ func theEntityShouldBeCreatedInTheSQLiteDatabase(ctx context.Context) error {
 		}
 		return nil
 	}, bo)
+	if err != nil {
+		return fmt.Errorf("failed to check entity in database: %w", err)
+	}
+
+	return nil
+}
+
+func theAnnotationsOfTheEntityShouldBeExistingInTheSQLiteDatabase(ctx context.Context) error {
+
+	w := etlworld.GetWorld(ctx)
+
+	var numericAnnotations []sqlitegolem.GetNumericAnnotationsRow
+	var stringAnnotations []sqlitegolem.GetStringAnnotationsRow
+
+	err := w.WithDB(ctx, func(db *sql.DB) (err error) {
+		gl := sqlitegolem.New(db)
+		numericAnnotations, err = gl.GetNumericAnnotations(ctx, w.CreatedEntityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
+		stringAnnotations, err = gl.GetStringAnnotations(ctx, w.CreatedEntityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check entity in database: %w", err)
+	}
+
+	expectedStringAnnotations := []sqlitegolem.GetStringAnnotationsRow{
+		{
+			AnnotationKey: "stringTest",
+			Value:         "stringTest",
+		},
+	}
+
+	if diff := cmp.Diff(stringAnnotations, expectedStringAnnotations); diff != "" {
+		return fmt.Errorf("string annotations are not equal: %s", diff)
+	}
+
+	expectedNumericAnnotations := []sqlitegolem.GetNumericAnnotationsRow{
+		{
+			AnnotationKey: "numericTest",
+			Value:         1234567890,
+		},
+	}
+
+	if diff := cmp.Diff(numericAnnotations, expectedNumericAnnotations); diff != "" {
+		return fmt.Errorf("numeric annotations are not equal: %s", diff)
+	}
 
 	return nil
 }
