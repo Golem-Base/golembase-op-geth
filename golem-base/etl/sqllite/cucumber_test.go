@@ -146,6 +146,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I create a new entity in Golebase$`, iCreateANewEntityInGolebase)
 	ctx.Step(`^the entity should be created in the SQLite database$`, theEntityShouldBeCreatedInTheSQLiteDatabase)
 	ctx.Step(`^the annotations of the entity should be existing in the SQLite database$`, theAnnotationsOfTheEntityShouldBeExistingInTheSQLiteDatabase)
+	ctx.Step(`^an existing entity in the SQLite database$`, anExistingEntityInTheSQLiteDatabase)
+	ctx.Step(`^the annotations of the entity should be updated in the SQLite database$`, theAnnotationsOfTheEntityShouldBeUpdatedInTheSQLiteDatabase)
+	ctx.Step(`^the entity should be updated in the SQLite database$`, theEntityShouldBeUpdatedInTheSQLiteDatabase)
+	ctx.Step(`^update the entity in Golembase$`, updateTheEntityInGolembase)
 
 }
 
@@ -266,5 +270,145 @@ func theAnnotationsOfTheEntityShouldBeExistingInTheSQLiteDatabase(ctx context.Co
 		return fmt.Errorf("numeric annotations are not equal: %s", diff)
 	}
 
+	return nil
+}
+
+func anExistingEntityInTheSQLiteDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	_, err := w.CreateEntity(ctx,
+		1000,
+		[]byte("test"),
+		[]storageutil.StringAnnotation{
+			{
+				Key:   "stringTest",
+				Value: "stringTest",
+			},
+		},
+		[]storageutil.NumericAnnotation{
+			{
+				Key:   "numericTest",
+				Value: 1234567890,
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create entity: %w", err)
+	}
+
+	return nil
+}
+
+func theAnnotationsOfTheEntityShouldBeUpdatedInTheSQLiteDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+
+	var numericAnnotations []sqlitegolem.GetNumericAnnotationsRow
+	var stringAnnotations []sqlitegolem.GetStringAnnotationsRow
+
+	err := w.WithDB(ctx, func(db *sql.DB) (err error) {
+		gl := sqlitegolem.New(db)
+		numericAnnotations, err = gl.GetNumericAnnotations(ctx, w.CreatedEntityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
+		stringAnnotations, err = gl.GetStringAnnotations(ctx, w.CreatedEntityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check entity in database: %w", err)
+	}
+
+	expectedStringAnnotations := []sqlitegolem.GetStringAnnotationsRow{
+		{
+			AnnotationKey: "stringTest2",
+			Value:         "stringTest2",
+		},
+	}
+
+	if diff := cmp.Diff(stringAnnotations, expectedStringAnnotations); diff != "" {
+		return fmt.Errorf("string annotations are not equal: %s", diff)
+	}
+
+	expectedNumericAnnotations := []sqlitegolem.GetNumericAnnotationsRow{
+		{
+			AnnotationKey: "numericTest2",
+			Value:         12345678901,
+		},
+	}
+
+	if diff := cmp.Diff(numericAnnotations, expectedNumericAnnotations); diff != "" {
+		return fmt.Errorf("numeric annotations are not equal: %s", diff)
+	}
+
+	return nil
+
+}
+
+func theEntityShouldBeUpdatedInTheSQLiteDatabase(ctx context.Context) error {
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	w := etlworld.GetWorld(ctx)
+
+	bo := backoff.WithContext(backoff.NewConstantBackOff(100*time.Millisecond), ctx)
+
+	err := backoff.Retry(func() error {
+		err := w.WithDB(ctx, func(db *sql.DB) error {
+			gl := sqlitegolem.New(db)
+			entity, err := gl.GetEntity(ctx, w.CreatedEntityKey.Hex())
+			if err != nil {
+				return fmt.Errorf("failed to get entity: %w", err)
+			}
+
+			if entity.Payload == nil {
+				return fmt.Errorf("entity payload is nil")
+			}
+
+			if string(entity.Payload) != "test2" {
+				return fmt.Errorf("entity payload is not equal to test2")
+			}
+
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to check entity in database: %w", err)
+		}
+		return nil
+	}, bo)
+	if err != nil {
+		return fmt.Errorf("failed to check entity in database: %w", err)
+	}
+
+	return nil
+
+}
+
+func updateTheEntityInGolembase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	_, err := w.UpdateEntity(ctx,
+		w.CreatedEntityKey,
+		999,
+		[]byte("test2"),
+		[]storageutil.StringAnnotation{
+			{
+				Key:   "stringTest2",
+				Value: "stringTest2",
+			},
+		},
+		[]storageutil.NumericAnnotation{
+			{
+				Key:   "numericTest2",
+				Value: 12345678901,
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create entity: %w", err)
+	}
 	return nil
 }

@@ -180,7 +180,37 @@ func main() {
 								}
 							}
 						case op.Update != nil:
-							log.Info("update", "entity", op.Update.EntityKey.Hex())
+							txDB.DeleteEntity(ctx, op.Update.EntityKey.Hex())
+							txDB.DeleteNumericAnnotations(ctx, op.Update.EntityKey.Hex())
+							txDB.DeleteStringAnnotations(ctx, op.Update.EntityKey.Hex())
+
+							txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
+								Key:       op.Update.EntityKey.Hex(),
+								ExpiresAt: int64(op.Update.ExpiresAtBlock),
+								Payload:   op.Update.Payload,
+							})
+
+							for _, annotation := range op.Update.NumericAnnotations {
+								err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
+									EntityKey:     op.Update.EntityKey.Hex(),
+									AnnotationKey: annotation.Key,
+									Value:         int64(annotation.Value),
+								})
+								if err != nil {
+									return fmt.Errorf("failed to insert numeric annotation: %w", err)
+								}
+							}
+
+							for _, annotation := range op.Update.StringAnnotations {
+								err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+									EntityKey:     op.Update.EntityKey.Hex(),
+									AnnotationKey: annotation.Key,
+									Value:         annotation.Value,
+								})
+								if err != nil {
+									return fmt.Errorf("failed to insert string annotation: %w", err)
+								}
+							}
 						case op.Delete != nil:
 							log.Info("delete", "entity", op.Delete.Hex())
 						}
