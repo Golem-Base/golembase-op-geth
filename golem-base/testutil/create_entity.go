@@ -102,6 +102,8 @@ func (w *World) CreateEntity(
 
 	w.LastReceipt = receipt
 
+	w.CreatedEntityKey = receipt.Logs[0].Topics[1]
+
 	return receipt, nil
 
 }

@@ -1,6 +1,5 @@
 Feature: Write-ahead log
 
-  @wip
   Scenario: creating an entity
     Given I have enough funds to pay for the transaction
     When submit a transaction to create an entity

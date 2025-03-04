@@ -31,6 +31,8 @@
               gopls # lsp
               gotools # goimports, ...
               shellcheck
+              sqlc
+              sqlite
             ];
           };
         });
