@@ -161,3 +161,65 @@ func Clear(db StateAccess, setKey common.Hash) {
 	// Reset the set size to zero
 	db.SetState(storageutil.GolemDBAddress, setKey, zeroHash)
 }
+
+func Iterate(db StateAccess, setKey common.Hash) func(yield func(value common.Hash) bool) {
+	return func(yield func(value common.Hash) bool) {
+		// Get the current size of the set
+		arrayLen := Size(db, setKey)
+
+		// If the set is empty, do nothing
+		if arrayLen.IsZero() {
+			return
+		}
+
+		// Iterate through each element in the set
+		for i := new(uint256.Int).SetUint64(1); i.Cmp(arrayLen) <= 0; i.AddUint64(i, 1) {
+			// Get the element address
+			elementAddress := new(uint256.Int).SetBytes32(setKey[:])
+			elementAddress.Add(elementAddress, i)
+
+			// Get the element value
+			value := db.GetState(storageutil.GolemDBAddress, elementAddress.Bytes32())
+
+			// Apply the yield function to the value
+			// If it returns false, stop iteration
+			if !yield(value) {
+				return
+			}
+		}
+	}
+}
+
+// Iterator returns a channel that can be used with a range loop to iterate over the set values.
+// This allows for more idiomatic iteration using 'for value := range keyset.Iterator(db, setKey) {}'.
+// The channel is closed automatically when the iteration is complete.
+func Iterator(db StateAccess, setKey common.Hash) <-chan common.Hash {
+	values := make(chan common.Hash)
+
+	go func() {
+		defer close(values)
+
+		// Get the current size of the set
+		arrayLen := Size(db, setKey)
+
+		// If the set is empty, return immediately (channel will be closed)
+		if arrayLen.IsZero() {
+			return
+		}
+
+		// Iterate through each element in the set
+		for i := new(uint256.Int).SetUint64(1); i.Cmp(arrayLen) <= 0; i.AddUint64(i, 1) {
+			// Get the element address
+			elementAddress := new(uint256.Int).SetBytes32(setKey[:])
+			elementAddress.Add(elementAddress, i)
+
+			// Get the element value
+			value := db.GetState(storageutil.GolemDBAddress, elementAddress.Bytes32())
+
+			// Send the value to the channel
+			values <- value
+		}
+	}()
+
+	return values
+}

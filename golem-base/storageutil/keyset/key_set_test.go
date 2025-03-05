@@ -392,3 +392,158 @@ func TestClearAndReaddValues(t *testing.T) {
 	entriesAfter := db.GetStorageEntryCount(storageutil.GolemDBAddress)
 	assert.Greater(t, entriesAfter, 0)
 }
+
+func TestIterateEmptySet(t *testing.T) {
+	db := newMockStateAccess()
+	setKey := newHash("0x1")
+
+	// This should not be called for an empty set
+	iterationCount := 0
+	for range keyset.Iterator(db, setKey) {
+		iterationCount++
+	}
+
+	assert.Equal(t, 0, iterationCount, "Iterate should not call yield function for empty set")
+}
+
+func TestIterateSetWithSingleValue(t *testing.T) {
+	db := newMockStateAccess()
+	setKey := newHash("0x1")
+	value := newHash("0x2")
+
+	// Add a value
+	err := keyset.AddValue(db, setKey, value)
+	assert.NoError(t, err)
+
+	// Iterate through the set
+	values := []common.Hash{}
+	for v := range keyset.Iterator(db, setKey) {
+		values = append(values, v)
+	}
+
+	// Should find exactly one value
+	assert.Equal(t, 1, len(values))
+	assert.Equal(t, value, values[0])
+}
+
+func TestIterateSetWithMultipleValues(t *testing.T) {
+	db := newMockStateAccess()
+	setKey := newHash("0x1")
+	value1 := newHash("0x2")
+	value2 := newHash("0x3")
+	value3 := newHash("0x4")
+
+	// Add multiple values
+	err := keyset.AddValue(db, setKey, value1)
+	assert.NoError(t, err)
+
+	err = keyset.AddValue(db, setKey, value2)
+	assert.NoError(t, err)
+
+	err = keyset.AddValue(db, setKey, value3)
+	assert.NoError(t, err)
+
+	// Verify all values are in the set using Size
+	assert.Equal(t, uint64(3), keyset.Size(db, setKey).Uint64())
+
+	// Iterate through the set and collect values
+	values := []common.Hash{}
+	for v := range keyset.Iterator(db, setKey) {
+		values = append(values, v)
+	}
+
+	// Should find all three values
+	assert.Equal(t, 3, len(values))
+	assert.Contains(t, values, value1)
+	assert.Contains(t, values, value2)
+	assert.Contains(t, values, value3)
+}
+
+func TestIterateWithEarlyTermination(t *testing.T) {
+	db := newMockStateAccess()
+	setKey := newHash("0x1")
+	value1 := newHash("0x2")
+	value2 := newHash("0x3")
+	value3 := newHash("0x4")
+
+	// Add multiple values
+	err := keyset.AddValue(db, setKey, value1)
+	assert.NoError(t, err)
+
+	err = keyset.AddValue(db, setKey, value2)
+	assert.NoError(t, err)
+
+	err = keyset.AddValue(db, setKey, value3)
+	assert.NoError(t, err)
+
+	iterationCount := 0
+
+	for range keyset.Iterator(db, setKey) {
+		iterationCount++
+		if iterationCount >= 2 {
+			break
+		}
+	}
+
+	// Should have stopped after the second value
+	assert.Equal(t, 2, iterationCount)
+}
+
+func TestIterateAfterRemovingMiddleValue(t *testing.T) {
+	db := newMockStateAccess()
+	setKey := newHash("0x1")
+	value1 := newHash("0x2")
+	value2 := newHash("0x3")
+	value3 := newHash("0x4")
+
+	// Add multiple values
+	err := keyset.AddValue(db, setKey, value1)
+	assert.NoError(t, err)
+
+	err = keyset.AddValue(db, setKey, value2)
+	assert.NoError(t, err)
+
+	err = keyset.AddValue(db, setKey, value3)
+	assert.NoError(t, err)
+
+	// Remove the middle value
+	err = keyset.RemoveValue(db, setKey, value2)
+	assert.NoError(t, err)
+
+	// Iterate through the set and collect values
+	valuesAfterRemoval := []common.Hash{}
+	for v := range keyset.Iterator(db, setKey) {
+		valuesAfterRemoval = append(valuesAfterRemoval, v)
+	}
+
+	// Should have two values - value1 and value3
+	assert.Equal(t, 2, len(valuesAfterRemoval))
+	assert.Contains(t, valuesAfterRemoval, value1)
+	assert.Contains(t, valuesAfterRemoval, value3)
+	assert.NotContains(t, valuesAfterRemoval, value2)
+}
+
+func TestIterateAfterClearingSet(t *testing.T) {
+	db := newMockStateAccess()
+	setKey := newHash("0x1")
+	value1 := newHash("0x2")
+	value2 := newHash("0x3")
+
+	// Add values
+	err := keyset.AddValue(db, setKey, value1)
+	assert.NoError(t, err)
+
+	err = keyset.AddValue(db, setKey, value2)
+	assert.NoError(t, err)
+
+	// Clear the set
+	keyset.Clear(db, setKey)
+
+	// This should not be called for an empty set
+	iterationCount := 0
+	for range keyset.Iterator(db, setKey) {
+		iterationCount++
+	}
+
+	assert.Equal(t, 0, iterationCount, "Iterate should not call yield function after clearing set")
+}
