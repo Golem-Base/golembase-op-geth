@@ -13,7 +13,7 @@ type StateAccess interface {
 	SetState(common.Address, common.Hash, common.Hash) common.Hash
 }
 
-var golemDBAddress = common.HexToAddress("0x0000000000000000000000000000000000000001")
+var GolemDBAddress = common.HexToAddress("0x0000000000000000000000000000000000000001")
 
 func SetGolemDBState(db StateAccess, key common.Hash, value []byte) {
 
@@ -22,7 +22,7 @@ func SetGolemDBState(db StateAccess, key common.Hash, value []byte) {
 	keyInt := new(uint256.Int).SetBytes(key[:])
 
 	for v := range BytesTo32ByteSequence(value) {
-		db.SetState(golemDBAddress, keyInt.Bytes32(), v)
+		db.SetState(GolemDBAddress, keyInt.Bytes32(), v)
 		keyInt.AddUint64(keyInt, 1)
 	}
 }
@@ -60,7 +60,7 @@ func BytesTo32ByteSequence(value []byte) iter.Seq[common.Hash] {
 }
 
 func GetGolemDBState(db StateAccess, key common.Hash) []byte {
-	head := db.GetState(golemDBAddress, key)
+	head := db.GetState(GolemDBAddress, key)
 	if head == emptyHash {
 		return []byte{}
 	}
@@ -87,7 +87,7 @@ func GetGolemDBState(db StateAccess, key common.Hash) []byte {
 
 	// Read data chunks
 	for remaining > 0 {
-		chunk := db.GetState(golemDBAddress, keyInt.Bytes32())
+		chunk := db.GetState(GolemDBAddress, keyInt.Bytes32())
 		size := min(remaining, 32)
 		value = append(value, chunk[:size]...)
 		remaining -= size
@@ -100,13 +100,13 @@ func GetGolemDBState(db StateAccess, key common.Hash) []byte {
 var emptyHash = common.Hash{}
 
 func DeleteGolemDBState(db StateAccess, key common.Hash) {
-	head := db.GetState(golemDBAddress, key)
+	head := db.GetState(GolemDBAddress, key)
 	if head == emptyHash {
 		return
 	}
 
 	// Clear the head slot
-	db.SetState(golemDBAddress, key, emptyHash)
+	db.SetState(GolemDBAddress, key, emptyHash)
 
 	// For small payloads (≤31 bytes), we only need to clear the head slot
 	if head[31]&0x01 == 0 {
@@ -123,7 +123,7 @@ func DeleteGolemDBState(db StateAccess, key common.Hash) {
 	// Clear all data slots (skip the length slot which was already cleared)
 	keyInt.AddUint64(keyInt, 1)
 	for range numberOfSlots {
-		db.SetState(golemDBAddress, keyInt.Bytes32(), emptyHash)
+		db.SetState(GolemDBAddress, keyInt.Bytes32(), emptyHash)
 		keyInt.AddUint64(keyInt, 1)
 	}
 }
