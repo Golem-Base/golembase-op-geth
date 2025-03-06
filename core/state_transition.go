@@ -190,11 +190,12 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         tx.BlobGasFeeCap(),
 
-		IsSystemTx:     tx.IsSystemTx(),
-		IsDepositTx:    tx.IsDepositTx(),
-		Mint:           tx.Mint(),
-		RollupCostData: tx.RollupCostData(),
-		BlockNumber:    blockNumber,
+		IsSystemTx:      tx.IsSystemTx(),
+		IsDepositTx:     tx.IsDepositTx(),
+		Mint:            tx.Mint(),
+		RollupCostData:  tx.RollupCostData(),
+		TransactionHash: tx.Hash(),
+		BlockNumber:     blockNumber,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {

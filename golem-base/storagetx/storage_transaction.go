@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -76,7 +77,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 
 			// create the key for the list of entities that will expire at the given block number
 			expiredEntityKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
-			err = storageutil.AppendToKeyList(access, expiredEntityKey, key)
+			err = keyset.AddValue(access, expiredEntityKey, key)
 			if err != nil {
 				return fmt.Errorf("failed to append to key list: %w", err)
 			}
@@ -96,7 +97,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 
 		{
 			for _, stringAnnotation := range ap.StringAnnotations {
-				err = storageutil.AppendToKeyList(
+				err = keyset.AddValue(
 					access,
 					crypto.Keccak256Hash(
 						[]byte("golemBaseStringAnnotation"),
@@ -111,7 +112,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 			}
 
 			for _, numericAnnotation := range ap.NumericAnnotations {
-				err = storageutil.AppendToKeyList(
+				err = keyset.AddValue(
 					access,
 					crypto.Keccak256Hash(
 						[]byte("golemBaseNumericAnnotation"),
@@ -163,7 +164,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 		}
 
 		for _, stringAnnotation := range ap.StringAnnotations {
-			err = storageutil.RemoveKeyFromList(
+			err = keyset.RemoveValue(
 				access,
 				crypto.Keccak256Hash(
 					[]byte("golemBaseStringAnnotation"),
@@ -178,7 +179,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 		}
 
 		for _, numericAnnotation := range ap.NumericAnnotations {
-			err = storageutil.RemoveKeyFromList(
+			err = keyset.RemoveValue(
 				access,
 				crypto.Keccak256Hash(
 					[]byte("golemBaseNumericAnnotation"),
@@ -197,7 +198,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 		// create the key for the list of entities that will expire at the given block number
 		expiredEntityKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
 
-		err = storageutil.RemoveKeyFromList(access, expiredEntityKey, toDelete)
+		err = keyset.RemoveValue(access, expiredEntityKey, toDelete)
 		if err != nil {
 			return fmt.Errorf("failed to append to key list: %w", err)
 		}
