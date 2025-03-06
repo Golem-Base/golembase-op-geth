@@ -190,11 +190,12 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		BlobHashes:            tx.BlobHashes(),
 		BlobGasFeeCap:         tx.BlobGasFeeCap(),
 
-		IsSystemTx:     tx.IsSystemTx(),
-		IsDepositTx:    tx.IsDepositTx(),
-		Mint:           tx.Mint(),
-		RollupCostData: tx.RollupCostData(),
-		BlockNumber:    blockNumber,
+		IsSystemTx:      tx.IsSystemTx(),
+		IsDepositTx:     tx.IsDepositTx(),
+		Mint:            tx.Mint(),
+		RollupCostData:  tx.RollupCostData(),
+		TransactionHash: tx.Hash(),
+		BlockNumber:     blockNumber,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -597,15 +598,18 @@ func (st *stateTransition) innerExecute() (*ExecutionResult, error) {
 			st.evm.Context.Transfer(st.evm.StateDB, sender.Address(), st.to(), value)
 
 			if len(st.msg.Data) > 0 {
+				var logs []*types.Log
 				// run the storage transaction
-				logs, err := storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, st.evm.StateDB)
+				logs, vmerr = storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, st.evm.StateDB)
 				if err != nil {
 					return nil, fmt.Errorf("failed to execute storage transaction: %w", err)
 				}
 
-				// add logs of the storage transaction
-				for _, log := range logs {
-					st.evm.StateDB.AddLog(log)
+				if vmerr == nil {
+					// add logs of the storage transaction
+					for _, log := range logs {
+						st.evm.StateDB.AddLog(log)
+					}
 				}
 			}
 		case msg.GolemBaseHousekeeping:

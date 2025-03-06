@@ -3,12 +3,14 @@ package eth
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -54,20 +56,7 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]commo
 
 	expiredEntityKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), blockNumberBig.Bytes())
 
-	listData := storageutil.GetGolemDBState(stateDb, expiredEntityKey)
-
-	if len(listData) == 0 {
-		return nil, nil
-	}
-
-	list := &storageutil.KeyList{}
-
-	err = rlp.DecodeBytes(listData, list)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode key list: %w", err)
-	}
-
-	return list.Keys, nil
+	return slices.Collect(keyset.Iterate(stateDb, expiredEntityKey)), nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) ([]common.Hash, error) {
@@ -83,20 +72,7 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) 
 		[]byte(value),
 	)
 
-	listData := storageutil.GetGolemDBState(stateDb, entityKeys)
-
-	list := &storageutil.KeyList{}
-
-	if len(listData) == 0 {
-		return nil, nil
-	}
-
-	err = rlp.DecodeBytes(listData, list)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode key list: %w", err)
-	}
-
-	return list.Keys, nil
+	return slices.Collect(keyset.Iterate(stateDb, entityKeys)), nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value uint64) ([]common.Hash, error) {
@@ -112,20 +88,7 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value 
 		binary.BigEndian.AppendUint64(nil, value),
 	)
 
-	listData := storageutil.GetGolemDBState(stateDb, entityKeys)
-
-	list := &storageutil.KeyList{}
-
-	if len(listData) == 0 {
-		return nil, nil
-	}
-
-	err = rlp.DecodeBytes(listData, list)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode key list: %w", err)
-	}
-
-	return list.Keys, nil
+	return slices.Collect(keyset.Iterate(stateDb, entityKeys)), nil
 }
 
 func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, error) {

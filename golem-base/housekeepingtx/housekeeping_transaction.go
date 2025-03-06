@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -28,7 +29,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 		}
 
 		for _, stringAnnotation := range ap.StringAnnotations {
-			err = storageutil.RemoveKeyFromList(
+			err = keyset.RemoveValue(
 				access,
 				crypto.Keccak256Hash(
 					[]byte("golemBaseStringAnnotation"),
@@ -43,7 +44,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 		}
 
 		for _, numericAnnotation := range ap.NumericAnnotations {
-			err = storageutil.RemoveKeyFromList(
+			err = keyset.RemoveValue(
 				access,
 				crypto.Keccak256Hash(
 					[]byte("golemBaseNumericAnnotation"),
@@ -62,7 +63,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 		// create the key for the list of entities that will expire at the given block number
 		expiredEntityKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
 
-		err = storageutil.RemoveKeyFromList(access, expiredEntityKey, toDelete)
+		err = keyset.RemoveValue(access, expiredEntityKey, toDelete)
 		if err != nil {
 			return fmt.Errorf("failed to append to key list: %w", err)
 		}
@@ -90,25 +91,14 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 
 	entitiesToExpireForBlockKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
 
-	listData := storageutil.GetGolemDBState(access, entitiesToExpireForBlockKey)
-
-	list := &storageutil.KeyList{}
-
-	if len(listData) > 0 {
-		err := rlp.DecodeBytes(listData, list)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode key list: %w", err)
-		}
-	}
-
-	for _, key := range list.Keys {
+	for key := range keyset.Iterator(access, entitiesToExpireForBlockKey) {
 		err := deleteEntity(key, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to delete entity %s: %w", key.Hex(), err)
 		}
 	}
 
-	storageutil.DeleteGolemDBState(access, entitiesToExpireForBlockKey)
+	keyset.Clear(access, entitiesToExpireForBlockKey)
 
 	return logs, nil
 }
