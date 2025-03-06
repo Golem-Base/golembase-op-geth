@@ -70,6 +70,12 @@ func AddValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 
 }
 
+func nextHash(h common.Hash) common.Hash {
+	v := new(uint256.Int).SetBytes32(h[:])
+	v.Add(v, oneUint256)
+	return common.Hash(v.Bytes32())
+}
+
 // RemoveValue removes a value from the set identified by setKey.
 // It does nothing if the value is not in the set.
 // For non-empty sets, it moves the last element to the position of the removed element
@@ -87,9 +93,11 @@ func RemoveValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 
 	arrayLen := new(uint256.Int).SetBytes(arrayLenAsHash[:])
 
+	// if the set is empty, set the map and the set to zero
 	if arrayLen.Cmp(oneUint256) == 0 {
 		db.SetState(storageutil.GolemDBAddress, mapKey, zeroHash)
 		db.SetState(storageutil.GolemDBAddress, setKey, zeroHash)
+		db.SetState(storageutil.GolemDBAddress, nextHash(setKey), zeroHash)
 		return nil
 	}
 

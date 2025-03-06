@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -164,28 +165,31 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 		}
 
 		for _, stringAnnotation := range ap.StringAnnotations {
-			err = keyset.RemoveValue(
+			listKey := crypto.Keccak256Hash(
+				[]byte("golemBaseStringAnnotation"),
+				[]byte(stringAnnotation.Key),
+				[]byte(stringAnnotation.Value),
+			)
+			err := keyset.RemoveValue(
 				access,
-				crypto.Keccak256Hash(
-					[]byte("golemBaseStringAnnotation"),
-					[]byte(stringAnnotation.Key),
-					[]byte(stringAnnotation.Value),
-				),
+				listKey,
 				toDelete,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to remove key %s from the string annotation list: %w", toDelete, err)
 			}
+
 		}
 
 		for _, numericAnnotation := range ap.NumericAnnotations {
-			err = keyset.RemoveValue(
+			listKey := crypto.Keccak256Hash(
+				[]byte("golemBaseNumericAnnotation"),
+				[]byte(numericAnnotation.Key),
+				binary.BigEndian.AppendUint64(nil, numericAnnotation.Value),
+			)
+			err := keyset.RemoveValue(
 				access,
-				crypto.Keccak256Hash(
-					[]byte("golemBaseNumericAnnotation"),
-					[]byte(numericAnnotation.Key),
-					binary.BigEndian.AppendUint64(nil, numericAnnotation.Value),
-				),
+				listKey,
 				toDelete,
 			)
 			if err != nil {
@@ -268,5 +272,10 @@ func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, access
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode storage transaction: %w", err)
 	}
-	return tx.Run(blockNumber, txHash, access)
+	logs, err := tx.Run(blockNumber, txHash, access)
+	if err != nil {
+		log.Error("Failed to run storage transaction", "error", err)
+		return nil, fmt.Errorf("failed to run storage transaction: %w", err)
+	}
+	return logs, nil
 }
