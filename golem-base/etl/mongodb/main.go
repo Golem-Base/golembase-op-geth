@@ -159,100 +159,67 @@ func main() {
 							switch {
 							case op.Create != nil:
 								log.Info("create", "entity", op.Create.EntityKey.Hex())
+
+								// Convert string and numeric annotations to maps
+								stringAnnotations := make(map[string]string)
+								for _, annotation := range op.Create.StringAnnotations {
+									stringAnnotations[annotation.Key] = annotation.Value
+								}
+
+								numericAnnotations := make(map[string]int64)
+								for _, annotation := range op.Create.NumericAnnotations {
+									numericAnnotations[annotation.Key] = int64(annotation.Value)
+								}
+
 								err = mongoDriver.InsertEntity(txCtx, mongogolem.Entity{
-									Key:       op.Create.EntityKey.Hex(),
-									ExpiresAt: int64(op.Create.ExpiresAtBlock),
-									Payload:   op.Create.Payload,
+									Key:                op.Create.EntityKey.Hex(),
+									ExpiresAt:          int64(op.Create.ExpiresAtBlock),
+									Payload:            op.Create.Payload,
+									StringAnnotations:  stringAnnotations,
+									NumericAnnotations: numericAnnotations,
 								})
 								if err != nil {
 									return nil, fmt.Errorf("failed to insert entity: %w", err)
 								}
 
-								for _, annotation := range op.Create.NumericAnnotations {
-									err = mongoDriver.InsertNumericAnnotation(txCtx, mongogolem.NumericAnnotation{
-										EntityKey:     op.Create.EntityKey.Hex(),
-										AnnotationKey: annotation.Key,
-										Value:         int64(annotation.Value),
-									})
-									if err != nil {
-										return nil, fmt.Errorf("failed to insert numeric annotation: %w", err)
-									}
-								}
-
-								for _, annotation := range op.Create.StringAnnotations {
-									err = mongoDriver.InsertStringAnnotation(txCtx, mongogolem.StringAnnotation{
-										EntityKey:     op.Create.EntityKey.Hex(),
-										AnnotationKey: annotation.Key,
-										Value:         annotation.Value,
-									})
-									if err != nil {
-										return nil, fmt.Errorf("failed to insert string annotation: %w", err)
-									}
-								}
-
 							case op.Update != nil:
-								// First delete existing data
+								log.Info("update", "entity", op.Update.EntityKey.Hex())
+
+								// First delete existing entity
 								err = mongoDriver.DeleteEntity(txCtx, op.Update.EntityKey.Hex())
 								if err != nil {
 									return nil, fmt.Errorf("failed to delete entity before update: %w", err)
 								}
 
-								err = mongoDriver.DeleteNumericAnnotations(txCtx, op.Update.EntityKey.Hex())
-								if err != nil {
-									return nil, fmt.Errorf("failed to delete numeric annotations before update: %w", err)
+								// Convert string and numeric annotations to maps
+								stringAnnotations := make(map[string]string)
+								for _, annotation := range op.Update.StringAnnotations {
+									stringAnnotations[annotation.Key] = annotation.Value
 								}
 
-								err = mongoDriver.DeleteStringAnnotations(txCtx, op.Update.EntityKey.Hex())
-								if err != nil {
-									return nil, fmt.Errorf("failed to delete string annotations before update: %w", err)
+								numericAnnotations := make(map[string]int64)
+								for _, annotation := range op.Update.NumericAnnotations {
+									numericAnnotations[annotation.Key] = int64(annotation.Value)
 								}
 
-								// Then insert updated data
+								// Insert updated entity
 								err = mongoDriver.InsertEntity(txCtx, mongogolem.Entity{
-									Key:       op.Update.EntityKey.Hex(),
-									ExpiresAt: int64(op.Update.ExpiresAtBlock),
-									Payload:   op.Update.Payload,
+									Key:                op.Update.EntityKey.Hex(),
+									ExpiresAt:          int64(op.Update.ExpiresAtBlock),
+									Payload:            op.Update.Payload,
+									StringAnnotations:  stringAnnotations,
+									NumericAnnotations: numericAnnotations,
 								})
 								if err != nil {
 									return nil, fmt.Errorf("failed to insert updated entity: %w", err)
 								}
 
-								for _, annotation := range op.Update.NumericAnnotations {
-									err = mongoDriver.InsertNumericAnnotation(txCtx, mongogolem.NumericAnnotation{
-										EntityKey:     op.Update.EntityKey.Hex(),
-										AnnotationKey: annotation.Key,
-										Value:         int64(annotation.Value),
-									})
-									if err != nil {
-										return nil, fmt.Errorf("failed to insert updated numeric annotation: %w", err)
-									}
-								}
-
-								for _, annotation := range op.Update.StringAnnotations {
-									err = mongoDriver.InsertStringAnnotation(txCtx, mongogolem.StringAnnotation{
-										EntityKey:     op.Update.EntityKey.Hex(),
-										AnnotationKey: annotation.Key,
-										Value:         annotation.Value,
-									})
-									if err != nil {
-										return nil, fmt.Errorf("failed to insert updated string annotation: %w", err)
-									}
-								}
-
 							case op.Delete != nil:
+								log.Info("delete", "entity", op.Delete.Hex())
+
 								err = mongoDriver.DeleteEntity(txCtx, op.Delete.Hex())
 								if err != nil {
 									return nil, fmt.Errorf("failed to delete entity: %w", err)
-								}
-
-								err = mongoDriver.DeleteNumericAnnotations(txCtx, op.Delete.Hex())
-								if err != nil {
-									return nil, fmt.Errorf("failed to delete numeric annotations: %w", err)
-								}
-
-								err = mongoDriver.DeleteStringAnnotations(txCtx, op.Delete.Hex())
-								if err != nil {
-									return nil, fmt.Errorf("failed to delete string annotations: %w", err)
 								}
 							}
 

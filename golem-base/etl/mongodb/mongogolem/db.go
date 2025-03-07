@@ -22,21 +22,15 @@ func New(db *mongo.Database) *MongoGolem {
 
 // Collections returns the MongoDB collections
 func (m *MongoGolem) Collections() struct {
-	ProcessingStatus   *mongo.Collection
-	Entities           *mongo.Collection
-	StringAnnotations  *mongo.Collection
-	NumericAnnotations *mongo.Collection
+	ProcessingStatus *mongo.Collection
+	Entities         *mongo.Collection
 } {
 	return struct {
-		ProcessingStatus   *mongo.Collection
-		Entities           *mongo.Collection
-		StringAnnotations  *mongo.Collection
-		NumericAnnotations *mongo.Collection
+		ProcessingStatus *mongo.Collection
+		Entities         *mongo.Collection
 	}{
-		ProcessingStatus:   m.db.Collection("processing_status"),
-		Entities:           m.db.Collection("entities"),
-		StringAnnotations:  m.db.Collection("string_annotations"),
-		NumericAnnotations: m.db.Collection("numeric_annotations"),
+		ProcessingStatus: m.db.Collection("processing_status"),
+		Entities:         m.db.Collection("entities"),
 	}
 }
 
@@ -44,8 +38,7 @@ func (m *MongoGolem) Collections() struct {
 func (m *MongoGolem) EnsureIndexes(ctx context.Context) error {
 	cols := m.Collections()
 
-	// Create simple indexes for each collection to avoid test failures
-	// Network index for processing_status
+	// Create network index for processing_status
 	networkIndex := mongo.IndexModel{
 		Keys:    bson.D{{Key: "network", Value: 1}},
 		Options: options.Index().SetUnique(true),
@@ -55,22 +48,31 @@ func (m *MongoGolem) EnsureIndexes(ctx context.Context) error {
 		return fmt.Errorf("failed to create network index for processing_status: %w", err)
 	}
 
-	// Entity key index for string annotations
-	stringEntityIndex := mongo.IndexModel{
-		Keys: bson.D{{Key: "entity_key", Value: 1}},
+	// Create expiration index for entities
+	expirationIndex := mongo.IndexModel{
+		Keys: bson.D{{Key: "expires_at", Value: 1}},
 	}
-	_, err = cols.StringAnnotations.Indexes().CreateOne(ctx, stringEntityIndex)
+	_, err = cols.Entities.Indexes().CreateOne(ctx, expirationIndex)
 	if err != nil {
-		return fmt.Errorf("failed to create entity_key index for string_annotations: %w", err)
+		return fmt.Errorf("failed to create expiration index for entities: %w", err)
 	}
 
-	// Entity key index for numeric annotations
-	numericEntityIndex := mongo.IndexModel{
-		Keys: bson.D{{Key: "entity_key", Value: 1}},
+	// Create wildcard index for string annotations
+	stringAnnotationsIndex := mongo.IndexModel{
+		Keys: bson.D{{Key: "stringAnnotations.$**", Value: 1}},
 	}
-	_, err = cols.NumericAnnotations.Indexes().CreateOne(ctx, numericEntityIndex)
+	_, err = cols.Entities.Indexes().CreateOne(ctx, stringAnnotationsIndex)
 	if err != nil {
-		return fmt.Errorf("failed to create entity_key index for numeric_annotations: %w", err)
+		return fmt.Errorf("failed to create wildcard index for string annotations: %w", err)
+	}
+
+	// Create wildcard index for numeric annotations
+	numericAnnotationsIndex := mongo.IndexModel{
+		Keys: bson.D{{Key: "numericAnnotations.$**", Value: 1}},
+	}
+	_, err = cols.Entities.Indexes().CreateOne(ctx, numericAnnotationsIndex)
+	if err != nil {
+		return fmt.Errorf("failed to create wildcard index for numeric annotations: %w", err)
 	}
 
 	return nil

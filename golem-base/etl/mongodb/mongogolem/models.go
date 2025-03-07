@@ -2,8 +2,6 @@ package mongogolem
 
 import (
 	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ProcessingStatus tracks the last processed block
@@ -14,27 +12,31 @@ type ProcessingStatus struct {
 	UpdatedAt                time.Time `bson:"updated_at"`
 }
 
-// Entity represents a stored entity
+// Entity represents a stored entity with embedded annotations
 type Entity struct {
-	Key       string    `bson:"_id"`
-	ExpiresAt int64     `bson:"expires_at"`
-	Payload   []byte    `bson:"payload"`
-	CreatedAt time.Time `bson:"created_at"`
-	UpdatedAt time.Time `bson:"updated_at"`
+	Key                string            `bson:"_id"`
+	ExpiresAt          int64             `bson:"expires_at"`
+	Payload            []byte            `bson:"content"`
+	StringAnnotations  map[string]string `bson:"stringAnnotations,omitempty"`
+	NumericAnnotations map[string]int64  `bson:"numericAnnotations,omitempty"`
+	CreatedAt          time.Time         `bson:"created_at"`
+	UpdatedAt          time.Time         `bson:"updated_at"`
+}
+
+// Annotation represents a key-value pair
+type Annotation struct {
+	Key   string
+	Value interface{}
 }
 
 // StringAnnotation represents a string annotation for an entity
 type StringAnnotation struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty"`
-	EntityKey     string             `bson:"entity_key"`
-	AnnotationKey string             `bson:"annotation_key"`
-	Value         string             `bson:"value"`
+	Key   string
+	Value string
 }
 
 // NumericAnnotation represents a numeric annotation for an entity
 type NumericAnnotation struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty"`
-	EntityKey     string             `bson:"entity_key"`
-	AnnotationKey string             `bson:"annotation_key"`
-	Value         int64              `bson:"value"`
+	Key   string
+	Value int64
 }

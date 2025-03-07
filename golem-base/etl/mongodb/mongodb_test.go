@@ -26,14 +26,11 @@ type mongoTestContext struct {
 }
 
 func TestMongoDB(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
 
 	opts := godog.Options{
 		NoColors: true,
 		Format:   "pretty",
-		Paths:    []string{"../../features/mongodb"},
+		Paths:    []string{"features"},
 		TestingT: t,
 	}
 
@@ -125,14 +122,18 @@ func initializeMongoDBScenario(sc *godog.ScenarioContext, t *testing.T) {
 			Key:       "test_entity",
 			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
 			Payload:   []byte("test payload"),
+			StringAnnotations: map[string]string{
+				"test_key": "test_value",
+			},
+			NumericAnnotations: map[string]int64{
+				"test_number": 42,
+			},
 		}
 		return mongoCtx.driver.InsertEntity(ctx, entity)
 	})
 
 	sc.Step(`^I can retrieve the test entity$`, func() error {
-		cols := mongoCtx.driver.Collections()
-		var entity mongogolem.Entity
-		err := cols.Entities.FindOne(ctx, bson.M{"_id": "test_entity"}).Decode(&entity)
+		entity, err := mongoCtx.driver.GetEntity(ctx, "test_entity")
 		if err != nil {
 			return fmt.Errorf("failed to find entity: %w", err)
 		}
@@ -144,26 +145,72 @@ func initializeMongoDBScenario(sc *godog.ScenarioContext, t *testing.T) {
 
 	sc.Step(`^I insert a test annotation$`, func() error {
 		annotation := mongogolem.StringAnnotation{
-			EntityKey:     "test_entity",
-			AnnotationKey: "test_key",
-			Value:         "test_value",
+			Key:   "new_key",
+			Value: "new_value",
 		}
-		return mongoCtx.driver.InsertStringAnnotation(ctx, annotation)
+		return mongoCtx.driver.AddStringAnnotation(ctx, "test_entity", annotation)
 	})
 
 	sc.Step(`^I can retrieve the test annotation$`, func() error {
-		cols := mongoCtx.driver.Collections()
-		var annotation mongogolem.StringAnnotation
-		err := cols.StringAnnotations.FindOne(ctx, bson.M{
-			"entity_key":     "test_entity",
-			"annotation_key": "test_key",
-		}).Decode(&annotation)
+		entity, err := mongoCtx.driver.GetEntity(ctx, "test_entity")
 		if err != nil {
-			return fmt.Errorf("failed to find annotation: %w", err)
+			return fmt.Errorf("failed to find entity: %w", err)
 		}
-		if annotation.Value != "test_value" {
-			return fmt.Errorf("unexpected value: %s", annotation.Value)
+
+		value, exists := entity.StringAnnotations["new_key"]
+		if !exists {
+			return fmt.Errorf("string annotation 'new_key' not found")
 		}
+		if value != "new_value" {
+			return fmt.Errorf("unexpected annotation value: %s", value)
+		}
+
+		numValue, numExists := entity.NumericAnnotations["test_number"]
+		if !numExists {
+			return fmt.Errorf("numeric annotation 'test_number' not found")
+		}
+		if numValue != 42 {
+			return fmt.Errorf("unexpected numeric annotation value: %d", numValue)
+		}
+
+		return nil
+	})
+
+	sc.Step(`^I can query the entity by string annotation$`, func() error {
+		cols := mongoCtx.driver.Collections()
+
+		// Query using the wildcard index on stringAnnotations
+		filter := bson.M{"stringAnnotations.test_key": "test_value"}
+		var entity mongogolem.Entity
+
+		err := cols.Entities.FindOne(ctx, filter).Decode(&entity)
+		if err != nil {
+			return fmt.Errorf("failed to query entity by string annotation: %w", err)
+		}
+
+		if entity.Key != "test_entity" {
+			return fmt.Errorf("unexpected entity key: %s", entity.Key)
+		}
+
+		return nil
+	})
+
+	sc.Step(`^I can query the entity by numeric annotation$`, func() error {
+		cols := mongoCtx.driver.Collections()
+
+		// Query using the wildcard index on numericAnnotations
+		filter := bson.M{"numericAnnotations.test_number": 42}
+		var entity mongogolem.Entity
+
+		err := cols.Entities.FindOne(ctx, filter).Decode(&entity)
+		if err != nil {
+			return fmt.Errorf("failed to query entity by numeric annotation: %w", err)
+		}
+
+		if entity.Key != "test_entity" {
+			return fmt.Errorf("unexpected entity key: %s", entity.Key)
+		}
+
 		return nil
 	})
 
