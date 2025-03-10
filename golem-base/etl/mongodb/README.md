@@ -80,6 +80,7 @@ The program uses a MongoDB database with the following main collections:
 Entity documents in MongoDB include:
 - `_id`: The entity key
 - `content`: The entity payload
+- `content_json`: JSON-deserialized payload (if payload is valid JSON)
 - `stringAnnotations`: String annotations for the entity
 - `numericAnnotations`: Numeric annotations for the entity
 - `created_at`: Timestamp when the entity was created

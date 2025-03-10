@@ -17,6 +17,7 @@ type Entity struct {
 	Key                string            `bson:"_id"`
 	ExpiresAt          int64             `bson:"expires_at"`
 	Payload            []byte            `bson:"content"`
+	PayloadAsJSON      interface{}       `bson:"content_json,omitempty"`
 	StringAnnotations  map[string]string `bson:"stringAnnotations,omitempty"`
 	NumericAnnotations map[string]int64  `bson:"numericAnnotations,omitempty"`
 	CreatedAt          time.Time         `bson:"created_at"`

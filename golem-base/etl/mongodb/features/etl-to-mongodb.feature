@@ -23,3 +23,9 @@ Feature: ETL to Mongodb
     And an existing entity in the Mongodb database
     When delete the entity in Golembase
     Then the entity should be deleted in the Mongodb database
+    
+   Scenario: JSON Payload Deserialization
+    Given A running Golembase node with WAL enabled
+    And A running ETL to Mongodb
+    When I create an entity with a JSON payload to the Golembase
+    Then the PayloadAsJSON in the Mongodb database should be populated

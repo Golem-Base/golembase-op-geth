@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var opts = godog.Options{
@@ -152,6 +153,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^delete the entity in Golembase$`, deleteTheEntityInGolembase)
 	ctx.Step(`^the annotations of the entity should be deleted in the SQLite database$`, theAnnotationsOfTheEntityShouldBeDeletedInTheSQLiteDatabase)
 	ctx.Step(`^the entity should be deleted in the Mongodb database$`, theEntityShouldBeDeletedInTheMongodbDatabase)
+	ctx.Step(`^I create an entity with a JSON payload to the Golembase$`, iCreateAnEntityWithAJSONPayloadToTheGolembase)
+	ctx.Step(`^the PayloadAsJSON in the Mongodb database should be populated$`, thePayloadAsJSONInTheMongodbDatabaseShouldBePopulated)
 
 }
 
@@ -225,6 +228,7 @@ type Entity struct {
 	Key                string            `bson:"_id"`
 	ExpiresAt          int64             `bson:"expires_at"`
 	Payload            []byte            `bson:"content"`
+	PayloadAsJSON      interface{}       `bson:"content_json,omitempty"`
 	StringAnnotations  map[string]string `bson:"stringAnnotations,omitempty"`
 	NumericAnnotations map[string]int64  `bson:"numericAnnotations,omitempty"`
 	CreatedAt          time.Time         `bson:"created_at"`
@@ -262,7 +266,7 @@ func anExistingEntityInTheMongodbDatabase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
 	_, err := w.CreateEntity(ctx,
 		1000,
-		[]byte("test"),
+		[]byte(`{"test": "value", "number": 123}`),
 		[]storageutil.StringAnnotation{
 			{
 				Key:   "stringTest",
@@ -281,7 +285,6 @@ func anExistingEntityInTheMongodbDatabase(ctx context.Context) error {
 	}
 
 	return nil
-
 }
 
 func theAnnotationsOfTheEntityShouldBeUpdatedInTheMongodbDatabase(ctx context.Context) error {
@@ -399,4 +402,77 @@ func theEntityShouldBeDeletedInTheMongodbDatabase(ctx context.Context) error {
 			bo,
 		)
 	})
+}
+
+func thePayloadAsJSONInTheMongodbDatabaseShouldBePopulated(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	entityKey := w.CreatedEntityKey
+
+	return w.AccessMongodb(func(mongo *mongogolem.MongoGolem) error {
+		collection := mongo.Collections().Entities
+		filter := bson.M{"_id": entityKey.Hex()}
+		res := collection.FindOne(ctx, filter)
+		if res.Err() != nil {
+			return fmt.Errorf("failed to find entity: %w", res.Err())
+		}
+
+		var entity Entity
+		err := res.Decode(&entity)
+		if err != nil {
+			return fmt.Errorf("failed to decode entity: %w", err)
+		}
+
+		if entity.PayloadAsJSON == nil {
+			return fmt.Errorf("expected PayloadAsJSON to be populated, but it was nil")
+		}
+
+		var testValue interface{}
+		var found bool
+
+		switch payload := entity.PayloadAsJSON.(type) {
+		case map[string]interface{}:
+			testValue, found = payload["test"]
+		case primitive.D:
+			for _, elem := range payload {
+				if elem.Key == "test" {
+					testValue = elem.Value
+					found = true
+					break
+				}
+			}
+		default:
+			return fmt.Errorf("expected PayloadAsJSON to be a map or primitive.D, got %T", entity.PayloadAsJSON)
+		}
+
+		if !found || testValue != "value" {
+			return fmt.Errorf("expected PayloadAsJSON to have test=value, got %v", testValue)
+		}
+
+		return nil
+	})
+}
+
+func iCreateAnEntityWithAJSONPayloadToTheGolembase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	_, err := w.CreateEntity(ctx,
+		1000,
+		[]byte(`{"test": "value", "number": 123}`),
+		[]storageutil.StringAnnotation{
+			{
+				Key:   "stringTest",
+				Value: "stringTest",
+			},
+		},
+		[]storageutil.NumericAnnotation{
+			{
+				Key:   "numericTest",
+				Value: 1234567890,
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create entity: %w", err)
+	}
+
+	return nil
 }

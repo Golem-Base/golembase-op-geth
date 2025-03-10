@@ -2,6 +2,7 @@ package mongogolem
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -94,6 +95,14 @@ func (m *MongoGolem) InsertEntity(ctx context.Context, entity Entity) error {
 		entity.NumericAnnotations = make(map[string]int64)
 	}
 
+	// Try to deserialize the payload to JSON if it's not empty
+	if len(entity.Payload) > 0 {
+		var jsonData interface{}
+		if err := json.Unmarshal(entity.Payload, &jsonData); err == nil {
+			entity.PayloadAsJSON = jsonData
+		}
+	}
+
 	_, err := cols.Entities.InsertOne(ctx, entity)
 	if err != nil {
 		return fmt.Errorf("failed to insert entity: %w", err)
@@ -114,6 +123,14 @@ func (m *MongoGolem) UpdateEntity(ctx context.Context, entity Entity) error {
 	}
 	if entity.NumericAnnotations == nil {
 		entity.NumericAnnotations = make(map[string]int64)
+	}
+
+	// Try to deserialize the payload to JSON if it's not empty
+	if len(entity.Payload) > 0 {
+		var jsonData interface{}
+		if err := json.Unmarshal(entity.Payload, &jsonData); err == nil {
+			entity.PayloadAsJSON = jsonData
+		}
 	}
 
 	_, err := cols.Entities.ReplaceOne(
