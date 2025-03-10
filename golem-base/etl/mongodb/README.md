@@ -1,65 +1,107 @@
-# MongoDB ETL for Golem
+# MongoDB ETL
 
-This package implements an ETL (Extract, Transform, Load) process for the Golem system using MongoDB as the storage backend.
+This program implements an Extract, Transform, Load (ETL) process that processes blockchain data from the Write-Ahead Log (WAL) written by the Golem Base extension of op-geth. The WAL contains entity operations (create, update, delete) and their associated annotations, which this program processes and stores in a MongoDB database.
 
-## Overview
+## Features
 
-The MongoDB ETL reads block data from a Write-Ahead Log (WAL) and persists it to a MongoDB database. It supports the following operations:
-
-- Creating entities
-- Updating entities
-- Deleting entities
-- Adding string annotations
-- Adding numeric annotations
+- Processes blockchain data from Golem Base WAL files
+- Stores entity data and annotations in MongoDB
+- Supports numeric and string annotations for entities
+- Handles entity lifecycle operations (create, update, delete)
+- Maintains processing status to track progress
 
 ## Requirements
 
-- Go 1.22 or later
-- MongoDB 6.0 or later
-- Access to a Golem WAL directory
+- Go 1.x
+- MongoDB
+- Access to an op-geth RPC endpoint
+- op-geth configured with Golem Base extension
 
-## Running the ETL
+## op-geth Configuration
 
+To enable WAL writing in op-geth with Golem Base extension, you need to:
+
+1. Start op-geth with the `--golembase.writeaheadlog` flag pointing to your desired WAL directory:
 ```bash
-go run main.go --mongo-uri "mongodb://localhost:27017" --db-name "golem" --wal "/path/to/wal" --rpc-endpoint "http://localhost:8545"
+op-geth --golembase.writeaheadlog /path/to/wal/directory
 ```
 
-### Command Line Options
+2. Make sure the WAL directory exists and is writable by the op-geth process.
 
-- `--mongo-uri`: MongoDB connection URI (required)
+The WAL directory will contain files that record all entity operations processed by the Golem Base extension. These files are what the MongoDB ETL program processes.
+
+## MongoDB Transaction Support
+
+This ETL uses MongoDB transactions to ensure data consistency when processing block operations. MongoDB transactions require a replica set deployment, as transactions are not supported on standalone MongoDB instances.
+
+### Setting Up a MongoDB Replica Set
+
+For development purposes, you can set up a single-node replica set:
+
+```bash
+# Start MongoDB with replica set enabled
+mongod --replSet rs0 --dbpath /path/to/data/directory
+
+# Connect to MongoDB and initiate the replica set
+mongo
+> rs.initiate()
+```
+
+For production environments, a proper multi-node replica set is recommended for high availability.
+
+## Configuration
+
+The program requires the following configuration parameters:
+
+- `--mongo-url`: MongoDB connection string (required)
 - `--db-name`: MongoDB database name (required)
-- `--wal`: Path to the Write-Ahead Log directory (required)
-- `--rpc-endpoint`: RPC endpoint for op-geth (required)
+- `--wal`: Directory containing the Write-Ahead Log files (required)
+- `--rpc-endpoint`: URL of the op-geth RPC endpoint (required)
 
-## Testing
+These can be provided via command line flags or environment variables:
+- `MONGO_URI`
+- `DB_NAME`
+- `WAL_DIR`
+- `RPC_ENDPOINT`
 
-The package includes Cucumber tests that use [Testcontainers](https://java.testcontainers.org/modules/databases/mongodb/) to spin up a MongoDB instance for testing.
-
-To run the tests:
+## Usage
 
 ```bash
-cd golem-base/etl/mongodb
-go test -v
+mongodb-etl --mongo-url mongodb://localhost:27017?replicaSet=rs0 --db-name golembase --wal ./wal --rpc-endpoint http://localhost:8545
 ```
 
-The tests use the features from `golem-base/features` along with MongoDB-specific features in `golem-base/features/mongodb`.
+## Database Structure
 
-## MongoDB Schema
+The program uses a MongoDB database with the following main collections:
 
-The ETL creates the following collections in MongoDB:
-
+- `entities`: Stores the main entity data and annotations
 - `processing_status`: Tracks the last processed block
-- `entities`: Stores entity data
-- `string_annotations`: Stores string annotations for entities
-- `numeric_annotations`: Stores numeric annotations for entities
 
-## Development
+Entity documents in MongoDB include:
+- `_id`: The entity key
+- `content`: The entity payload
+- `stringAnnotations`: String annotations for the entity
+- `numericAnnotations`: Numeric annotations for the entity
+- `created_at`: Timestamp when the entity was created
+- `updated_at`: Timestamp when the entity was last updated
+- `expires_at`: Expiration time for the entity (if applicable)
 
-### MongoDB Driver
+## Processing Flow
 
-The MongoDB driver implementation is in the `mongogolem` package. It provides methods for:
+1. Connects to the op-geth RPC endpoint and MongoDB
+2. Checks for existing processing status
+3. If no status exists, initializes with genesis block
+4. Processes WAL files sequentially
+5. For each block:
+   - Processes all operations (create, update, delete)
+   - Handles entity data and annotations
+   - Updates processing status
+6. Uses MongoDB transactions to ensure data consistency
 
-- Creating and managing database indexes
-- CRUD operations for entities
-- Managing annotations
-- Tracking processing status 
+## Error Handling
+
+- Graceful shutdown on interrupt signals
+- Transaction rollback on processing errors
+- Detailed error logging
+- Automatic retry mechanisms using backoff strategies
+- Robust error reporting 
