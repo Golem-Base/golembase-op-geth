@@ -1,0 +1,1 @@
+op-geth: bash -c "exec go run ./cmd/geth --dev --http --http.api 'eth,web3,net,debug,golembase' --verbosity 3 --http.addr '0.0.0.0' --http.port 8545 --http.corsdomain '*' --http.vhosts '*' --golembase.writeaheadlog '/tmp/golembase.wal'"

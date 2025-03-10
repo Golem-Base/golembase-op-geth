@@ -90,6 +90,8 @@
             shellcheck
             sqlc
             sqlite
+            overmind
+
           ];
         };
       });
