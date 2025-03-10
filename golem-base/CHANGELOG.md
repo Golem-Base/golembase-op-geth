@@ -75,4 +75,6 @@ Here we will keep track of the changes to the stock [go-ethereum](https://github
 ## 2025-03-03
     - Implemented ETL from WAL to SQLite
 
+## 2025-03-10
+    - Implemented ETL from WAL to MongoDB
 
