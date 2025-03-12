@@ -41,7 +41,7 @@
         in
         {
           default = pkgs.buildGoModule {
-            name = "op-geth";
+            name = "gb-op-geth";
 
             src = ./.;
 
