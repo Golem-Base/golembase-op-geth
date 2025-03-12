@@ -111,3 +111,93 @@ This JSON-RPC API provides several capabilities:
 3. **Query Language Support**
    - `queryEntities`: Executes queries with a custom query language, returning structured results
 
+## Development Environment and CLI Usage
+
+### Running the Development Environment
+
+Golem Base provides a development environment that includes all necessary services to work with the system. To start the development environment run the development script:
+   ```
+   ./golem-base/run_dev.sh
+   ```
+
+This will start all required services defined in the Procfile, including:
+- Geth node in dev mode with Golem Base support
+- SQLite ETL (Extract, Transform, Load) process
+- MongoDB database
+- MongoDB ETL process
+
+The script automatically cleans up old WAL (Write-Ahead Logging) files and uses Overmind to manage all processes. You can press Ctrl+C to stop all services.
+
+### Using the Golem Base CLI
+
+The Golem Base CLI allows you to interact with the system through various commands. The CLI is built using the executable in `cmd/golembase/main.go`.
+
+#### Creating an Account
+
+Before interacting with Golem Base, you need to create an account:
+
+```
+go run ./cmd/golembase account create
+```
+
+This will:
+1. Generate a new private key
+2. Save it to your configuration directory at `~/.config/golembase/private.key` (macOS/Linux)
+3. Display the generated Ethereum address
+
+If an account already exists, it will show the existing address.
+
+#### Funding an Account
+
+To add funds to your account (necessary for creating entities):
+
+```
+go run ./cmd/golembase account fund
+```
+
+This command:
+1. Loads your account information
+2. Connects to the local Golem Base node (by default at http://localhost:8545)
+3. Uses an available node account to transfer 100 ETH to your account
+4. Waits for the transaction to be mined
+
+Optional flags:
+- `--node-url`: Specify a different node URL
+- `--value`: Change the amount of ETH to transfer (default: 100)
+
+#### Checking Account Balance
+
+To verify your account balance:
+
+```
+go run ./cmd/golembase account balance
+```
+
+This displays your account address and current balance in ETH.
+
+#### Creating an Entity
+
+To create a new entity in Golem Base:
+
+```
+go run ./cmd/golembase entity create
+```
+
+This will:
+1. Create an entity with default data ("this is a test") and TTL (100 blocks)
+2. Sign and submit a transaction to the node
+3. Wait for the transaction to be mined
+4. Display the entity key when successful
+
+Optional flags:
+- `--node-url`: Specify a different node URL
+- `--data`: Custom payload data for the entity
+- `--ttl`: Custom time-to-live value in blocks
+
+The entity will be stored with:
+- Your specified payload
+- A default string annotation (key: "foo", value: "bar")
+- The entity key derived from the transaction hash, payload, and operation index
+
+Once created, you can query and interact with the entity using the JSON-RPC API methods described earlier.
+
