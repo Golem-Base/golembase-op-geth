@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# This script waits for the RPC endpoint to become available and then starts the SQLite ETL process.
+# It handles:
+#   - Checking for RPC endpoint availability with retry logic
+#   - Cleaning up any existing SQLite database files
+#   - Starting the SQLite ETL process that transfers data from the blockchain to SQLite
+#   - Configuring connection parameters for the RPC endpoint and SQLite database
+#   - Setting up proper error handling
+
 # Default values
 RPC_ENDPOINT="http://localhost:8545"
 WAL_PATH="/tmp/golembase.wal"

@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 
+# This script starts the MongoDB ETL process for Golem Base.
+# It handles:
+#   - Waiting for MongoDB to become available in replica set mode
+#   - Waiting for the RPC endpoint to become available
+#   - Starting the MongoDB ETL process that transfers data from the blockchain to MongoDB
+#   - Configuring connection parameters for MongoDB and the RPC endpoint
+#   - Setting up proper error handling and retry logic
+
+
 # Configuration
 MONGO_URI="mongodb://admin:password@localhost:27017"
 WAL_PATH="/tmp/golembase.wal"
