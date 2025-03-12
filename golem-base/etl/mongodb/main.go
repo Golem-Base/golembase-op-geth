@@ -86,9 +86,12 @@ func main() {
 			mongoDriver := mongogolem.New(db)
 
 			// Create indexes
-			if err := mongoDriver.EnsureIndexes(ctx); err != nil {
+			err = mongoDriver.EnsureIndexes(ctx)
+			if err != nil {
 				return fmt.Errorf("failed to ensure indexes: %w", err)
 			}
+
+			log.Info("Ensured indexes")
 
 			ec, err := ethclient.Dial(cfg.rpcEndpoint)
 			if err != nil {
@@ -104,6 +107,8 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("failed to check if processing status exists: %w", err)
 			}
+
+			log.Info("has processing status", "hasProcessingStatus", hasProcessingStatus)
 
 			if !hasProcessingStatus {
 				log.Info("no processing status found, inserting genesis block")

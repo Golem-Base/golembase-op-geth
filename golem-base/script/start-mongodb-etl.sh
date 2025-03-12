@@ -1,0 +1,71 @@
+#!/bin/bash
+set -e
+
+# Configuration
+MONGO_URI="mongodb://admin:password@localhost:27017"
+WAL_PATH="/tmp/golembase.wal"
+RPC_ENDPOINT="http://localhost:8545"
+DB_NAME="golembase"
+MAX_ATTEMPTS=30
+SLEEP_INTERVAL=5
+
+echo "Waiting for MongoDB to be available in replica mode..."
+
+# Function to check MongoDB status
+check_mongo_status() {
+  mongosh "$MONGO_URI" --quiet --eval 'rs.status().ok' 2>/dev/null || echo 0
+}
+
+# Wait for MongoDB to become available in replica mode
+attempt=0
+while [ $attempt -lt $MAX_ATTEMPTS ]; do
+  ((attempt++))
+  
+  echo "Attempt $attempt/$MAX_ATTEMPTS: Checking MongoDB status..."
+  STATUS=$(check_mongo_status)
+  
+  if [ "$STATUS" = "1" ]; then
+    echo "MongoDB is available and running in replica mode!"
+    break
+  fi
+  
+  if [ $attempt -eq $MAX_ATTEMPTS ]; then
+    echo "Failed to connect to MongoDB in replica mode after $MAX_ATTEMPTS attempts."
+    exit 1
+  fi
+  
+  echo "MongoDB not ready yet or not in replica mode. Waiting $SLEEP_INTERVAL seconds..."
+  sleep $SLEEP_INTERVAL
+done
+
+# Function to check RPC endpoint status
+check_rpc_status() {
+  curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' "$RPC_ENDPOINT" | grep -q "result" && echo 1 || echo 0
+}
+
+# Wait for RPC endpoint to become available
+echo "Waiting for RPC endpoint to be available..."
+attempt=0
+while [ $attempt -lt $MAX_ATTEMPTS ]; do
+  ((attempt++))
+  
+  echo "Attempt $attempt/$MAX_ATTEMPTS: Checking RPC endpoint status..."
+  STATUS=$(check_rpc_status)
+  
+  if [ "$STATUS" = "1" ]; then
+    echo "RPC endpoint is available!"
+    break
+  fi
+  
+  if [ $attempt -eq $MAX_ATTEMPTS ]; then
+    echo "Failed to connect to RPC endpoint after $MAX_ATTEMPTS attempts."
+    exit 1
+  fi
+  
+  echo "RPC endpoint not ready yet. Waiting $SLEEP_INTERVAL seconds..."
+  sleep $SLEEP_INTERVAL
+done
+
+# Start the MongoDB ETL process
+echo "Starting MongoDB ETL process..."
+exec go run ./golem-base/etl/mongodb/ --wal "$WAL_PATH" --mongo-uri "$MONGO_URI" --rpc-endpoint "$RPC_ENDPOINT" --db-name "$DB_NAME" 

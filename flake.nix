@@ -91,7 +91,7 @@
             sqlc
             sqlite
             overmind
-
+            mongosh
           ];
         };
       });
