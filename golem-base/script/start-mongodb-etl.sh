@@ -9,6 +9,11 @@ DB_NAME="golembase"
 MAX_ATTEMPTS=30
 SLEEP_INTERVAL=5
 
+# Get the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the golem base directory (parent of script directory)
+GOLEM_BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 echo "Waiting for MongoDB to be available in replica mode..."
 
 # Function to check MongoDB status
@@ -68,4 +73,4 @@ done
 
 # Start the MongoDB ETL process
 echo "Starting MongoDB ETL process..."
-exec go run ./golem-base/etl/mongodb/ --wal "$WAL_PATH" --mongo-uri "$MONGO_URI" --rpc-endpoint "$RPC_ENDPOINT" --db-name "$DB_NAME" 
+exec go run "${GOLEM_BASE_DIR}/etl/mongodb/" --wal "$WAL_PATH" --mongo-uri "$MONGO_URI" --rpc-endpoint "$RPC_ENDPOINT" --db-name "$DB_NAME" 

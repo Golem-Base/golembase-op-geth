@@ -8,6 +8,11 @@ DB_PATH="/tmp/golembase-sqlite"
 MAX_ATTEMPTS=30
 SLEEP_SECONDS=2
 
+# Get the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the golem base directory (parent of script directory)
+GOLEM_BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Clean up any existing SQLite files
 rm -f ${DB_PATH}*
 
@@ -41,4 +46,4 @@ fi
 
 # Start the ETL process
 echo "Starting SQLite ETL process..."
-exec go run ./golem-base/etl/sqlite/ --wal "${WAL_PATH}" --db "${DB_PATH}" --rpc-endpoint "${RPC_ENDPOINT}" 
+exec go run "${GOLEM_BASE_DIR}/etl/sqlite/" --wal "${WAL_PATH}" --db "${DB_PATH}" --rpc-endpoint "${RPC_ENDPOINT}" 
