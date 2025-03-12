@@ -69,6 +69,7 @@
               description = "";
               homepage = "https://github.com/Golem-Base/op-geth";
               license = licenses.gpl3Only;
+              mainProgram = "geth";
             };
           };
         }
