@@ -1,0 +1,44 @@
+#!/bin/bash
+set -e
+
+# Default values
+RPC_ENDPOINT="http://localhost:8545"
+WAL_PATH="/tmp/golembase.wal"
+DB_PATH="/tmp/golembase-sqlite"
+MAX_ATTEMPTS=30
+SLEEP_SECONDS=2
+
+# Clean up any existing SQLite files
+rm -f ${DB_PATH}*
+
+echo "Waiting for RPC endpoint to become available at ${RPC_ENDPOINT}..."
+
+# Function to check if RPC is available
+check_rpc() {
+  curl -s -o /dev/null -w "%{http_code}" "${RPC_ENDPOINT}" | grep -q "200"
+  return $?
+}
+
+# Wait for RPC to become available
+attempt=1
+while [ $attempt -le $MAX_ATTEMPTS ]; do
+  echo "Attempt $attempt of $MAX_ATTEMPTS: Checking RPC availability..."
+  
+  if check_rpc; then
+    echo "RPC endpoint is available! Starting ETL process..."
+    break
+  fi
+  
+  echo "RPC endpoint not available yet. Waiting ${SLEEP_SECONDS} seconds..."
+  sleep $SLEEP_SECONDS
+  attempt=$((attempt + 1))
+done
+
+if [ $attempt -gt $MAX_ATTEMPTS ]; then
+  echo "Error: RPC endpoint did not become available after $MAX_ATTEMPTS attempts."
+  exit 1
+fi
+
+# Start the ETL process
+echo "Starting SQLite ETL process..."
+exec go run ./golem-base/etl/sqlite/ --wal "${WAL_PATH}" --db "${DB_PATH}" --rpc-endpoint "${RPC_ENDPOINT}" 
