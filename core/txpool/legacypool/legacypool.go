@@ -54,7 +54,7 @@ const (
 	// non-trivial consequences: larger transactions are significantly harder and
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
-	txMaxSize = 4 * txSlotSize // 128KB
+	txMaxSize = 16 * txSlotSize // 512KB
 )
 
 var (
@@ -299,7 +299,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 // pool, specifically, whether it is a Legacy, AccessList or Dynamic transaction.
 func (pool *LegacyPool) Filter(tx *types.Transaction) bool {
 	switch tx.Type() {
-	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.SetCodeTxType:
+	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.SetCodeTxType, types.GolemBaseUpdateStorageTxType:
 		return true
 	default:
 		return false
@@ -609,7 +609,8 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction) error {
 			1<<types.LegacyTxType |
 			1<<types.AccessListTxType |
 			1<<types.DynamicFeeTxType |
-			1<<types.SetCodeTxType,
+			1<<types.SetCodeTxType |
+			1<<types.GolemBaseUpdateStorageTxType,
 		MaxSize:          txMaxSize,
 		MinTip:           pool.gasTip.Load().ToBig(),
 		EffectiveGasCeil: pool.config.EffectiveGasCeil,

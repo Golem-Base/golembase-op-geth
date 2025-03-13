@@ -479,6 +479,10 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 		usedType = types.DynamicFeeTxType
 	case args.AccessList != nil || defaultType == types.AccessListTxType:
 		usedType = types.AccessListTxType
+	case args.AccessList != nil || defaultType == types.GolemBaseUpdateStorageTxType:
+		usedType = types.GolemBaseUpdateStorageTxType
+	case args.AccessList != nil || defaultType == types.GolemBaseHousekeepingTxType:
+		usedType = types.GolemBaseHousekeepingTxType
 	}
 	// Make it possible to default to newer tx, but use legacy if gasprice is provided
 	if args.GasPrice != nil {
@@ -540,6 +544,23 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 			al = *args.AccessList
 		}
 		data = &types.DynamicFeeTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.data(),
+			AccessList: al,
+		}
+
+	case types.GolemBaseUpdateStorageTxType:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.GolemBaseUpdateStorageTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),
 			Nonce:      uint64(*args.Nonce),
