@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # This script waits for the RPC endpoint to become available and then starts the SQLite ETL process.
@@ -36,12 +36,12 @@ check_rpc() {
 attempt=1
 while [ $attempt -le $MAX_ATTEMPTS ]; do
   echo "Attempt $attempt of $MAX_ATTEMPTS: Checking RPC availability..."
-  
+
   if check_rpc; then
     echo "RPC endpoint is available! Starting ETL process..."
     break
   fi
-  
+
   echo "RPC endpoint not available yet. Waiting ${SLEEP_SECONDS} seconds..."
   sleep $SLEEP_SECONDS
   attempt=$((attempt + 1))
@@ -54,4 +54,4 @@ fi
 
 # Start the ETL process
 echo "Starting SQLite ETL process..."
-exec go run "${GOLEM_BASE_DIR}/etl/sqlite/" --wal "${WAL_PATH}" --db "${DB_PATH}" --rpc-endpoint "${RPC_ENDPOINT}" 
+exec go run "${GOLEM_BASE_DIR}/etl/sqlite/" --wal "${WAL_PATH}" --db "${DB_PATH}" --rpc-endpoint "${RPC_ENDPOINT}"

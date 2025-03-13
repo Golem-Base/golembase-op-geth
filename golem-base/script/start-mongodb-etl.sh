@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # This script starts the MongoDB ETL process for Golem Base.
@@ -34,20 +34,20 @@ check_mongo_status() {
 attempt=0
 while [ $attempt -lt $MAX_ATTEMPTS ]; do
   ((attempt++))
-  
+
   echo "Attempt $attempt/$MAX_ATTEMPTS: Checking MongoDB status..."
   STATUS=$(check_mongo_status)
-  
+
   if [ "$STATUS" = "1" ]; then
     echo "MongoDB is available and running in replica mode!"
     break
   fi
-  
+
   if [ $attempt -eq $MAX_ATTEMPTS ]; then
     echo "Failed to connect to MongoDB in replica mode after $MAX_ATTEMPTS attempts."
     exit 1
   fi
-  
+
   echo "MongoDB not ready yet or not in replica mode. Waiting $SLEEP_INTERVAL seconds..."
   sleep $SLEEP_INTERVAL
 done
@@ -62,24 +62,24 @@ echo "Waiting for RPC endpoint to be available..."
 attempt=0
 while [ $attempt -lt $MAX_ATTEMPTS ]; do
   ((attempt++))
-  
+
   echo "Attempt $attempt/$MAX_ATTEMPTS: Checking RPC endpoint status..."
   STATUS=$(check_rpc_status)
-  
+
   if [ "$STATUS" = "1" ]; then
     echo "RPC endpoint is available!"
     break
   fi
-  
+
   if [ $attempt -eq $MAX_ATTEMPTS ]; then
     echo "Failed to connect to RPC endpoint after $MAX_ATTEMPTS attempts."
     exit 1
   fi
-  
+
   echo "RPC endpoint not ready yet. Waiting $SLEEP_INTERVAL seconds..."
   sleep $SLEEP_INTERVAL
 done
 
 # Start the MongoDB ETL process
 echo "Starting MongoDB ETL process..."
-exec go run "${GOLEM_BASE_DIR}/etl/mongodb/" --wal "$WAL_PATH" --mongo-uri "$MONGO_URI" --rpc-endpoint "$RPC_ENDPOINT" --db-name "$DB_NAME" 
+exec go run "${GOLEM_BASE_DIR}/etl/mongodb/" --wal "$WAL_PATH" --mongo-uri "$MONGO_URI" --rpc-endpoint "$RPC_ENDPOINT" --db-name "$DB_NAME"

@@ -13,7 +13,13 @@
 
 
 # Don't exit immediately on error, we want to handle errors gracefully
-set -o pipefail
+set -u -o pipefail
+
+# Detect if docker is actually podman
+isPodman=false
+if docker version | grep -q Podman; then
+  isPodman=true
+fi
 
 # Global flag to track if we're in cleanup
 CLEANING_UP=false
@@ -25,7 +31,7 @@ cleanup() {
         return
     fi
     CLEANING_UP=true
-    
+
     echo -e "\nCleaning up MongoDB container..."
     docker rm -f mongodb 2>/dev/null || true
     echo "MongoDB container removed."
@@ -51,12 +57,31 @@ docker rm -f mongodb 2>/dev/null || true
 
 # Run MongoDB container in foreground
 echo "Starting MongoDB container..."
-docker run --name mongodb \
-    -p 27017:27017 \
-    -v /tmp/mongodb-keyfile:/keyfile \
-    -e MONGO_INITDB_ROOT_USERNAME=admin \
-    -e MONGO_INITDB_ROOT_PASSWORD=password \
-    -d mongo:latest mongod --replSet rs0 --bind_ip_all --keyFile /keyfile/mongodb-keyfile --auth
+if [ "${isPodman}" == "true" ]; then
+    # With the default networking mode (pasta) we lose connectivity to mongo
+    # shortly after startup. There might be some other daemon (systemd-networkd?)
+    # that doesn't like the extra network config.
+    # Using slirp4netns avoids this issue.
+    # Besides that, we add the U option to the bind mount to automatically chown
+    # all the contents to the containers user, and we set the user to be mongodb.
+    docker run --name mongodb \
+        -p 27017:27017 \
+        -v /tmp/mongodb-keyfile:/keyfile:U,ro \
+        -e MONGO_INITDB_ROOT_USERNAME=admin \
+        -e MONGO_INITDB_ROOT_PASSWORD=password \
+        --user=mongodb:mongodb \
+        --network=slirp4netns \
+        -d docker.io/library/mongo:latest \
+        mongod --replSet rs0 --bind_ip_all --keyFile /keyfile/mongodb-keyfile --auth
+else
+    docker run --name mongodb \
+        -p 27017:27017 \
+        -v /tmp/mongodb-keyfile:/keyfile:ro \
+        -e MONGO_INITDB_ROOT_USERNAME=admin \
+        -e MONGO_INITDB_ROOT_PASSWORD=password \
+        -d docker.io/library/mongo:latest \
+        mongod --replSet rs0 --bind_ip_all --keyFile /keyfile/mongodb-keyfile --auth
+fi
 
 # Check if container started successfully
 if ! docker ps | grep -q mongodb; then
@@ -75,11 +100,11 @@ while [ $COUNTER -lt $MAX_WAIT ]; do
         echo "MongoDB is ready!"
         break
     fi
-    
+
     (( COUNTER++ )) || true
     echo "Waiting... ($COUNTER/$MAX_WAIT seconds)"
     sleep 1
-    
+
     # Check if container is still running
     if ! docker ps | grep -q mongodb; then
         echo "MongoDB container stopped unexpectedly. Checking logs:"
@@ -104,7 +129,7 @@ if [[ "$RS_STATUS" == *"NotYetInitialized"* ]]; then
     echo "Replica set not initialized. Initializing now..."
     # Initialize replica set
     docker exec mongodb mongosh -u admin -p password --authenticationDatabase admin --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]})"
-    
+
     echo "Waiting for replica set initialization..."
     sleep 5
 else
