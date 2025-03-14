@@ -15,3 +15,4 @@ Feature: housekeeping
     When there is a new block
     Then the expired entity should be deleted
     And the number of entities should be 0
+    And the list of all entities should be empty

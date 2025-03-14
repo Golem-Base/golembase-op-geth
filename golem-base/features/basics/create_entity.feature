@@ -6,3 +6,4 @@ Feature: creating entities
     Then the entity should be created
     And the number of entities should be 1
     And the expiry of the entity should be recorded
+    And the entity should be in the list of all entities
