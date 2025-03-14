@@ -92,6 +92,10 @@
             sqlite
             overmind
             mongosh
+            openssl
+          ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux [
+            # For podman networking
+            slirp4netns
           ];
         };
       });
