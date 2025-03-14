@@ -95,6 +95,8 @@ The API methods are accessible through the following JSON-RPC endpoints:
 - `golembase_getEntitiesForStringAnnotationValue`
 - `golembase_getEntitiesForNumericAnnotationValue`
 - `golembase_queryEntities`
+- `golembase_getEntityCount`
+- `golembase_getAllEntityKeys`
 
 ## API Functionality
 
@@ -107,9 +109,21 @@ This JSON-RPC API provides several capabilities:
    - `getEntitiesToExpireAtBlock`: Returns entities scheduled to expire at a specific block
    - `getEntitiesForStringAnnotationValue`: Finds entities with matching string annotations
    - `getEntitiesForNumericAnnotationValue`: Finds entities with matching numeric annotations
+   - `getEntityCount`: Returns the total number of entities in storage
+   - `getAllEntityKeys`: Returns all entity keys currently in storage
 
 3. **Query Language Support**
    - `queryEntities`: Executes queries with a custom query language, returning structured results
+     - Supports equality comparisons for both string and numeric annotations (e.g., `name = "test"` or `age = 123`)
+     - Logical operators for complex queries:
+       - AND operator: `&&` (e.g., `name = "test" && age = 30`)
+       - OR operator: `||` (e.g., `status = "active" || status = "pending"`)
+     - Parentheses for grouping expressions and controlling precedence (e.g., `(type = "document" || type = "image") && status = "approved"`)
+     - String values must be enclosed in double quotes, with escape sequences for special characters
+     - Numeric values are represented as unsigned integers
+     - Returns an array of `SearchResult` objects containing:
+       - `Key`: The entity's unique hash identifier
+       - `Value`: The entity's payload data
 
 ## Development Environment and CLI Usage
 
