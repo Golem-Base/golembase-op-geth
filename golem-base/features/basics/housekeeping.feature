@@ -14,3 +14,4 @@ Feature: housekeeping
     And there is an entity that will expire in the next block
     When there is a new block
     Then the expired entity should be deleted
+    And the number of entities should be 0

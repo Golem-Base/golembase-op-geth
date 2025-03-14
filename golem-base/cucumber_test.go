@@ -153,6 +153,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the write-ahead log for the create should be created$`, theWriteaheadLogForTheCreateShouldBeCreated)
 	ctx.Step(`^the write-ahead log for the update should be created$`, theWriteaheadLogForTheUpdateShouldBeCreated)
 	ctx.Step(`^the write-ahead log for the delete should be created$`, theWriteaheadLogForTheDeleteShouldBeCreated)
+	ctx.Step(`^the number of entities should be (\d+)$`, theNumberOfEntitiesShouldBe)
 
 }
 
@@ -1038,6 +1039,23 @@ func theWriteaheadLogForTheDeleteShouldBeCreated(ctx context.Context) error {
 
 	if err != nil {
 		return fmt.Errorf("check deleted: failed to check if write-ahead log is equal: %w", err)
+	}
+
+	return nil
+
+}
+
+func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
+	w := testutil.GetWorld(ctx)
+
+	var count uint64
+	err := w.GethInstance.RPCClient.CallContext(ctx, &count, "golembase_getEntityCount")
+	if err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	if int(count) != expected {
+		return fmt.Errorf("expected %d entities, but got %d", expected, count)
 	}
 
 	return nil

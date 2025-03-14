@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -131,4 +132,17 @@ func (ds *golemBaseDataSource) GetKeysForStringAnnotation(key, value string) ([]
 
 func (ds *golemBaseDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
 	return ds.api.GetEntitiesForNumericAnnotationValue(key, value)
+}
+
+// GetEntityCount returns the total number of entities in the storage.
+func (api *golemBaseAPI) GetEntityCount() (uint64, error) {
+	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get state: %w", err)
+	}
+
+	// Use keyset.Size to get the count of entities from the global registry
+	count := keyset.Size(stateDb, allentities.AllEntitiesKey)
+
+	return count.Uint64(), nil
 }

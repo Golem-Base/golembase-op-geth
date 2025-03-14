@@ -4,4 +4,5 @@ Feature: creating entities
     Given I have enough funds to pay for the transaction
     When submit a transaction to create an entity
     Then the entity should be created
+    And the number of entities should be 1
     And the expiry of the entity should be recorded
