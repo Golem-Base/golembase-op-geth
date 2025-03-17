@@ -46,15 +46,7 @@
             src = ./.;
 
             subPackages = [
-              "cmd/abidump"
-              "cmd/abigen"
-              "cmd/clef"
-              "cmd/devp2p"
-              "cmd/ethkey"
-              "cmd/evm"
               "cmd/geth"
-              "cmd/rlpdump"
-              "cmd/utils"
             ];
 
             proxyVendor = true;
