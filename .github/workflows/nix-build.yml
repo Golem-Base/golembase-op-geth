@@ -9,17 +9,13 @@ on:
       - v1.101500-base
 
 jobs:
-  build:
+  nix-build:
     name: Build with Nix
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@02a151ada4993995686f9ed4f1be7cfbb229e56f # v31
-          
-      - name: Nix Build
-        run: nix build
+      - run: nix build
