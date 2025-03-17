@@ -153,6 +153,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the write-ahead log for the create should be created$`, theWriteaheadLogForTheCreateShouldBeCreated)
 	ctx.Step(`^the write-ahead log for the update should be created$`, theWriteaheadLogForTheUpdateShouldBeCreated)
 	ctx.Step(`^the write-ahead log for the delete should be created$`, theWriteaheadLogForTheDeleteShouldBeCreated)
+	ctx.Step(`^the number of entities should be (\d+)$`, theNumberOfEntitiesShouldBe)
+	ctx.Step(`^the entity should be in the list of all entities$`, theEntityShouldBeInTheListOfAllEntities)
+	ctx.Step(`^the list of all entities should be empty$`, theListOfAllEntitiesShouldBeEmpty)
 
 }
 
@@ -1042,4 +1045,61 @@ func theWriteaheadLogForTheDeleteShouldBeCreated(ctx context.Context) error {
 
 	return nil
 
+}
+
+func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
+	w := testutil.GetWorld(ctx)
+
+	var count uint64
+	err := w.GethInstance.RPCClient.CallContext(ctx, &count, "golembase_getEntityCount")
+	if err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	if int(count) != expected {
+		return fmt.Errorf("expected %d entities, but got %d", expected, count)
+	}
+
+	return nil
+
+}
+
+func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	var entityKeys []common.Hash
+	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys")
+	if err != nil {
+		return fmt.Errorf("failed to get all entity keys: %w", err)
+	}
+
+	found := false
+	for _, key := range entityKeys {
+		if key == w.CreatedEntityKey {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("entity with key %s not found in the list of all entities", w.CreatedEntityKey.Hex())
+	}
+
+	return nil
+}
+
+func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	var entityKeys []common.Hash
+	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys")
+	if err != nil {
+		return fmt.Errorf("failed to get all entity keys: %w", err)
+	}
+
+	if len(entityKeys) != 0 {
+		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
+	}
+
+	return nil
 }

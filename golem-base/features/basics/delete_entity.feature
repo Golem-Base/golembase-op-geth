@@ -4,3 +4,5 @@ Feature: deleting entities
     Given I have created an entity
     When I submit a transaction to delete the entity
     Then the entity should be deleted
+    And the number of entities should be 0
+    And the list of all entities should be empty

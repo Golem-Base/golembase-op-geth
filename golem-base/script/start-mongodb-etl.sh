@@ -27,18 +27,22 @@ echo "Waiting for MongoDB to be available in replica mode..."
 
 # Function to check MongoDB status
 check_mongo_status() {
-  mongosh "$MONGO_URI" --quiet --eval 'rs.status().ok' 2>/dev/null || echo 0
+  echo "Attempting to connect to MongoDB at $MONGO_URI..."
+  if ! mongosh "$MONGO_URI" --quiet --eval 'rs.status().ok' 2>&1; then
+    echo "MongoDB connection failed"
+    return 1
+  fi
+  echo "MongoDB connection successful"
+  return 0
 }
 
 # Wait for MongoDB to become available in replica mode
 attempt=0
 while [ $attempt -lt $MAX_ATTEMPTS ]; do
-  ((attempt++))
+  ((attempt++)) || true
 
   echo "Attempt $attempt/$MAX_ATTEMPTS: Checking MongoDB status..."
-  STATUS=$(check_mongo_status)
-
-  if [ "$STATUS" = "1" ]; then
+  if check_mongo_status; then
     echo "MongoDB is available and running in replica mode!"
     break
   fi
@@ -61,7 +65,7 @@ check_rpc_status() {
 echo "Waiting for RPC endpoint to be available..."
 attempt=0
 while [ $attempt -lt $MAX_ATTEMPTS ]; do
-  ((attempt++))
+  ((attempt++)) || true
 
   echo "Attempt $attempt/$MAX_ATTEMPTS: Checking RPC endpoint status..."
   STATUS=$(check_rpc_status)

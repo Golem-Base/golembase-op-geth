@@ -78,3 +78,6 @@ Here we will keep track of the changes to the stock [go-ethereum](https://github
 ## 2025-03-10
     - Implemented ETL from WAL to MongoDB
 
+## 2025-03-14
+    - Implemented global list of entities
+

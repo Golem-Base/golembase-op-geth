@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -18,12 +19,17 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 
 	logs := []*types.Log{}
 
-	deleteEntity := func(toDelete common.Hash, emitLogs bool) error {
+	deleteEntity := func(toDelete common.Hash) error {
 		v := storageutil.GetGolemDBState(access, toDelete)
 
 		ap := storageutil.ActivePayload{}
 
-		err := rlp.DecodeBytes(v, &ap)
+		err := allentities.RemoveEntity(access, toDelete)
+		if err != nil {
+			return fmt.Errorf("failed to remove entity from all entities: %w", err)
+		}
+
+		err = rlp.DecodeBytes(v, &ap)
 		if err != nil {
 			return fmt.Errorf("failed to decode active payload for %s: %w", toDelete.Hex(), err)
 		}
@@ -70,18 +76,15 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 
 		storageutil.DeleteGolemDBState(access, toDelete)
 
-		if emitLogs {
-
-			// create the log for the created entity
-			log := &types.Log{
-				Address:     common.Address{0x01}, // Set the appropriate address if needed
-				Topics:      []common.Hash{storagetx.GolemBaseStorageEntityDeleted, toDelete},
-				Data:        []byte{},
-				BlockNumber: blockNumber,
-			}
-
-			logs = append(logs, log)
+		// create the log for the created entity
+		log := &types.Log{
+			Address:     common.Address{0x01}, // Set the appropriate address if needed
+			Topics:      []common.Hash{storagetx.GolemBaseStorageEntityDeleted, toDelete},
+			Data:        []byte{},
+			BlockNumber: blockNumber,
 		}
+
+		logs = append(logs, log)
 
 		return nil
 
@@ -92,7 +95,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 	entitiesToExpireForBlockKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
 
 	for key := range keyset.Iterator(access, entitiesToExpireForBlockKey) {
-		err := deleteEntity(key, true)
+		err := deleteEntity(key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to delete entity %s: %w", key.Hex(), err)
 		}

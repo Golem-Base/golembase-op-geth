@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -66,8 +67,13 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 
 	storeEntity := func(key common.Hash, ap *storageutil.ActivePayload, emitLogs bool) error {
 
+		err := allentities.AddEntity(access, key)
+		if err != nil {
+			return fmt.Errorf("failed to add entity to all entities: %w", err)
+		}
+
 		buf := new(bytes.Buffer)
-		err := rlp.Encode(buf, ap)
+		err = rlp.Encode(buf, ap)
 		if err != nil {
 			return fmt.Errorf("failed to encode active payload: %w", err)
 		}
@@ -155,11 +161,17 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 	}
 
 	deleteEntity := func(toDelete common.Hash, emitLogs bool) error {
+
+		err := allentities.RemoveEntity(access, toDelete)
+		if err != nil {
+			return fmt.Errorf("failed to remove entity from all entities: %w", err)
+		}
+
 		v := storageutil.GetGolemDBState(access, toDelete)
 
 		ap := storageutil.ActivePayload{}
 
-		err := rlp.DecodeBytes(v, &ap)
+		err = rlp.DecodeBytes(v, &ap)
 		if err != nil {
 			return fmt.Errorf("failed to decode active payload for %s: %w", toDelete.Hex(), err)
 		}
