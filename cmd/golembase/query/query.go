@@ -11,14 +11,19 @@ import (
 )
 
 func Query() *cli.Command {
+	cfg := struct {
+		NodeURL string
+	}{}
 	return &cli.Command{
 		Name:  "query",
 		Usage: "query entity",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "node-url",
-				Usage: "The URL of the node to connect to",
-				Value: "http://localhost:8545",
+				Name:        "node-url",
+				Usage:       "The URL of the node to connect to",
+				Value:       "http://localhost:8545",
+				EnvVars:     []string{"NODE_URL"},
+				Destination: &cfg.NodeURL,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -31,7 +36,7 @@ func Query() *cli.Command {
 				return fmt.Errorf("query is required")
 			}
 			// Connect to the geth node
-			rpcClient, err := rpc.Dial(c.String("node-url"))
+			rpcClient, err := rpc.Dial(cfg.NodeURL)
 			if err != nil {
 				return fmt.Errorf("failed to connect to node: %w", err)
 			}
