@@ -3,10 +3,10 @@ name: Nix Build
 on:
   push:
     branches:
-      - v1.101500-base
+      - main
   pull_request:
     branches:
-      - v1.101500-base
+      - main
 
 jobs:
   nix-build:
