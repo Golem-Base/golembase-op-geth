@@ -25,6 +25,7 @@ func AccountBalance() *cli.Command {
 				Name:        "node-url",
 				Usage:       "The URL of the node to connect to",
 				Value:       "http://localhost:8545",
+				EnvVars:     []string{"NODE_URL"},
 				Destination: &cfg.NodeURL,
 			},
 		},
