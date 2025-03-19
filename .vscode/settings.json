@@ -1,0 +1,5 @@
+{
+    "go.testEnvVars": {
+        "CUCUMBER_WIP_ONLY": "true"
+    }
+}
