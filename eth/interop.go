@@ -37,7 +37,7 @@ func (s *Ethereum) SimLogs(tx *types.Transaction) ([]*types.Log, uint64, error) 
 	}
 	var vmConf vm.Config
 	signer := types.MakeSigner(chainConfig, header.Number, header.Time)
-	message, err := core.TransactionToMessage(tx, signer, header.BaseFee)
+	message, err := core.TransactionToMessage(tx, signer, header.BaseFee, header.Number.Uint64())
 	if err != nil {
 		return nil, 0, fmt.Errorf("cannot convert tx to message for log simulation: %w", err)
 	}
