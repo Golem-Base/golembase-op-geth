@@ -18,8 +18,8 @@ import (
 
 func FundAccount() *cli.Command {
 	cfg := struct {
-		NodeURL string
-		Value   int64
+		nodeURL string
+		value   int64
 	}{}
 	return &cli.Command{
 		Flags: []cli.Flag{
@@ -28,14 +28,14 @@ func FundAccount() *cli.Command {
 				Usage:       "The URL of the node to connect to",
 				Value:       "http://localhost:8545",
 				EnvVars:     []string{"NODE_URL"},
-				Destination: &cfg.NodeURL,
+				Destination: &cfg.nodeURL,
 			},
 			&cli.Int64Flag{
 				Name:        "value",
 				Usage:       "The amount of ETH to fund the account with",
 				Value:       100,
 				EnvVars:     []string{"VALUE"},
-				Destination: &cfg.Value,
+				Destination: &cfg.value,
 			},
 		},
 		Name:  "fund",
@@ -49,7 +49,7 @@ func FundAccount() *cli.Command {
 			ctx, cancel := signal.NotifyContext(c.Context, os.Interrupt)
 			defer cancel()
 
-			ethclient, err := ethclient.Dial(cfg.NodeURL)
+			ethclient, err := ethclient.Dial(cfg.nodeURL)
 			if err != nil {
 				return fmt.Errorf("failed to dial node: %w", err)
 			}
@@ -86,7 +86,7 @@ func FundAccount() *cli.Command {
 				MaxFeePerGas:         (*hexutil.Big)(big.NewInt(5e9)), // 5 Gwei
 				Gas:                  (*hexutil.Uint64)(pointerOf(uint64(2_800_000))),
 				To:                   pointerOf(userAccount.Address), //
-				Value:                (*hexutil.Big)(EthToWei(cfg.Value)),
+				Value:                (*hexutil.Big)(EthToWei(cfg.value)),
 			}
 
 			var txHash common.Hash

@@ -15,7 +15,7 @@ import (
 
 func AccountBalance() *cli.Command {
 	cfg := struct {
-		NodeURL string
+		nodeURL string
 	}{}
 	return &cli.Command{
 		Name:  "balance",
@@ -26,7 +26,7 @@ func AccountBalance() *cli.Command {
 				Usage:       "The URL of the node to connect to",
 				Value:       "http://localhost:8545",
 				EnvVars:     []string{"NODE_URL"},
-				Destination: &cfg.NodeURL,
+				Destination: &cfg.nodeURL,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -38,7 +38,7 @@ func AccountBalance() *cli.Command {
 			ctx, cancel := signal.NotifyContext(c.Context, os.Interrupt)
 			defer cancel()
 
-			ethclient, err := ethclient.Dial(cfg.NodeURL)
+			ethclient, err := ethclient.Dial(cfg.nodeURL)
 			if err != nil {
 				return fmt.Errorf("failed to dial node: %w", err)
 			}

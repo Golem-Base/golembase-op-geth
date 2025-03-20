@@ -20,9 +20,9 @@ import (
 func Create() *cli.Command {
 
 	cfg := struct {
-		NodeURL string
-		Data    string
-		TTL     uint64
+		nodeURL string
+		data    string
+		ttl     uint64
 	}{}
 	return &cli.Command{
 		Name:  "create",
@@ -33,21 +33,21 @@ func Create() *cli.Command {
 				Usage:       "The URL of the node to connect to",
 				Value:       "http://localhost:8545",
 				EnvVars:     []string{"NODE_URL"},
-				Destination: &cfg.NodeURL,
+				Destination: &cfg.nodeURL,
 			},
 			&cli.StringFlag{
 				Name:        "data",
 				Usage:       "data for the create operation",
 				Value:       "this is a test",
 				EnvVars:     []string{"ENTITY_DATA"},
-				Destination: &cfg.Data,
+				Destination: &cfg.data,
 			},
 			&cli.Uint64Flag{
 				Name:        "ttl",
 				Usage:       "ttl for the create operation",
 				Value:       100,
 				EnvVars:     []string{"ENTITY_TTL"},
-				Destination: &cfg.TTL,
+				Destination: &cfg.ttl,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -61,7 +61,7 @@ func Create() *cli.Command {
 			}
 
 			// Connect to the geth node
-			client, err := ethclient.DialContext(ctx, cfg.NodeURL)
+			client, err := ethclient.DialContext(ctx, cfg.nodeURL)
 			if err != nil {
 				return fmt.Errorf("failed to connect to node: %w", err)
 			}

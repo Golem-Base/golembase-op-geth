@@ -25,15 +25,20 @@ func Blocks() *cli.Command {
 }
 
 func blockList() *cli.Command {
+	cfg := struct {
+		nodeURL string
+	}{}
 	return &cli.Command{
 		Name:    "list",
 		Aliases: []string{"ls"},
 		Usage:   "list blocks",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "node-url",
-				Usage: "The URL of the node to connect to",
-				Value: "http://localhost:8545",
+				Name:        "node-url",
+				Usage:       "The URL of the node to connect to",
+				Value:       "http://localhost:8545",
+				Destination: &cfg.nodeURL,
+				EnvVars:     []string{"NODE_URL"},
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -41,7 +46,7 @@ func blockList() *cli.Command {
 			ctx, stop := signal.NotifyContext(c.Context, os.Interrupt)
 			defer stop()
 
-			rpcClient, err := rpc.DialContext(ctx, c.String("node-url"))
+			rpcClient, err := rpc.DialContext(ctx, cfg.nodeURL)
 			if err != nil {
 				return fmt.Errorf("failed to connect to node: %w", err)
 			}
@@ -70,15 +75,20 @@ func blockList() *cli.Command {
 }
 
 func blockDetails() *cli.Command {
+	cfg := struct {
+		nodeURL string
+	}{}
 	return &cli.Command{
 		Name:    "cat",
 		Aliases: []string{"details"},
 		Usage:   "get block details",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "node-url",
-				Usage: "The URL of the node to connect to",
-				Value: "http://localhost:8545",
+				Name:        "node-url",
+				Usage:       "The URL of the node to connect to",
+				Value:       "http://localhost:8545",
+				Destination: &cfg.nodeURL,
+				EnvVars:     []string{"NODE_URL"},
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -96,7 +106,7 @@ func blockDetails() *cli.Command {
 				return fmt.Errorf("failed to parse block number: %w", err)
 			}
 
-			rpcClient, err := rpc.DialContext(ctx, c.String("node-url"))
+			rpcClient, err := rpc.DialContext(ctx, cfg.nodeURL)
 			if err != nil {
 				return fmt.Errorf("failed to connect to node: %w", err)
 			}
