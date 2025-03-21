@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,7 +157,38 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the number of entities should be (\d+)$`, theNumberOfEntitiesShouldBe)
 	ctx.Step(`^the entity should be in the list of all entities$`, theEntityShouldBeInTheListOfAllEntities)
 	ctx.Step(`^the list of all entities should be empty$`, theListOfAllEntitiesShouldBeEmpty)
+	ctx.Step(`^I search for entities with the invalid query$`, iSearchForEntitiesWithTheInvalidQuery)
+	ctx.Step(`^I should see an error containing "([^"]*)"$`, iShouldSeeAnErrorContaining)
 
+}
+
+func iSearchForEntitiesWithTheInvalidQuery(ctx context.Context, query *godog.DocString) error {
+	w := testutil.GetWorld(ctx)
+
+	err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		nil,
+		"golembase_queryEntities",
+		query.Content,
+	)
+
+	w.LastError = err
+
+	return nil
+}
+
+func iShouldSeeAnErrorContaining(ctx context.Context, expectedSubstring string) error {
+	w := testutil.GetWorld(ctx)
+
+	if w.LastError == nil {
+		return fmt.Errorf("no error occurred")
+	}
+
+	if !strings.Contains(w.LastError.Error(), expectedSubstring) {
+		return fmt.Errorf("error %w does not contain expected substring: %s", w.LastError, expectedSubstring)
+	}
+
+	return nil
 }
 
 func iHaveEnoughFundsToPayForTheTransaction(ctx context.Context) error {
