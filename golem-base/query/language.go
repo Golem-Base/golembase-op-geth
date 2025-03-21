@@ -2,7 +2,6 @@ package query
 
 import (
 	"errors"
-	"log"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -188,8 +187,5 @@ var Parser = participle.MustBuild[Expression](
 
 func Parse(s string) (*Expression, error) {
 	v, err := Parser.ParseString("", s)
-	if err != nil {
-		log.Fatal(err)
-	}
 	return v, err
 }

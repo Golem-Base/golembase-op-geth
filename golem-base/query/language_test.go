@@ -213,4 +213,9 @@ func TestParse(t *testing.T) {
 		)
 	})
 
+	t.Run("invalid expression", func(t *testing.T) {
+		_, err := query.Parse(`key = 8e`)
+		require.Error(t, err, `1:8: unexpected token "e"`)
+	})
+
 }
