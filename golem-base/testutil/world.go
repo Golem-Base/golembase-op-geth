@@ -16,6 +16,7 @@ type World struct {
 	LastReceipt      *types.Receipt
 	SearchResult     []golemtype.SearchResult
 	CreatedEntityKey common.Hash
+	LastError        error
 }
 
 func NewWorld(ctx context.Context, gethPath string) (*World, error) {
