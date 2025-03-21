@@ -147,6 +147,21 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 
 	misc.EnsureCreate2Deployer(miner.chainConfig, work.header.Time, work.state)
 
+	// If there are no transactions, add a housekeeping transaction.
+	// This is for the case we're running geth in dev mode wihtout op-node running.
+	if len(params.txs) == 0 {
+		params.txs = types.Transactions{
+			types.NewTx(&types.DepositTx{
+				// System address
+				From:  common.HexToAddress("0xDeaDDEaDDeAdDeAdDEAdDEaddeAddEAdDEAd0001"),
+				To:    &types.L1BlockAddr,
+				Value: big.NewInt(0),
+				Gas:   1000000,
+				Data:  []byte{},
+			}),
+		}
+	}
+
 	for _, tx := range params.txs {
 		from, _ := types.Sender(work.signer, tx)
 		work.state.SetTxContext(tx.Hash(), work.tcount)
@@ -499,28 +514,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
-	}
-
-	{
-		tx := types.NewTx(&types.DepositTx{
-			// System address
-			From:  common.HexToAddress("0xDeaDDEaDDeAdDeAdDEAdDEaddeAddEAdDEAd0001"),
-			To:    &types.L1BlockAddr,
-			Value: big.NewInt(0),
-			Gas:   1000000,
-			Data:  []byte{},
-		})
-		// nonce,
-		// address.GolemBaseHousekeepingAddress,
-		// big.NewInt(0), 21000, big.NewInt(0), []byte{})
-
-		env.state.SetTxContext(tx.Hash(), env.tcount)
-
-		err := miner.commitTransaction(env, tx)
-		if err != nil {
-			log.Error("Failed to commit housekeeping transaction", "err", err)
-		}
-
 	}
 
 	blockDABytes := new(big.Int)
