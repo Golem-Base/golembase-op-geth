@@ -32,3 +32,10 @@ Feature: Search
       (foo = "bar" || foo = "baz") && foo = "bar"
       """
     Then I should find 2 entities
+
+  Scenario: invalid query
+    When I search for entities with the invalid query
+      """
+      key = 8e
+      """
+    Then I should see an error containing "unexpected token"
