@@ -1,13 +1,14 @@
 {
   description = "Golem Base L3 Store Prototype";
   inputs = {
-
-    nixpkgs = {
-      url = "github:NixOS/nixpkgs/nixos-24.11";
-    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
 
     systems.url = "github:nix-systems/default";
 
+    rpcplorer = {
+      url = "git+ssh://git@github.com/Golem-Base/rpcplorer.git";
+      inputs.systems.follows = "systems";
+    };
   };
 
   outputs =
@@ -15,26 +16,15 @@
       self,
       nixpkgs,
       systems,
+      rpcplorer,
       ...
     }@inputs:
     let
-      eachSystem =
-        f:
-        nixpkgs.lib.genAttrs (import systems) (
-          system:
-          f (
-            import nixpkgs {
-              inherit system;
-              config = {
-                allowUnfree = true;
-              };
-            }
-          )
-        );
-
+      eachSystem = f: nixpkgs.lib.genAttrs (import systems) (system: f system nixpkgs.legacyPackages.${system});
     in
     {
       packages = eachSystem (
+        _system:
         pkgs:
         let
           inherit (pkgs) lib;
@@ -75,7 +65,7 @@
         }
       );
 
-      devShells = eachSystem (pkgs: {
+      devShells = eachSystem (system: pkgs: {
         default = pkgs.mkShell {
           shellHook = ''
             # Set here the env vars you want to be available in the shell
@@ -96,7 +86,7 @@
           ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux [
             # For podman networking
             slirp4netns
-          ];
+          ] ++ [ rpcplorer.packages.${system}.default ] ;
         };
       });
     };
