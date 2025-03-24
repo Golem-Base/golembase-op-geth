@@ -1,5 +1,5 @@
 -- name: InsertEntity :exec
-INSERT INTO entities (key, expires_at, payload) VALUES (?, ?, ?);
+INSERT INTO entities (key, expires_at, payload, owner_address) VALUES (?, ?, ?, ?);
 
 -- name: InsertStringAnnotation :exec
 INSERT INTO string_annotations (entity_key, annotation_key, value) VALUES (?, ?, ?);
@@ -8,7 +8,10 @@ INSERT INTO string_annotations (entity_key, annotation_key, value) VALUES (?, ?,
 INSERT INTO numeric_annotations (entity_key, annotation_key, value) VALUES (?, ?, ?);
 
 -- name: GetEntity :one
-SELECT expires_at, payload FROM entities WHERE key = ?;
+SELECT expires_at, payload, owner_address FROM entities WHERE key = ?;
+
+-- name: GetEntitiesByOwner :many
+SELECT key, expires_at, payload FROM entities WHERE owner_address = ?;
 
 -- name: GetStringAnnotations :many
 SELECT annotation_key, value FROM string_annotations WHERE entity_key = ?;

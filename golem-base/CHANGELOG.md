@@ -83,3 +83,6 @@ Here we will keep track of the changes to the stock [go-ethereum](https://github
 
 ## 2025-03-19
     - Removed custom transactions to reduce fricion with the rest of the OP ecosystem
+
+## 2025-03-24
+    - Added storing of entity owners when entities are created

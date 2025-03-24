@@ -182,6 +182,7 @@ func main() {
 									Payload:            op.Create.Payload,
 									StringAnnotations:  stringAnnotations,
 									NumericAnnotations: numericAnnotations,
+									OwnerAddress:       op.Create.Owner.Hex(),
 								})
 								if err != nil {
 									return nil, fmt.Errorf("failed to insert entity: %w", err)
@@ -207,6 +208,12 @@ func main() {
 									numericAnnotations[annotation.Key] = int64(annotation.Value)
 								}
 
+								// Get the existing entity to preserve the owner address
+								existingEntity, err := mongoDriver.GetEntity(txCtx, op.Update.EntityKey.Hex())
+								if err != nil {
+									return nil, fmt.Errorf("failed to get existing entity: %w", err)
+								}
+
 								// Insert updated entity
 								err = mongoDriver.InsertEntity(txCtx, mongogolem.Entity{
 									Key:                op.Update.EntityKey.Hex(),
@@ -214,6 +221,7 @@ func main() {
 									Payload:            op.Update.Payload,
 									StringAnnotations:  stringAnnotations,
 									NumericAnnotations: numericAnnotations,
+									OwnerAddress:       existingEntity.OwnerAddress,
 								})
 								if err != nil {
 									return nil, fmt.Errorf("failed to insert updated entity: %w", err)

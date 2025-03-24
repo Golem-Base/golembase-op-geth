@@ -5,9 +5,10 @@
 package sqlitegolem
 
 type Entity struct {
-	Key       string
-	ExpiresAt int64
-	Payload   []byte
+	Key          string
+	ExpiresAt    int64
+	Payload      []byte
+	OwnerAddress string
 }
 
 type NumericAnnotation struct {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,6 +38,7 @@ type Create struct {
 	Payload            []byte                          `json:"payload"`
 	StringAnnotations  []storageutil.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
+	Owner              common.Address                  `json:"owner"`
 }
 
 type Update struct {
@@ -67,7 +69,7 @@ func PathToBlockNumber(path string) (uint64, error) {
 	return strconv.ParseUint(matches[1], 10, 64)
 }
 
-func WriteLogForBlock(dir string, block *types.Block, receipts []*types.Receipt) (err error) {
+func WriteLogForBlock(dir string, block *types.Block, chainID *big.Int, receipts []*types.Receipt) (err error) {
 
 	defer func() {
 		if err != nil {
@@ -96,6 +98,8 @@ func WriteLogForBlock(dir string, block *types.Block, receipts []*types.Receipt)
 	})
 
 	txns := block.Transactions()
+
+	signer := types.LatestSignerForChainID(chainID)
 
 	for i, tx := range txns {
 		receipt := receipts[i]
@@ -163,15 +167,21 @@ func WriteLogForBlock(dir string, block *types.Block, receipts []*types.Receipt)
 				expiresAtBlockU256 := uint256.NewInt(0).SetBytes(l.Data)
 				expiresAtBlock := expiresAtBlockU256.Uint64()
 
+				from, err := types.Sender(signer, tx)
+				if err != nil {
+					return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
+				}
+
 				cr := Create{
 					EntityKey:          key,
 					ExpiresAtBlock:     expiresAtBlock,
 					Payload:            create.Payload,
 					StringAnnotations:  create.StringAnnotations,
 					NumericAnnotations: create.NumericAnnotations,
+					Owner:              from,
 				}
 
-				err := enc.Encode(Operation{
+				err = enc.Encode(Operation{
 					Create: &cr,
 				})
 				if err != nil {

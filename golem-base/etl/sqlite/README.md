@@ -34,7 +34,7 @@ The WAL directory will contain files that record all entity operations processed
 
 The program requires the following configuration parameters:
 
-- `--db`: Path to the SQLite database file (required)
+- `--db`: SQLite database file path (required)
 - `--wal`: Directory containing the Write-Ahead Log files (required)
 - `--rpc-endpoint`: URL of the op-geth RPC endpoint (required)
 
@@ -46,21 +46,35 @@ These can be provided via command line flags or environment variables:
 ## Usage
 
 ```bash
-sqlite-etl --db ./data.db --wal ./wal --rpc-endpoint http://localhost:8545
+sqlite-etl --db golembase.db --wal ./wal --rpc-endpoint http://localhost:8545
 ```
 
-## Database Schema
+## Database Structure
 
 The program uses a SQLite database with the following main tables:
 
-- `entities`: Stores the main entity data
-- `numeric_annotations`: Stores numeric annotations for entities
-- `string_annotations`: Stores string annotations for entities
+- `entities`: Stores the main entity data and annotations
 - `processing_status`: Tracks the last processed block
+
+Entity records in SQLite include:
+- `key`: The entity key (primary key)
+- `content`: The entity payload
+- `stringAnnotations`: String annotations for the entity
+- `numericAnnotations`: Numeric annotations for the entity
+- `created_at`: Timestamp when the entity was created
+- `updated_at`: Timestamp when the entity was last updated
+- `expires_at`: Expiration time for the entity (if applicable)
+- `owner_address`: The Ethereum address of the entity owner (hex string)
+
+The following indexes are created for efficient querying:
+- `idx_entities_owner_address`: Index on the owner's Ethereum address
+- `expires_at`: Index for TTL queries
+- `stringAnnotations`: Index for string annotation queries
+- `numericAnnotations`: Index for numeric annotation queries
 
 ## Processing Flow
 
-1. Connects to the op-geth RPC endpoint
+1. Connects to the op-geth RPC endpoint and SQLite database
 2. Checks for existing processing status
 3. If no status exists, initializes with genesis block
 4. Processes WAL files sequentially
@@ -68,11 +82,12 @@ The program uses a SQLite database with the following main tables:
    - Processes all operations (create, update, delete)
    - Handles entity data and annotations
    - Updates processing status
-6. Uses transactions to ensure data consistency
+6. Uses SQLite transactions to ensure data consistency
 
 ## Error Handling
 
 - Graceful shutdown on interrupt signals
 - Transaction rollback on processing errors
 - Detailed error logging
-- Automatic schema initialization if needed
+- Automatic retry mechanisms using backoff strategies
+- Robust error reporting

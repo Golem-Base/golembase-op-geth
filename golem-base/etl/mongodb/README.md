@@ -86,6 +86,13 @@ Entity documents in MongoDB include:
 - `created_at`: Timestamp when the entity was created
 - `updated_at`: Timestamp when the entity was last updated
 - `expires_at`: Expiration time for the entity (if applicable)
+- `owner_address`: The Ethereum address of the entity owner (hex string)
+
+The following indexes are created for efficient querying:
+- `owner_address`: Index on the owner's Ethereum address
+- `expires_at`: Index for TTL queries
+- `stringAnnotations.$**`: Wildcard index for string annotation queries
+- `numericAnnotations.$**`: Wildcard index for numeric annotation queries
 
 ## Processing Flow
 

@@ -76,13 +76,15 @@ The implementation uses a specialized index that tracks which entities expire at
 
 The API methods are accessible through the following JSON-RPC endpoints:
 
-- `golembase_getStorageValue`
-- `golembase_getEntitiesToExpireAtBlock`
-- `golembase_getEntitiesForStringAnnotationValue`
-- `golembase_getEntitiesForNumericAnnotationValue`
-- `golembase_queryEntities`
-- `golembase_getEntityCount`
-- `golembase_getAllEntityKeys`
+- `golembase_getStorageValue`: Retrieves payload data for a given hash key
+- `golembase_getFullEntity`: Retrieves the complete entity data including payload, TTL, and annotations for a given hash key
+- `golembase_getEntitiesToExpireAtBlock`: Returns entities scheduled to expire at a specific block
+- `golembase_getEntitiesForStringAnnotationValue`: Finds entities with matching string annotations
+- `golembase_getEntitiesForNumericAnnotationValue`: Finds entities with matching numeric annotations
+- `golembase_queryEntities`: Executes queries with a custom query language
+- `golembase_getEntityCount`: Returns the total number of entities in storage
+- `golembase_getAllEntityKeys`: Returns all entity keys currently in storage
+- `golembase_getEntitiesOfOwner`: Returns all entity keys owned by a specific address
 
 ## API Functionality
 
@@ -90,6 +92,7 @@ This JSON-RPC API provides several capabilities:
 
 1. **Storage Access**
    - `getStorageValue`: Retrieves payload data for a given hash key
+   - `getFullEntity`: Retrieves complete entity data including payload, TTL, owner Ethereum address and annotations
 
 2. **Entity Queries**
    - `getEntitiesToExpireAtBlock`: Returns entities scheduled to expire at a specific block
@@ -97,6 +100,7 @@ This JSON-RPC API provides several capabilities:
    - `getEntitiesForNumericAnnotationValue`: Finds entities with matching numeric annotations
    - `getEntityCount`: Returns the total number of entities in storage
    - `getAllEntityKeys`: Returns all entity keys currently in storage
+   - `getEntitiesOfOwner`: Returns all entity keys owned by a specific Ethereum address
 
 3. **Query Language Support**
    - `queryEntities`: Executes queries with a custom query language, returning structured results

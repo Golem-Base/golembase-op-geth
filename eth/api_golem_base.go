@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -44,6 +45,25 @@ func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
 	}
 
 	return ap.Payload, nil
+}
+
+func (api *golemBaseAPI) GetFullEntity(key common.Hash) (storageutil.ActivePayload, error) {
+	header := api.eth.blockchain.CurrentBlock()
+	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return storageutil.ActivePayload{}, fmt.Errorf("failed to get state: %w", err)
+	}
+
+	v := storageutil.GetGolemDBState(stateDb, key)
+
+	ap := storageutil.ActivePayload{}
+
+	err = rlp.DecodeBytes(v, &ap)
+	if err != nil {
+		return storageutil.ActivePayload{}, fmt.Errorf("failed to decode active payload: %w", err)
+	}
+
+	return ap, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]common.Hash, error) {
@@ -162,4 +182,13 @@ func (api *golemBaseAPI) GetAllEntityKeys() ([]common.Hash, error) {
 	}
 
 	return entityKeys, nil
+}
+
+func (api *golemBaseAPI) GetEntitiesOfOwner(owner common.Address) ([]common.Hash, error) {
+	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state: %w", err)
+	}
+
+	return slices.Collect(entitiesofowner.Iterate(stateDb, owner)), nil
 }

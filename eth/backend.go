@@ -263,7 +263,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	if walDir != "" {
 		eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, func(block *types.Block, receipts []*types.Receipt) error {
-			return wal.WriteLogForBlock(walDir, block, receipts)
+			return wal.WriteLogForBlock(walDir, block, chainConfig.ChainID, receipts)
 		})
 	} else {
 		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory)
