@@ -985,6 +985,7 @@ func theWriteaheadLogForTheCreateShouldBeCreated(ctx context.Context) error {
 					NumericAnnotations: []storageutil.NumericAnnotation{
 						{Key: "test_number", Value: 42},
 					},
+					Owner: w.FundedAccount.Address,
 				},
 			},
 		},
