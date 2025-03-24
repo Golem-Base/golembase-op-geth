@@ -7,8 +7,11 @@ CREATE TABLE processing_status (
 CREATE TABLE entities (
   key TEXT NOT NULL PRIMARY KEY,
   expires_at INTEGER NOT NULL,
-  payload BLOB NOT NULL
+  payload BLOB NOT NULL,
+  owner_address TEXT NOT NULL
 );
+
+CREATE INDEX idx_entities_owner_address ON entities(owner_address);
 
 CREATE TABLE string_annotations (
   entity_key TEXT NOT NULL,

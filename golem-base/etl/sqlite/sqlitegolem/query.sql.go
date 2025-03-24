@@ -7,6 +7,7 @@ package sqlitegolem
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteEntity = `-- name: DeleteEntity :exec
@@ -57,18 +58,19 @@ func (q *Queries) EntityExists(ctx context.Context, key string) (bool, error) {
 }
 
 const getEntity = `-- name: GetEntity :one
-SELECT expires_at, payload FROM entities WHERE key = ?
+SELECT expires_at, payload, owner_address FROM entities WHERE key = ?
 `
 
 type GetEntityRow struct {
-	ExpiresAt int64
-	Payload   []byte
+	ExpiresAt    int64
+	Payload      []byte
+	OwnerAddress sql.NullString
 }
 
 func (q *Queries) GetEntity(ctx context.Context, key string) (GetEntityRow, error) {
 	row := q.db.QueryRowContext(ctx, getEntity, key)
 	var i GetEntityRow
-	err := row.Scan(&i.ExpiresAt, &i.Payload)
+	err := row.Scan(&i.ExpiresAt, &i.Payload, &i.OwnerAddress)
 	return i, err
 }
 
@@ -87,7 +89,7 @@ func (q *Queries) GetNumericAnnotations(ctx context.Context, entityKey string) (
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetNumericAnnotationsRow
+	items := []GetNumericAnnotationsRow{}
 	for rows.Next() {
 		var i GetNumericAnnotationsRow
 		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
@@ -135,7 +137,7 @@ func (q *Queries) GetStringAnnotations(ctx context.Context, entityKey string) ([
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetStringAnnotationsRow
+	items := []GetStringAnnotationsRow{}
 	for rows.Next() {
 		var i GetStringAnnotationsRow
 		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
@@ -164,17 +166,23 @@ func (q *Queries) HasProcessingStatus(ctx context.Context, network string) (bool
 }
 
 const insertEntity = `-- name: InsertEntity :exec
-INSERT INTO entities (key, expires_at, payload) VALUES (?, ?, ?)
+INSERT INTO entities (key, expires_at, payload, owner_address) VALUES (?, ?, ?, ?)
 `
 
 type InsertEntityParams struct {
-	Key       string
-	ExpiresAt int64
-	Payload   []byte
+	Key          string
+	ExpiresAt    int64
+	Payload      []byte
+	OwnerAddress sql.NullString
 }
 
 func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) error {
-	_, err := q.db.ExecContext(ctx, insertEntity, arg.Key, arg.ExpiresAt, arg.Payload)
+	_, err := q.db.ExecContext(ctx, insertEntity,
+		arg.Key,
+		arg.ExpiresAt,
+		arg.Payload,
+		arg.OwnerAddress,
+	)
 	return err
 }
 

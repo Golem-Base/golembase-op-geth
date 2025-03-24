@@ -150,9 +150,10 @@ func main() {
 						case op.Create != nil:
 							log.Info("create", "entity", op.Create.EntityKey.Hex())
 							err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-								Key:       op.Create.EntityKey.Hex(),
-								ExpiresAt: int64(op.Create.ExpiresAtBlock),
-								Payload:   op.Create.Payload,
+								Key:          op.Create.EntityKey.Hex(),
+								ExpiresAt:    int64(op.Create.ExpiresAtBlock),
+								Payload:      op.Create.Payload,
+								OwnerAddress: sql.NullString{String: op.Create.Owner.Hex(), Valid: true},
 							})
 							if err != nil {
 								return fmt.Errorf("failed to insert entity: %w", err)
@@ -180,14 +181,20 @@ func main() {
 								}
 							}
 						case op.Update != nil:
+							existingEntity, err := txDB.GetEntity(ctx, op.Update.EntityKey.Hex())
+							if err != nil {
+								return fmt.Errorf("failed to get existing entity: %w", err)
+							}
+
 							txDB.DeleteEntity(ctx, op.Update.EntityKey.Hex())
 							txDB.DeleteNumericAnnotations(ctx, op.Update.EntityKey.Hex())
 							txDB.DeleteStringAnnotations(ctx, op.Update.EntityKey.Hex())
 
 							txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-								Key:       op.Update.EntityKey.Hex(),
-								ExpiresAt: int64(op.Update.ExpiresAtBlock),
-								Payload:   op.Update.Payload,
+								Key:          op.Update.EntityKey.Hex(),
+								ExpiresAt:    int64(op.Update.ExpiresAtBlock),
+								Payload:      op.Update.Payload,
+								OwnerAddress: existingEntity.OwnerAddress,
 							})
 
 							for _, annotation := range op.Update.NumericAnnotations {

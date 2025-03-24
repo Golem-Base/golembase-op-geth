@@ -153,7 +153,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^delete the entity in Golembase$`, deleteTheEntityInGolembase)
 	ctx.Step(`^the annotations of the entity should be deleted in the SQLite database$`, theAnnotationsOfTheEntityShouldBeDeletedInTheSQLiteDatabase)
 	ctx.Step(`^the entity should be deleted in the SQLite database$`, theEntityShouldBeDeletedInTheSQLiteDatabase)
-
+	ctx.Step(`^the owner address should be stored in the SQLite database$`, theOwnerAddressShouldBeStoredInTheSQLiteDatabase)
+	ctx.Step(`^the owner address should be preserved in the SQLite database$`, theOwnerAddressShouldBePreservedInTheSQLiteDatabase)
 }
 
 func aRunningETLToSQLite() error {
@@ -493,4 +494,50 @@ func theEntityShouldBeDeletedInTheSQLiteDatabase(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func theOwnerAddressShouldBeStoredInTheSQLiteDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	entityKey := w.CreatedEntityKey
+
+	return w.WithDB(ctx, func(db *sql.DB) error {
+		gl := sqlitegolem.New(db)
+		entity, err := gl.GetEntity(ctx, entityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
+		if !entity.OwnerAddress.Valid {
+			return fmt.Errorf("expected owner address to be stored, but it was null")
+		}
+
+		if entity.OwnerAddress.String == "" {
+			return fmt.Errorf("expected owner address to be stored, but it was empty")
+		}
+
+		return nil
+	})
+}
+
+func theOwnerAddressShouldBePreservedInTheSQLiteDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	entityKey := w.CreatedEntityKey
+
+	return w.WithDB(ctx, func(db *sql.DB) error {
+		gl := sqlitegolem.New(db)
+		entity, err := gl.GetEntity(ctx, entityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
+		if !entity.OwnerAddress.Valid {
+			return fmt.Errorf("expected owner address to be preserved, but it was null")
+		}
+
+		if entity.OwnerAddress.String == "" {
+			return fmt.Errorf("expected owner address to be preserved, but it was empty")
+		}
+
+		return nil
+	})
 }
