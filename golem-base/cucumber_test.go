@@ -159,7 +159,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the list of all entities should be empty$`, theListOfAllEntitiesShouldBeEmpty)
 	ctx.Step(`^I search for entities with the invalid query$`, iSearchForEntitiesWithTheInvalidQuery)
 	ctx.Step(`^I should see an error containing "([^"]*)"$`, iShouldSeeAnErrorContaining)
-
+	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
+	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
 }
 
 func iSearchForEntitiesWithTheInvalidQuery(ctx context.Context, query *godog.DocString) error {
@@ -1131,6 +1132,47 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 
 	if len(entityKeys) != 0 {
 		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
+	}
+
+	return nil
+}
+
+func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	var entityKeys []common.Hash
+	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getEntitiesOfOwner", w.FundedAccount.Address)
+	if err != nil {
+		return fmt.Errorf("failed to get entities of owner: %w", err)
+	}
+
+	found := false
+	for _, key := range entityKeys {
+		if key == w.CreatedEntityKey {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("entity with key %s not found in the list of entities of the owner", w.CreatedEntityKey.Hex())
+	}
+
+	return nil
+}
+
+func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	var ap storageutil.ActivePayload
+
+	err := w.GethInstance.RPCClient.CallContext(ctx, &ap, "golembase_getFullEntity", w.CreatedEntityKey.Hex())
+	if err != nil {
+		return fmt.Errorf("failed to get entity metadata: %w", err)
+	}
+
+	if ap.Owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ap.Owner.Hex())
 	}
 
 	return nil

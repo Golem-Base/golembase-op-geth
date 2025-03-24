@@ -622,7 +622,7 @@ func (st *stateTransition) innerExecute() (*ExecutionResult, error) {
 			if len(st.msg.Data) > 0 {
 				var logs []*types.Log
 				// run the storage transaction
-				logs, vmerr = storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, st.evm.StateDB)
+				logs, vmerr = storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, msg.From, st.evm.StateDB)
 				if err != nil {
 					return nil, fmt.Errorf("failed to execute storage transaction: %w", err)
 				}

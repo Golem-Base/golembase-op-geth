@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -63,7 +64,7 @@ type Update struct {
 	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
 }
 
-func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access storageutil.StateAccess) ([]*types.Log, error) {
+func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
 	logs := []*types.Log{}
 
 	storeEntity := func(key common.Hash, ap *storageutil.ActivePayload, emitLogs bool) error {
@@ -71,6 +72,11 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 		err := allentities.AddEntity(access, key)
 		if err != nil {
 			return fmt.Errorf("failed to add entity to all entities: %w", err)
+		}
+
+		err = entitiesofowner.AddEntity(access, sender, key)
+		if err != nil {
+			return fmt.Errorf("failed to add entity to owner entities: %w", err)
 		}
 
 		buf := new(bytes.Buffer)
@@ -147,6 +153,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 		key := crypto.Keccak256Hash(txHash.Bytes(), create.Payload, paddedI)
 
 		ap := &storageutil.ActivePayload{
+			Owner:              sender,
 			ExpiresAtBlock:     blockNumber + create.TTL,
 			Payload:            create.Payload,
 			StringAnnotations:  create.StringAnnotations,
@@ -220,6 +227,11 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 			return fmt.Errorf("failed to append to key list: %w", err)
 		}
 
+		err = entitiesofowner.RemoveEntity(access, ap.Owner, toDelete)
+		if err != nil {
+			return fmt.Errorf("failed to remove entity from owner entities: %w", err)
+		}
+
 		storageutil.DeleteGolemDBState(access, toDelete)
 
 		if emitLogs {
@@ -279,13 +291,13 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, access
 	return logs, nil
 }
 
-func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, access storageutil.StateAccess) ([]*types.Log, error) {
+func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
 	tx := &StorageTransaction{}
 	err := rlp.DecodeBytes(d, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode storage transaction: %w", err)
 	}
-	logs, err := tx.Run(blockNumber, txHash, access)
+	logs, err := tx.Run(blockNumber, txHash, sender, access)
 	if err != nil {
 		log.Error("Failed to run storage transaction", "error", err)
 		return nil, fmt.Errorf("failed to run storage transaction: %w", err)

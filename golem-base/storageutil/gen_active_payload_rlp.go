@@ -26,6 +26,7 @@ func (obj *ActivePayload) EncodeRLP(_w io.Writer) error {
 		w.ListEnd(_tmp6)
 	}
 	w.ListEnd(_tmp4)
+	w.WriteBytes(obj.Owner[:])
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

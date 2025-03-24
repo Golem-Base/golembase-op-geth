@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -73,6 +74,11 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, access storageut
 		err = keyset.RemoveValue(access, expiredEntityKey, toDelete)
 		if err != nil {
 			return fmt.Errorf("failed to append to key list: %w", err)
+		}
+
+		err = entitiesofowner.RemoveEntity(access, ap.Owner, toDelete)
+		if err != nil {
+			return fmt.Errorf("failed to remove entity from owner entities: %w", err)
 		}
 
 		storageutil.DeleteGolemDBState(access, toDelete)
