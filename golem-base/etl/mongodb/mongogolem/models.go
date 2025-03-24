@@ -22,6 +22,7 @@ type Entity struct {
 	NumericAnnotations map[string]int64  `bson:"numericAnnotations,omitempty"`
 	CreatedAt          time.Time         `bson:"created_at"`
 	UpdatedAt          time.Time         `bson:"updated_at"`
+	OwnerAddress       string            `bson:"owner_address"`
 }
 
 // Annotation represents a key-value pair

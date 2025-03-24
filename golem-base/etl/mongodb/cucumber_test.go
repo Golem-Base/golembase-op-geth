@@ -155,6 +155,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the entity should be deleted in the Mongodb database$`, theEntityShouldBeDeletedInTheMongodbDatabase)
 	ctx.Step(`^I create an entity with a JSON payload to the Golembase$`, iCreateAnEntityWithAJSONPayloadToTheGolembase)
 	ctx.Step(`^the PayloadAsJSON in the Mongodb database should be populated$`, thePayloadAsJSONInTheMongodbDatabaseShouldBePopulated)
+	ctx.Step(`^the owner address should be stored in the Mongodb database$`, theOwnerAddressShouldBeStoredInTheMongodbDatabase)
+	ctx.Step(`^the owner address should be preserved in the Mongodb database$`, theOwnerAddressShouldBePreservedInTheMongodbDatabase)
+	ctx.Step(`^a new entity in Golebase$`, aNewEntityInGolebase)
 
 }
 
@@ -233,6 +236,7 @@ type Entity struct {
 	NumericAnnotations map[string]int64  `bson:"numericAnnotations,omitempty"`
 	CreatedAt          time.Time         `bson:"created_at"`
 	UpdatedAt          time.Time         `bson:"updated_at"`
+	OwnerAddress       string            `bson:"owner_address,omitempty"`
 }
 
 func theAnnotationsOfTheEntityShouldBeExistingInTheMongodbDatabase(ctx context.Context) error {
@@ -475,4 +479,82 @@ func iCreateAnEntityWithAJSONPayloadToTheGolembase(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func theOwnerAddressShouldBeStoredInTheMongodbDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	entityKey := w.CreatedEntityKey
+
+	return w.AccessMongodb(func(mongo *mongogolem.MongoGolem) error {
+		collection := mongo.Collections().Entities
+		filter := bson.M{"_id": entityKey.Hex()}
+		res := collection.FindOne(ctx, filter)
+		if res.Err() != nil {
+			return fmt.Errorf("failed to find entity: %w", res.Err())
+		}
+
+		var entity Entity
+		err := res.Decode(&entity)
+		if err != nil {
+			return fmt.Errorf("failed to decode entity: %w", err)
+		}
+
+		if entity.OwnerAddress == "" {
+			return fmt.Errorf("expected owner address to be stored, but it was empty")
+		}
+
+		return nil
+	})
+}
+
+func theOwnerAddressShouldBePreservedInTheMongodbDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	entityKey := w.CreatedEntityKey
+
+	return w.AccessMongodb(func(mongo *mongogolem.MongoGolem) error {
+		collection := mongo.Collections().Entities
+		filter := bson.M{"_id": entityKey.Hex()}
+		res := collection.FindOne(ctx, filter)
+		if res.Err() != nil {
+			return fmt.Errorf("failed to find entity: %w", res.Err())
+		}
+
+		var entity Entity
+		err := res.Decode(&entity)
+		if err != nil {
+			return fmt.Errorf("failed to decode entity: %w", err)
+		}
+
+		if entity.OwnerAddress == "" {
+			return fmt.Errorf("expected owner address to be preserved, but it was empty")
+		}
+
+		return nil
+	})
+}
+
+func aNewEntityInGolebase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	_, err := w.CreateEntity(ctx,
+		1000,
+		[]byte(`{"test": "value", "number": 123}`),
+		[]storageutil.StringAnnotation{
+			{
+				Key:   "stringTest",
+				Value: "stringTest",
+			},
+		},
+		[]storageutil.NumericAnnotation{
+			{
+				Key:   "numericTest",
+				Value: 1234567890,
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create entity: %w", err)
+	}
+
+	return nil
+
 }

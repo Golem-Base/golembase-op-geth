@@ -57,6 +57,15 @@ func (m *MongoGolem) EnsureIndexes(ctx context.Context) error {
 		return fmt.Errorf("failed to create expiration index for entities: %w", err)
 	}
 
+	// Create owner address index for entities
+	ownerAddressIndex := mongo.IndexModel{
+		Keys: bson.D{{Key: "owner_address", Value: 1}},
+	}
+	_, err = cols.Entities.Indexes().CreateOne(ctx, ownerAddressIndex)
+	if err != nil {
+		return fmt.Errorf("failed to create owner address index for entities: %w", err)
+	}
+
 	// Create wildcard index for string annotations
 	stringAnnotationsIndex := mongo.IndexModel{
 		Keys: bson.D{{Key: "stringAnnotations.$**", Value: 1}},
