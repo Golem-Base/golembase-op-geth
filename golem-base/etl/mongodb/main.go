@@ -191,7 +191,13 @@ func main() {
 							case op.Update != nil:
 								log.Info("update", "entity", op.Update.EntityKey.Hex())
 
-								// First delete existing entity
+								// Get the existing entity to preserve the owner address
+								existingEntity, err := mongoDriver.GetEntity(txCtx, op.Update.EntityKey.Hex())
+								if err != nil {
+									return nil, fmt.Errorf("failed to get existing entity: %w", err)
+								}
+
+								// Delete existing entity
 								err = mongoDriver.DeleteEntity(txCtx, op.Update.EntityKey.Hex())
 								if err != nil {
 									return nil, fmt.Errorf("failed to delete entity before update: %w", err)
@@ -206,12 +212,6 @@ func main() {
 								numericAnnotations := make(map[string]int64)
 								for _, annotation := range op.Update.NumericAnnotations {
 									numericAnnotations[annotation.Key] = int64(annotation.Value)
-								}
-
-								// Get the existing entity to preserve the owner address
-								existingEntity, err := mongoDriver.GetEntity(txCtx, op.Update.EntityKey.Hex())
-								if err != nil {
-									return nil, fmt.Errorf("failed to get existing entity: %w", err)
 								}
 
 								// Insert updated entity

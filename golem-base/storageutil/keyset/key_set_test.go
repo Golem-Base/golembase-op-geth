@@ -1,6 +1,8 @@
 package keyset_test
 
 import (
+	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -61,6 +63,24 @@ func (m *mockStateAccess) GetStorageEntryCount(addr common.Address) int {
 		return len(storageMap)
 	}
 	return 0
+}
+
+func (m *mockStateAccess) Print(addr common.Address) {
+	keys := []common.Hash{}
+
+	for key := range m.storage[addr] {
+		keys = append(keys, key)
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].Big().Cmp(keys[j].Big()) < 0
+	})
+
+	for _, key := range keys {
+		value := m.storage[addr][key]
+		fmt.Printf("%s: %s\n", key.Hex(), value.Hex())
+
+	}
 }
 
 // Helper function to create test values
@@ -166,6 +186,15 @@ func TestMultipleValuesInSet(t *testing.T) {
 	assert.True(t, keyset.ContainsValue(db, setKey, value1))
 	assert.False(t, keyset.ContainsValue(db, setKey, value2))
 	assert.True(t, keyset.ContainsValue(db, setKey, value3))
+
+	value4 := newHash("0x5")
+	err = keyset.AddValue(db, setKey, value4)
+	assert.NoError(t, err)
+
+	assert.True(t, keyset.ContainsValue(db, setKey, value1))
+	assert.False(t, keyset.ContainsValue(db, setKey, value2))
+	assert.True(t, keyset.ContainsValue(db, setKey, value3))
+	assert.True(t, keyset.ContainsValue(db, setKey, value4))
 }
 
 func TestSizeEmptySet(t *testing.T) {
@@ -491,24 +520,32 @@ func TestIterateWithEarlyTermination(t *testing.T) {
 
 func TestIterateAfterRemovingMiddleValue(t *testing.T) {
 	db := newMockStateAccess()
-	setKey := newHash("0x1")
-	value1 := newHash("0x2")
-	value2 := newHash("0x3")
-	value3 := newHash("0x4")
+	setKey := newHash("0x0")
+	value1 := newHash("0x41")
+	value2 := newHash("0x42")
+	value3 := newHash("0x43")
 
 	// Add multiple values
 	err := keyset.AddValue(db, setKey, value1)
 	assert.NoError(t, err)
+	db.Print(storageutil.GolemDBAddress)
+	fmt.Println("--------------------------------")
 
 	err = keyset.AddValue(db, setKey, value2)
 	assert.NoError(t, err)
+	db.Print(storageutil.GolemDBAddress)
+	fmt.Println("--------------------------------")
 
 	err = keyset.AddValue(db, setKey, value3)
 	assert.NoError(t, err)
+	db.Print(storageutil.GolemDBAddress)
+	fmt.Println("--------------------------------")
 
 	// Remove the middle value
 	err = keyset.RemoveValue(db, setKey, value2)
 	assert.NoError(t, err)
+	db.Print(storageutil.GolemDBAddress)
+	fmt.Println("--------------------------------")
 
 	// Iterate through the set and collect values
 	valuesAfterRemoval := []common.Hash{}

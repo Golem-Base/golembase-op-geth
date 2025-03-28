@@ -82,7 +82,6 @@ func nextHash(h common.Hash) common.Hash {
 // to maintain a compact array representation.
 // Returns an error if there are any issues during the operation.
 func RemoveValue(db StateAccess, setKey common.Hash, value common.Hash) error {
-	mapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], value[:])
 
 	// if the value is not in the set, do nothing
 	if !ContainsValue(db, setKey, value) {
@@ -93,6 +92,8 @@ func RemoveValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 
 	arrayLen := new(uint256.Int).SetBytes(arrayLenAsHash[:])
 
+	mapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], value[:])
+
 	// if the set is empty, set the map and the set to zero
 	if arrayLen.Cmp(oneUint256) == 0 {
 		db.SetState(storageutil.GolemDBAddress, mapKey, zeroHash)
@@ -101,30 +102,40 @@ func RemoveValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 		return nil
 	}
 
+	// get the index of the value in the array
 	arrayIndexAsHash := db.GetState(storageutil.GolemDBAddress, mapKey)
-
 	arrayIndex := new(uint256.Int).SetBytes(arrayIndexAsHash[:])
 
+	// if the index is out of bounds, this should never happen
 	if arrayLen.Cmp(arrayIndex) < 0 {
 		return errors.New("value index is out of bounds, this should never happen")
 	}
 
+	// clear the mapping for the value
 	db.SetState(storageutil.GolemDBAddress, mapKey, zeroHash)
 
+	// get the address of the value to remove
 	toRemoveAddress := new(uint256.Int).SetBytes32(setKey[:])
 	toRemoveAddress.Add(toRemoveAddress, arrayIndex)
 
+	// get the address of the last element in the array
 	lastElementAddress := new(uint256.Int).SetBytes32(setKey[:])
 	lastElementAddress.Add(lastElementAddress, arrayLen)
 	lastElementValue := db.GetState(storageutil.GolemDBAddress, lastElementAddress.Bytes32())
 
+	// store the last element in the place of the value to remove
 	db.SetState(storageutil.GolemDBAddress, toRemoveAddress.Bytes32(), lastElementValue)
 
+	// decrement the length of the array
 	arrayLen.SubUint64(arrayLen, 1)
 	db.SetState(storageutil.GolemDBAddress, setKey, arrayLen.Bytes32())
 
+	// update the mapping for the last element
 	lastElementMapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], lastElementValue[:])
 	db.SetState(storageutil.GolemDBAddress, lastElementMapKey, arrayIndex.Bytes32())
+
+	// clear last slot in the array
+	db.SetState(storageutil.GolemDBAddress, lastElementAddress.Bytes32(), zeroHash)
 
 	return nil
 

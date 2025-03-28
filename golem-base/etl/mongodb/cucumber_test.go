@@ -311,9 +311,22 @@ func theAnnotationsOfTheEntityShouldBeUpdatedInTheMongodbDatabase(ctx context.Co
 		if len(entity.StringAnnotations) != 1 {
 			return fmt.Errorf("expected 1 string annotation, got %d", len(entity.StringAnnotations))
 		}
+
+		if string(entity.Payload) != `test2` {
+			return fmt.Errorf("expected payload to be test2, got %s", string(entity.Payload))
+		}
+
+		if entity.StringAnnotations["stringTest2"] != "stringTest2" {
+			return fmt.Errorf("expected string annotation to be stringTest2, got %s", entity.StringAnnotations["stringTest2"])
+		}
+
 		if len(entity.NumericAnnotations) != 1 {
 			return fmt.Errorf("expected 1 numeric annotation, got %d", len(entity.NumericAnnotations))
 		}
+		if entity.NumericAnnotations["numericTest2"] != 12345678901 {
+			return fmt.Errorf("expected numeric annotation to be 12345678901, got %d", entity.NumericAnnotations["numericTest2"])
+		}
+
 		return nil
 	})
 }
@@ -334,6 +347,18 @@ func theEntityShouldBeUpdatedInTheMongodbDatabase(ctx context.Context) error {
 		err := res.Decode(&entity)
 		if err != nil {
 			return fmt.Errorf("failed to decode entity: %w", err)
+		}
+
+		if string(entity.Payload) != `test2` {
+			return fmt.Errorf("expected payload to be test2, got %s", string(entity.Payload))
+		}
+
+		if entity.StringAnnotations["stringTest2"] != "stringTest2" {
+			return fmt.Errorf("expected string annotation to be stringTest2, got %s", entity.StringAnnotations["stringTest2"])
+		}
+
+		if entity.NumericAnnotations["numericTest2"] != 12345678901 {
+			return fmt.Errorf("expected numeric annotation to be 12345678901, got %d", entity.NumericAnnotations["numericTest2"])
 		}
 
 		return nil
