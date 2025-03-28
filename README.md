@@ -138,9 +138,25 @@ export your existing configuration:
 $ geth --your-favourite-flags dumpconfig
 ```
 
-### Running with Docker Compose
+#### Docker quick start
 
-For a complete local development setup with MongoDB and SQLite ETL services, see [RUN_LOCALLY.md](RUN_LOCALLY.md).
+One of the quickest ways to get Ethereum up and running on your machine is by using
+Docker:
+
+```shell
+docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
+           -p 8545:8545 -p 30303:30303 \
+           ethereum/client-go
+```
+
+This will start `geth` in snap-sync mode with a DB memory allowance of 1GB, as the
+above command does.  It will also create a persistent volume in your home directory for
+saving your blockchain as well as map the default ports. There is also an `alpine` tag
+available for a slim version of the image.
+
+Do not forget `--http.addr 0.0.0.0`, if you want to access RPC from other containers
+and/or hosts. By default, `geth` binds to the local interface and RPC endpoints are not
+accessible from the outside.
 
 ### Programmatically interfacing `geth` nodes
 
@@ -237,135 +253,3 @@ also included in our repository in the `COPYING.LESSER` file.
 The go-ethereum binaries (i.e. all code inside of the `cmd` directory) are licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also
 included in our repository in the `COPYING` file.
-
-# OP-Geth with MongoDB and SQLite ETL Services
-
-This repository contains a Docker Compose setup for running OP-Geth with MongoDB and SQLite ETL services, along with an RPC Explorer interface.
-
-## Services Overview
-
-### Core Services
-
-- **op-geth**: The main Ethereum node service running in dev mode
-- **mongodb**: MongoDB instance configured with replica set
-- **mongodb-etl**: Service for syncing blockchain data to MongoDB
-- **sqlite-etl**: Service for syncing blockchain data to SQLite
-- **rpcplorer**: Web interface for exploring blockchain data
-
-### Supporting Services
-
-- **setup**: Initializes MongoDB keyfile for replica set authentication
-
-## Prerequisites
-
-- Docker
-- Docker Compose
-
-## Getting Started
-
-1. Clone the repository
-2. Run the services:
-   ```bash
-   docker-compose up
-   ```
-
-## Service Details
-
-### OP-Geth
-- Runs in dev mode with HTTP and WebSocket APIs enabled
-- Exposes port 8545 for RPC connections
-- Supports various APIs: eth, web3, net, debug, golembase
-- Uses write-ahead logging for data persistence
-
-### MongoDB
-- Version: 8.0.6
-- Configured with replica set (rs0)
-- Exposes port 27017
-- Uses authentication (admin/password)
-- Includes health checks for replica set status
-
-### MongoDB ETL
-- Syncs blockchain data to MongoDB
-- Depends on both op-geth and MongoDB services
-- Uses write-ahead logging for data persistence
-
-### SQLite ETL
-- Syncs blockchain data to SQLite database
-- Depends on op-geth service
-- Uses write-ahead logging for data persistence
-
-### RPC Explorer
-- Web interface for exploring blockchain data
-- Exposes port 8080
-- Connects to op-geth RPC endpoint
-
-## Volumes
-
-The following volumes are created and managed by Docker Compose:
-- `mongodb_keyfile`: Stores MongoDB replica set keyfile
-- `mongodb_data`: Persistent storage for MongoDB data
-- `golembase_wal`: Write-ahead log storage
-- `golembase_sqlite`: SQLite database storage
-- `geth_data`: OP-Geth data storage
-
-## Environment Variables
-
-### MongoDB
-- `MONGO_INITDB_ROOT_USERNAME`: admin
-- `MONGO_INITDB_ROOT_PASSWORD`: password
-- `MONGO_REPLICA_SET_NAME`: rs0
-
-### MongoDB ETL
-- `MONGO_URI`: MongoDB connection string
-- `WAL_PATH`: Path to write-ahead log
-- `RPC_ENDPOINT`: OP-Geth RPC endpoint
-- `DB_NAME`: MongoDB database name
-
-### SQLite ETL
-- `RPC_ENDPOINT`: OP-Geth RPC endpoint
-- `WAL_PATH`: Path to write-ahead log
-- `DB_PATH`: SQLite database path
-
-### RPC Explorer
-- `NODE_URL`: OP-Geth RPC endpoint
-
-## Health Checks
-
-- OP-Geth: Checks HTTP endpoint availability
-- MongoDB: Verifies replica set status
-- Other services: Depend on core services' health
-
-## Ports
-
-- 8545: OP-Geth RPC
-- 27017: MongoDB
-- 8080: RPC Explorer
-
-## Development
-
-To modify or extend the setup:
-
-1. Edit `docker-compose.yml` for service configuration
-2. Modify the Dockerfile for service-specific build requirements
-3. Update environment variables as needed
-
-## Troubleshooting
-
-1. Check service logs:
-   ```bash
-   docker-compose logs [service-name]
-   ```
-
-2. Verify service health:
-   ```bash
-   docker-compose ps
-   ```
-
-3. Restart services:
-   ```bash
-   docker-compose restart [service-name]
-   ```
-
-## License
-
-[Add your license information here]
