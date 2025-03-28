@@ -1,4 +1,3 @@
-@wip
 Feature: ETL to Mongodb
 
   Scenario: ETL Create to Mongodb
