@@ -9,6 +9,16 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
+      - name: Login to Docker Registry
+        run: |
+          echo "${{ secrets.QUAY_IO_PASSWORD }}" | docker login quay.io -u ${{ secrets.QUAY_IO_USERNAME }} --password-stdin
       - name: Run tests
         # Some tests fail on the self-hosted runner, but because they're not relevant to our work, we disable them.
-        run: nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...
+        run: |
+          nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...
+          SHORT_COMMIT=$(git rev-parse --short HEAD)
+          docker build -t quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT -t quay.io/golemnetwork/gb-op-geth:latest .
+          docker push quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            docker push quay.io/golemnetwork/gb-op-geth:latest
+          fi
