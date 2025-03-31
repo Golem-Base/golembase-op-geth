@@ -194,12 +194,12 @@ func iCreateANewEntityInGolebase(ctx context.Context) error {
 
 func theEntityShouldBeCreatedInTheSQLiteDatabase(ctx context.Context) error {
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	w := etlworld.GetWorld(ctx)
 
-	bo := backoff.WithContext(backoff.NewConstantBackOff(100*time.Millisecond), ctx)
+	bo := backoff.WithContext(backoff.NewConstantBackOff(200*time.Millisecond), ctx)
 
 	err := backoff.Retry(func() error {
 		err := w.WithDB(ctx, func(db *sql.DB) error {

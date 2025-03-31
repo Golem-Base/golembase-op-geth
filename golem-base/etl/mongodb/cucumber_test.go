@@ -336,29 +336,47 @@ func theEntityShouldBeUpdatedInTheMongodbDatabase(ctx context.Context) error {
 	entityKey := w.CreatedEntityKey
 
 	return w.AccessMongodb(func(mongo *mongogolem.MongoGolem) error {
-		collection := mongo.Collections().Entities
-		filter := bson.M{"_id": entityKey.Hex()}
-		res := collection.FindOne(ctx, filter)
-		if res.Err() != nil {
-			return fmt.Errorf("failed to find entity: %w", res.Err())
-		}
+		timeoutCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
 
 		var entity Entity
-		err := res.Decode(&entity)
+		var lastErr error
+
+		err := backoff.Retry(func() error {
+			collection := mongo.Collections().Entities
+			filter := bson.M{"_id": entityKey.Hex()}
+			res := collection.FindOne(timeoutCtx, filter)
+			if res.Err() != nil {
+				lastErr = fmt.Errorf("failed to find entity: %w", res.Err())
+				return lastErr
+			}
+
+			err := res.Decode(&entity)
+			if err != nil {
+				lastErr = fmt.Errorf("failed to decode entity: %w", err)
+				return lastErr
+			}
+
+			if string(entity.Payload) != `test2` {
+				lastErr = fmt.Errorf("expected payload to be test2, got %s", string(entity.Payload))
+				return lastErr
+			}
+
+			if entity.StringAnnotations["stringTest2"] != "stringTest2" {
+				lastErr = fmt.Errorf("expected string annotation to be stringTest2, got %s", entity.StringAnnotations["stringTest2"])
+				return lastErr
+			}
+
+			if entity.NumericAnnotations["numericTest2"] != 12345678901 {
+				lastErr = fmt.Errorf("expected numeric annotation to be 12345678901, got %d", entity.NumericAnnotations["numericTest2"])
+				return lastErr
+			}
+
+			return nil
+		}, backoff.WithContext(backoff.NewConstantBackOff(200*time.Millisecond), timeoutCtx))
+
 		if err != nil {
-			return fmt.Errorf("failed to decode entity: %w", err)
-		}
-
-		if string(entity.Payload) != `test2` {
-			return fmt.Errorf("expected payload to be test2, got %s", string(entity.Payload))
-		}
-
-		if entity.StringAnnotations["stringTest2"] != "stringTest2" {
-			return fmt.Errorf("expected string annotation to be stringTest2, got %s", entity.StringAnnotations["stringTest2"])
-		}
-
-		if entity.NumericAnnotations["numericTest2"] != 12345678901 {
-			return fmt.Errorf("expected numeric annotation to be 12345678901, got %d", entity.NumericAnnotations["numericTest2"])
+			return lastErr
 		}
 
 		return nil
@@ -409,9 +427,9 @@ func theEntityShouldBeDeletedInTheMongodbDatabase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
 	return w.AccessMongodb(func(mongo *mongogolem.MongoGolem) error {
 
-		timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		bo := backoff.WithContext(backoff.NewConstantBackOff(100*time.Millisecond), ctx)
+		bo := backoff.WithContext(backoff.NewConstantBackOff(200*time.Millisecond), ctx)
 
 		return backoff.Retry(
 			func() error {
