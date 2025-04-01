@@ -23,6 +23,6 @@ type StringAnnotation struct {
 }
 
 type NumericAnnotation struct {
-	Key   string
-	Value uint64
+	Key   string `json:"key"`
+	Value uint64 `json:"value"`
 }
