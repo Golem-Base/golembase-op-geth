@@ -1,11 +1,11 @@
-package storageutil_test
+package stateblob_test
 
 import (
 	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +13,7 @@ func TestPacker(t *testing.T) {
 
 	t.Run("short slice", func(t *testing.T) {
 
-		hashes := storageutil.BytesTo32ByteSequence([]byte("hello"))
+		hashes := stateblob.BytesTo32ByteSequence([]byte("hello"))
 
 		// require.Equal(t, len(hashes), 1)
 		require.Equal(
@@ -24,7 +24,7 @@ func TestPacker(t *testing.T) {
 	})
 
 	t.Run("long slice", func(t *testing.T) {
-		hashes := storageutil.BytesTo32ByteSequence([]byte("lorem ipsum dolor sit amet consectetur adipiscing elit"))
+		hashes := stateblob.BytesTo32ByteSequence([]byte("lorem ipsum dolor sit amet consectetur adipiscing elit"))
 
 		require.Equal(
 			t,
@@ -82,15 +82,15 @@ func TestGolemDBState(t *testing.T) {
 		value := []byte("small payload")
 
 		// Test Set
-		storageutil.SetGolemDBState(db, key, value)
+		stateblob.SetBlob(db, key, value)
 
 		// Test Get
-		retrieved := storageutil.GetGolemDBState(db, key)
+		retrieved := stateblob.GetBlob(db, key)
 		require.Equal(t, value, retrieved)
 
 		// Test Delete
-		storageutil.DeleteGolemDBState(db, key)
-		retrieved = storageutil.GetGolemDBState(db, key)
+		stateblob.DeleteBlob(db, key)
+		retrieved = stateblob.GetBlob(db, key)
 		require.Empty(t, retrieved)
 		require.True(t, db.IsEmpty())
 	})
@@ -101,15 +101,15 @@ func TestGolemDBState(t *testing.T) {
 		value := []byte("this is a large payload that definitely exceeds thirty one bytes in length")
 
 		// Test Set
-		storageutil.SetGolemDBState(db, key, value)
+		stateblob.SetBlob(db, key, value)
 
 		// Test Get
-		retrieved := storageutil.GetGolemDBState(db, key)
+		retrieved := stateblob.GetBlob(db, key)
 		require.Equal(t, value, retrieved)
 
 		// Test Delete
-		storageutil.DeleteGolemDBState(db, key)
-		retrieved = storageutil.GetGolemDBState(db, key)
+		stateblob.DeleteBlob(db, key)
+		retrieved = stateblob.GetBlob(db, key)
 		require.Empty(t, retrieved)
 		require.True(t, db.IsEmpty())
 	})
@@ -120,15 +120,15 @@ func TestGolemDBState(t *testing.T) {
 		value := []byte{}
 
 		// Test Set
-		storageutil.SetGolemDBState(db, key, value)
+		stateblob.SetBlob(db, key, value)
 
 		// Test Get
-		retrieved := storageutil.GetGolemDBState(db, key)
+		retrieved := stateblob.GetBlob(db, key)
 		require.Equal(t, value, retrieved)
 
 		// Test Delete
-		storageutil.DeleteGolemDBState(db, key)
-		retrieved = storageutil.GetGolemDBState(db, key)
+		stateblob.DeleteBlob(db, key)
+		retrieved = stateblob.GetBlob(db, key)
 		require.Empty(t, retrieved)
 		require.True(t, db.IsEmpty())
 	})
@@ -140,15 +140,15 @@ func TestGolemDBState(t *testing.T) {
 		require.Equal(t, 31, len(value))
 
 		// Test Set
-		storageutil.SetGolemDBState(db, key, value)
+		stateblob.SetBlob(db, key, value)
 
 		// Test Get
-		retrieved := storageutil.GetGolemDBState(db, key)
+		retrieved := stateblob.GetBlob(db, key)
 		require.Equal(t, value, retrieved)
 
 		// Test Delete
-		storageutil.DeleteGolemDBState(db, key)
-		retrieved = storageutil.GetGolemDBState(db, key)
+		stateblob.DeleteBlob(db, key)
+		retrieved = stateblob.GetBlob(db, key)
 		require.Empty(t, retrieved)
 		require.True(t, db.IsEmpty())
 	})
@@ -160,15 +160,15 @@ func TestGolemDBState(t *testing.T) {
 		require.Equal(t, 32, len(value))
 
 		// Test Set
-		storageutil.SetGolemDBState(db, key, value)
+		stateblob.SetBlob(db, key, value)
 
 		// Test Get
-		retrieved := storageutil.GetGolemDBState(db, key)
+		retrieved := stateblob.GetBlob(db, key)
 		require.Equal(t, value, retrieved)
 
 		// Test Delete
-		storageutil.DeleteGolemDBState(db, key)
-		retrieved = storageutil.GetGolemDBState(db, key)
+		stateblob.DeleteBlob(db, key)
+		retrieved = stateblob.GetBlob(db, key)
 		require.Empty(t, retrieved)
 		require.True(t, db.IsEmpty())
 	})

@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -35,7 +36,7 @@ func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
 		return nil, err
 	}
 
-	v := storageutil.GetGolemDBState(stateDb, key)
+	v := stateblob.GetBlob(stateDb, key)
 
 	ap := storageutil.ActivePayload{}
 
@@ -54,7 +55,7 @@ func (api *golemBaseAPI) GetFullEntity(key common.Hash) (storageutil.ActivePaylo
 		return storageutil.ActivePayload{}, fmt.Errorf("failed to get state: %w", err)
 	}
 
-	v := storageutil.GetGolemDBState(stateDb, key)
+	v := stateblob.GetBlob(stateDb, key)
 
 	ap := storageutil.ActivePayload{}
 

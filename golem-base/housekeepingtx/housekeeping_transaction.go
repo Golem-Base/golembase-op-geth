@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
@@ -32,7 +33,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 	logs := []*types.Log{}
 
 	deleteEntity := func(toDelete common.Hash) error {
-		v := storageutil.GetGolemDBState(db, toDelete)
+		v := stateblob.GetBlob(db, toDelete)
 
 		ap := storageutil.ActivePayload{}
 
@@ -91,7 +92,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 			return fmt.Errorf("failed to remove entity from owner entities: %w", err)
 		}
 
-		storageutil.DeleteGolemDBState(db, toDelete)
+		stateblob.DeleteBlob(db, toDelete)
 
 		// create the log for the created entity
 		log := &types.Log{

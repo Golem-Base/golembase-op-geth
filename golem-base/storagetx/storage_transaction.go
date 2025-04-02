@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -64,7 +65,14 @@ type Update struct {
 	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
 }
 
-func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
+func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
+
+	defer func() {
+		if err != nil {
+			log.Error("failed to run storage transaction", "error", err)
+		}
+	}()
+
 	logs := []*types.Log{}
 
 	storeEntity := func(key common.Hash, ap *storageutil.ActivePayload, emitLogs bool) error {
@@ -85,7 +93,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			return fmt.Errorf("failed to encode active payload: %w", err)
 		}
 
-		storageutil.SetGolemDBState(access, key, buf.Bytes())
+		stateblob.SetBlob(access, key, buf.Bytes())
 		expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
 		{
 
@@ -175,7 +183,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			return fmt.Errorf("failed to remove entity from all entities: %w", err)
 		}
 
-		v := storageutil.GetGolemDBState(access, toDelete)
+		v := stateblob.GetBlob(access, toDelete)
 
 		ap := storageutil.ActivePayload{}
 
@@ -232,7 +240,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			return fmt.Errorf("failed to remove entity from owner entities: %w", err)
 		}
 
-		storageutil.DeleteGolemDBState(access, toDelete)
+		stateblob.DeleteBlob(access, toDelete)
 
 		if emitLogs {
 
