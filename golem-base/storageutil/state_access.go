@@ -5,6 +5,7 @@ import (
 	"iter"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/holiman/uint256"
 )
 
@@ -13,7 +14,7 @@ type StateAccess interface {
 	SetState(common.Address, common.Hash, common.Hash) common.Hash
 }
 
-var GolemDBAddress = common.HexToAddress("0x0000000000000000000000000000000000000001")
+var GolemDBAddress = address.GolemBaseStorageProcessorAddress
 
 func SetGolemDBState(db StateAccess, key common.Hash, value []byte) {
 
