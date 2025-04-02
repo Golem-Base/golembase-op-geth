@@ -16,15 +16,24 @@ jobs:
         # Some tests fail on the self-hosted runner, but because they're not relevant to our work, we disable them.
         run: |
           nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...
-          SHORT_COMMIT=$(git rev-parse --short HEAD)
-          docker build -t quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT -t quay.io/golemnetwork/gb-op-geth:latest .
-          docker push quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            docker push quay.io/golemnetwork/gb-op-geth:latest
-          fi
-          # If this is a tag (release), push the image with the tag name
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            TAG=${GITHUB_REF#refs/tags/}
-            docker tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT quay.io/golemnetwork/gb-op-geth:$TAG
-            docker push quay.io/golemnetwork/gb-op-geth:$TAG
+          # Only build and push docker images for main branch and tags, not for PRs
+          if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/* ]]; then
+            SHORT_COMMIT=$(git rev-parse --short HEAD)
+            docker build -t quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT -t quay.io/golemnetwork/gb-op-geth:latest .
+            
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              docker push quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT
+              docker push quay.io/golemnetwork/gb-op-geth:latest
+            fi
+            
+            # If this is a tag (release), push the image with the tag name
+            if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+              TAG=${GITHUB_REF#refs/tags/}
+              docker tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT quay.io/golemnetwork/gb-op-geth:$TAG
+              docker push quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT
+              docker push quay.io/golemnetwork/gb-op-geth:$TAG
+            fi
+          else
+            # For PRs, just build the image but don't push it
+            docker build -t quay.io/golemnetwork/gb-op-geth:pr-test .
           fi
