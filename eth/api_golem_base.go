@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"encoding/binary"
 	"fmt"
 	"slices"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -88,13 +88,9 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) 
 		return nil, err
 	}
 
-	entityKeys := crypto.Keccak256Hash(
-		[]byte("golemBaseStringAnnotation"),
-		[]byte(key),
-		[]byte(value),
-	)
+	entitySetKey := annotationindex.StringAnnotationIndexKey(key, value)
 
-	return slices.Collect(keyset.Iterate(stateDb, entityKeys)), nil
+	return slices.Collect(keyset.Iterate(stateDb, entitySetKey)), nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value uint64) ([]common.Hash, error) {
@@ -104,11 +100,7 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value 
 		return nil, err
 	}
 
-	entityKeys := crypto.Keccak256Hash(
-		[]byte("golemBaseNumericAnnotation"),
-		[]byte(key),
-		binary.BigEndian.AppendUint64(nil, value),
-	)
+	entityKeys := annotationindex.NumericAnnotationIndexKey(key, value)
 
 	return slices.Collect(keyset.Iterate(stateDb, entityKeys)), nil
 }

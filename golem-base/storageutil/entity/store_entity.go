@@ -2,7 +2,6 @@ package entity
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -10,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -63,11 +63,7 @@ func Store(
 	for _, stringAnnotation := range ap.StringAnnotations {
 		err = keyset.AddValue(
 			access,
-			crypto.Keccak256Hash(
-				[]byte("golemBaseStringAnnotation"),
-				[]byte(stringAnnotation.Key),
-				[]byte(stringAnnotation.Value),
-			),
+			annotationindex.StringAnnotationIndexKey(stringAnnotation.Key, stringAnnotation.Value),
 			key,
 		)
 		if err != nil {
@@ -78,11 +74,7 @@ func Store(
 	for _, numericAnnotation := range ap.NumericAnnotations {
 		err = keyset.AddValue(
 			access,
-			crypto.Keccak256Hash(
-				[]byte("golemBaseNumericAnnotation"),
-				[]byte(numericAnnotation.Key),
-				binary.BigEndian.AppendUint64(nil, numericAnnotation.Value),
-			),
+			annotationindex.NumericAnnotationIndexKey(numericAnnotation.Key, numericAnnotation.Value),
 			key,
 		)
 		if err != nil {

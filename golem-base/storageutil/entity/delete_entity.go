@@ -1,13 +1,13 @@
 package entity
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -30,14 +30,10 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 	}
 
 	for _, stringAnnotation := range ap.StringAnnotations {
-		listKey := crypto.Keccak256Hash(
-			[]byte("golemBaseStringAnnotation"),
-			[]byte(stringAnnotation.Key),
-			[]byte(stringAnnotation.Value),
-		)
+		setKey := annotationindex.StringAnnotationIndexKey(stringAnnotation.Key, stringAnnotation.Value)
 		err := keyset.RemoveValue(
 			access,
-			listKey,
+			setKey,
 			toDelete,
 		)
 		if err != nil {
@@ -47,14 +43,10 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 	}
 
 	for _, numericAnnotation := range ap.NumericAnnotations {
-		listKey := crypto.Keccak256Hash(
-			[]byte("golemBaseNumericAnnotation"),
-			[]byte(numericAnnotation.Key),
-			binary.BigEndian.AppendUint64(nil, numericAnnotation.Value),
-		)
+		setKeys := annotationindex.NumericAnnotationIndexKey(numericAnnotation.Key, numericAnnotation.Value)
 		err := keyset.RemoveValue(
 			access,
-			listKey,
+			setKeys,
 			toDelete,
 		)
 		if err != nil {
