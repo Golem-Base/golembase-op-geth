@@ -1,3 +1,13 @@
+## Golem op-geth
+
+**This is a fork of [Ethereum Optimism's op-geth](https://github.com/ethereum-optimism/op-geth), originally based on the Go Ethereum codebase.**
+
+This fork extends the functionality of op-geth to support a custom entity storage and querying layer. It also provides an improved developer experience through a Nix flake and DevShell setup, along with an additional docker-compose for easier interaction with docker.
+
+Our fork manages entities that are structured annotation-based data objects stored on-chain with the Ethereum account trie. Entities are created, updated, queried, and expired using custom blockchain logic. We maintain an index for efficient exact-match queries. When a new entity is created, the system records the address of the account that created it and stores it within the entity's data structure. The entity activity is logged in a write-ahead log (WAL), making them ETL compatible and extractable through SQLite and MongoDB.
+
+_The remainder of this README is a copy of the original op-geth read me from which we forked our repo._
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
