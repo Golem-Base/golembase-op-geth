@@ -7,7 +7,6 @@ package sqlitegolem
 
 import (
 	"context"
-	"database/sql"
 )
 
 const deleteEntity = `-- name: DeleteEntity :exec
@@ -57,6 +56,39 @@ func (q *Queries) EntityExists(ctx context.Context, key string) (bool, error) {
 	return column_1, err
 }
 
+const getEntitiesByOwner = `-- name: GetEntitiesByOwner :many
+SELECT key, expires_at, payload FROM entities WHERE owner_address = ?
+`
+
+type GetEntitiesByOwnerRow struct {
+	Key       string
+	ExpiresAt int64
+	Payload   []byte
+}
+
+func (q *Queries) GetEntitiesByOwner(ctx context.Context, ownerAddress string) ([]GetEntitiesByOwnerRow, error) {
+	rows, err := q.db.QueryContext(ctx, getEntitiesByOwner, ownerAddress)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetEntitiesByOwnerRow
+	for rows.Next() {
+		var i GetEntitiesByOwnerRow
+		if err := rows.Scan(&i.Key, &i.ExpiresAt, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEntity = `-- name: GetEntity :one
 SELECT expires_at, payload, owner_address FROM entities WHERE key = ?
 `
@@ -64,7 +96,7 @@ SELECT expires_at, payload, owner_address FROM entities WHERE key = ?
 type GetEntityRow struct {
 	ExpiresAt    int64
 	Payload      []byte
-	OwnerAddress sql.NullString
+	OwnerAddress string
 }
 
 func (q *Queries) GetEntity(ctx context.Context, key string) (GetEntityRow, error) {
@@ -89,7 +121,7 @@ func (q *Queries) GetNumericAnnotations(ctx context.Context, entityKey string) (
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetNumericAnnotationsRow{}
+	var items []GetNumericAnnotationsRow
 	for rows.Next() {
 		var i GetNumericAnnotationsRow
 		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
@@ -137,7 +169,7 @@ func (q *Queries) GetStringAnnotations(ctx context.Context, entityKey string) ([
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetStringAnnotationsRow{}
+	var items []GetStringAnnotationsRow
 	for rows.Next() {
 		var i GetStringAnnotationsRow
 		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
@@ -173,7 +205,7 @@ type InsertEntityParams struct {
 	Key          string
 	ExpiresAt    int64
 	Payload      []byte
-	OwnerAddress sql.NullString
+	OwnerAddress string
 }
 
 func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) error {

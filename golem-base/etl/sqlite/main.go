@@ -153,7 +153,7 @@ func main() {
 								Key:          op.Create.EntityKey.Hex(),
 								ExpiresAt:    int64(op.Create.ExpiresAtBlock),
 								Payload:      op.Create.Payload,
-								OwnerAddress: sql.NullString{String: op.Create.Owner.Hex(), Valid: true},
+								OwnerAddress: op.Create.Owner.Hex(),
 							})
 							if err != nil {
 								return fmt.Errorf("failed to insert entity: %w", err)

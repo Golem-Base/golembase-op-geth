@@ -507,11 +507,7 @@ func theOwnerAddressShouldBeStoredInTheSQLiteDatabase(ctx context.Context) error
 			return fmt.Errorf("failed to get entity: %w", err)
 		}
 
-		if !entity.OwnerAddress.Valid {
-			return fmt.Errorf("expected owner address to be stored, but it was null")
-		}
-
-		if entity.OwnerAddress.String == "" {
+		if entity.OwnerAddress == "" {
 			return fmt.Errorf("expected owner address to be stored, but it was empty")
 		}
 
@@ -530,11 +526,7 @@ func theOwnerAddressShouldBePreservedInTheSQLiteDatabase(ctx context.Context) er
 			return fmt.Errorf("failed to get entity: %w", err)
 		}
 
-		if !entity.OwnerAddress.Valid {
-			return fmt.Errorf("expected owner address to be preserved, but it was null")
-		}
-
-		if entity.OwnerAddress.String == "" {
+		if entity.OwnerAddress == "" {
 			return fmt.Errorf("expected owner address to be preserved, but it was empty")
 		}
 

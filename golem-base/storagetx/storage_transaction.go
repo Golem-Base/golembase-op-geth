@@ -1,7 +1,6 @@
 package storagetx
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -78,36 +77,15 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 	storeEntity := func(key common.Hash, ap *entity.ActivePayload, emitLogs bool) error {
 
-		err := allentities.AddEntity(access, key)
+		err := entity.Store(access, key, sender, *ap)
 		if err != nil {
-			return fmt.Errorf("failed to add entity to all entities: %w", err)
-		}
-
-		err = entitiesofowner.AddEntity(access, sender, key)
-		if err != nil {
-			return fmt.Errorf("failed to add entity to owner entities: %w", err)
-		}
-
-		buf := new(bytes.Buffer)
-		err = rlp.Encode(buf, ap)
-		if err != nil {
-			return fmt.Errorf("failed to encode active payload: %w", err)
-		}
-
-		stateblob.SetBlob(access, key, buf.Bytes())
-		expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
-		{
-
-			// create the key for the list of entities that will expire at the given block number
-			expiredEntityKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
-			err = keyset.AddValue(access, expiredEntityKey, key)
-			if err != nil {
-				return fmt.Errorf("failed to append to key list: %w", err)
-			}
-
+			return fmt.Errorf("failed to store entity: %w", err)
 		}
 
 		if emitLogs {
+
+			expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
+
 			// create the log for the created entity
 			log := &types.Log{
 				Address:     address.GolemBaseStorageProcessorAddress,
@@ -116,38 +94,6 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 				BlockNumber: blockNumber,
 			}
 			logs = append(logs, log)
-		}
-
-		{
-			for _, stringAnnotation := range ap.StringAnnotations {
-				err = keyset.AddValue(
-					access,
-					crypto.Keccak256Hash(
-						[]byte("golemBaseStringAnnotation"),
-						[]byte(stringAnnotation.Key),
-						[]byte(stringAnnotation.Value),
-					),
-					key,
-				)
-				if err != nil {
-					return fmt.Errorf("failed to append to key list: %w", err)
-				}
-			}
-
-			for _, numericAnnotation := range ap.NumericAnnotations {
-				err = keyset.AddValue(
-					access,
-					crypto.Keccak256Hash(
-						[]byte("golemBaseNumericAnnotation"),
-						[]byte(numericAnnotation.Key),
-						binary.BigEndian.AppendUint64(nil, numericAnnotation.Value),
-					),
-					key,
-				)
-				if err != nil {
-					return fmt.Errorf("failed to append to key list: %w", err)
-				}
-			}
 		}
 
 		return nil
