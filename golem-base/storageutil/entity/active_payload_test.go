@@ -1,10 +1,10 @@
-package storageutil_test
+package entity_test
 
 import (
 	"bytes"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 )
@@ -12,27 +12,27 @@ import (
 func TestActivePayloadRLP(t *testing.T) {
 	tests := []struct {
 		name    string
-		payload storageutil.ActivePayload
+		payload entity.ActivePayload
 	}{
 		{
 			name: "empty payload",
-			payload: storageutil.ActivePayload{
+			payload: entity.ActivePayload{
 				ExpiresAtBlock:     0,
 				Payload:            []byte{},
-				StringAnnotations:  []storageutil.StringAnnotation{},
-				NumericAnnotations: []storageutil.NumericAnnotation{},
+				StringAnnotations:  []entity.StringAnnotation{},
+				NumericAnnotations: []entity.NumericAnnotation{},
 			},
 		},
 		{
 			name: "payload with data",
-			payload: storageutil.ActivePayload{
+			payload: entity.ActivePayload{
 				ExpiresAtBlock: 12345,
 				Payload:        []byte("test payload data"),
-				StringAnnotations: []storageutil.StringAnnotation{
+				StringAnnotations: []entity.StringAnnotation{
 					{Key: "key1", Value: "value1"},
 					{Key: "key2", Value: "value2"},
 				},
-				NumericAnnotations: []storageutil.NumericAnnotation{
+				NumericAnnotations: []entity.NumericAnnotation{
 					{Key: "num1", Value: 42},
 					{Key: "num2", Value: 123},
 				},
@@ -48,7 +48,7 @@ func TestActivePayloadRLP(t *testing.T) {
 			require.NoError(t, err)
 
 			// Unmarshal back from RLP
-			var decoded storageutil.ActivePayload
+			var decoded entity.ActivePayload
 			err = rlp.DecodeBytes(buf.Bytes(), &decoded)
 			require.NoError(t, err)
 

@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/log"
@@ -51,18 +52,18 @@ type StorageTransaction struct {
 }
 
 type Create struct {
-	TTL                uint64                          `json:"ttl"`
-	Payload            []byte                          `json:"payload"`
-	StringAnnotations  []storageutil.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
+	TTL                uint64                     `json:"ttl"`
+	Payload            []byte                     `json:"payload"`
+	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 }
 
 type Update struct {
-	EntityKey          common.Hash                     `json:"entityKey"`
-	TTL                uint64                          `json:"ttl"`
-	Payload            []byte                          `json:"payload"`
-	StringAnnotations  []storageutil.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
+	EntityKey          common.Hash                `json:"entityKey"`
+	TTL                uint64                     `json:"ttl"`
+	Payload            []byte                     `json:"payload"`
+	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 }
 
 func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
@@ -75,7 +76,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 	logs := []*types.Log{}
 
-	storeEntity := func(key common.Hash, ap *storageutil.ActivePayload, emitLogs bool) error {
+	storeEntity := func(key common.Hash, ap *entity.ActivePayload, emitLogs bool) error {
 
 		err := allentities.AddEntity(access, key)
 		if err != nil {
@@ -160,7 +161,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 		key := crypto.Keccak256Hash(txHash.Bytes(), create.Payload, paddedI)
 
-		ap := &storageutil.ActivePayload{
+		ap := &entity.ActivePayload{
 			Owner:              sender,
 			ExpiresAtBlock:     blockNumber + create.TTL,
 			Payload:            create.Payload,
@@ -185,7 +186,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 		v := stateblob.GetBlob(access, toDelete)
 
-		ap := storageutil.ActivePayload{}
+		ap := entity.ActivePayload{}
 
 		err = rlp.DecodeBytes(v, &ap)
 		if err != nil {
@@ -272,7 +273,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			return nil, err
 		}
 
-		ap := &storageutil.ActivePayload{
+		ap := &entity.ActivePayload{
 			ExpiresAtBlock:     blockNumber + update.TTL,
 			Payload:            update.Payload,
 			StringAnnotations:  update.StringAnnotations,

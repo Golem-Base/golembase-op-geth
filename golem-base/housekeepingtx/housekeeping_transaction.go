@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -35,7 +35,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 	deleteEntity := func(toDelete common.Hash) error {
 		v := stateblob.GetBlob(db, toDelete)
 
-		ap := storageutil.ActivePayload{}
+		ap := entity.ActivePayload{}
 
 		err := allentities.RemoveEntity(db, toDelete)
 		if err != nil {

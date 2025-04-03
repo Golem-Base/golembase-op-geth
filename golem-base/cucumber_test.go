@@ -21,7 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
 	"github.com/ethereum/go-ethereum/golem-base/wal"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -203,13 +203,13 @@ func submitATransactionToCreateAnEntity(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -368,7 +368,7 @@ func iStoreAnEntityWithAStringAnnotation(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
@@ -392,8 +392,8 @@ func iStoreAnEntityWithANumericalAnnotation(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]storageutil.StringAnnotation{},
-		[]storageutil.NumericAnnotation{
+		[]entity.StringAnnotation{},
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -412,10 +412,10 @@ func iStoreAnEntityWithANumericalAnnotation(ctx context.Context) error {
 func iHaveAnEntityWithStringAnnotations(ctx context.Context, payload string, annotationsTable *godog.Table) error {
 	w := testutil.GetWorld(ctx)
 
-	stringAnnotations := []storageutil.StringAnnotation{}
+	stringAnnotations := []entity.StringAnnotation{}
 
 	for _, row := range annotationsTable.Rows {
-		stringAnnotations = append(stringAnnotations, storageutil.StringAnnotation{
+		stringAnnotations = append(stringAnnotations, entity.StringAnnotation{
 			Key:   row.Cells[0].Value,
 			Value: row.Cells[1].Value,
 		})
@@ -426,7 +426,7 @@ func iHaveAnEntityWithStringAnnotations(ctx context.Context, payload string, ann
 		100,
 		[]byte("test payload"),
 		stringAnnotations,
-		[]storageutil.NumericAnnotation{},
+		[]entity.NumericAnnotation{},
 	)
 
 	if err != nil {
@@ -472,14 +472,14 @@ func iShouldFindEntity(ctx context.Context, count int) error {
 func iHaveAnEntityWithNumericAnnotations(ctx context.Context, payload string, annotationsTable *godog.Table) error {
 	w := testutil.GetWorld(ctx)
 
-	numericAnnotations := []storageutil.NumericAnnotation{}
+	numericAnnotations := []entity.NumericAnnotation{}
 
 	for _, row := range annotationsTable.Rows {
 		val, err := strconv.ParseUint(row.Cells[1].Value, 10, 64)
 		if err != nil {
 			return fmt.Errorf("failed to parse numeric value: %w", err)
 		}
-		numericAnnotations = append(numericAnnotations, storageutil.NumericAnnotation{
+		numericAnnotations = append(numericAnnotations, entity.NumericAnnotation{
 			Key:   row.Cells[0].Value,
 			Value: val,
 		})
@@ -489,7 +489,7 @@ func iHaveAnEntityWithNumericAnnotations(ctx context.Context, payload string, an
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]storageutil.StringAnnotation{},
+		[]entity.StringAnnotation{},
 		numericAnnotations,
 	)
 
@@ -535,13 +535,13 @@ func iHaveCreatedAnEntity(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -599,13 +599,13 @@ func iSubmitATransactionToUpdateTheEntityChangingThePaylod(ctx context.Context) 
 		w.CreatedEntityKey,
 		100,
 		[]byte("new payload"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -654,13 +654,13 @@ func iSubmitATransactionToUpdateTheEntityChangingTheAnnotations(ctx context.Cont
 		w.CreatedEntityKey,
 		100,
 		[]byte("new payload"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key1",
 				Value: "test_value1",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number1",
 				Value: 43,
@@ -712,13 +712,13 @@ func iSubmitATransactionToUpdateTheEntityChangingTheTtlOfTheEntity(ctx context.C
 		w.CreatedEntityKey,
 		200,
 		[]byte("new payload"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -774,13 +774,13 @@ func submitATransactionToCreateAnEntityOfK(ctx context.Context, kilobytes int) e
 		ctx,
 		200,
 		payload,
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -896,13 +896,13 @@ func thereIsAnEntityThatWillExpireInTheNextBlock(ctx context.Context) error {
 		ctx,
 		1,
 		[]byte("test payload"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -979,10 +979,10 @@ func theWriteaheadLogForTheCreateShouldBeCreated(ctx context.Context) error {
 					EntityKey:      w.CreatedEntityKey,
 					ExpiresAtBlock: 102,
 					Payload:        []byte("test payload"),
-					StringAnnotations: []storageutil.StringAnnotation{
+					StringAnnotations: []entity.StringAnnotation{
 						{Key: "test_key", Value: "test_value"},
 					},
-					NumericAnnotations: []storageutil.NumericAnnotation{
+					NumericAnnotations: []entity.NumericAnnotation{
 						{Key: "test_number", Value: 42},
 					},
 					Owner: w.FundedAccount.Address,
@@ -1037,10 +1037,10 @@ func theWriteaheadLogForTheUpdateShouldBeCreated(ctx context.Context) error {
 					EntityKey:      w.CreatedEntityKey,
 					ExpiresAtBlock: 103,
 					Payload:        []byte("new payload"),
-					StringAnnotations: []storageutil.StringAnnotation{
+					StringAnnotations: []entity.StringAnnotation{
 						{Key: "test_key", Value: "test_value"},
 					},
-					NumericAnnotations: []storageutil.NumericAnnotation{
+					NumericAnnotations: []entity.NumericAnnotation{
 						{Key: "test_number", Value: 42},
 					},
 				},
@@ -1165,7 +1165,7 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	var ap storageutil.ActivePayload
+	var ap entity.ActivePayload
 
 	err := w.GethInstance.RPCClient.CallContext(ctx, &ap, "golembase_getFullEntity", w.CreatedEntityKey.Hex())
 	if err != nil {

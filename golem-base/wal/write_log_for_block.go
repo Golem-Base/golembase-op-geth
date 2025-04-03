@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -33,20 +33,20 @@ type Operation struct {
 }
 
 type Create struct {
-	EntityKey          common.Hash                     `json:"entityKey"`
-	ExpiresAtBlock     uint64                          `json:"expiresAtBlock"`
-	Payload            []byte                          `json:"payload"`
-	StringAnnotations  []storageutil.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
-	Owner              common.Address                  `json:"owner"`
+	EntityKey          common.Hash                `json:"entityKey"`
+	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
+	Payload            []byte                     `json:"payload"`
+	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
+	Owner              common.Address             `json:"owner"`
 }
 
 type Update struct {
-	EntityKey          common.Hash                     `json:"entityKey"`
-	ExpiresAtBlock     uint64                          `json:"expiresAtBlock"`
-	Payload            []byte                          `json:"payload"`
-	StringAnnotations  []storageutil.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []storageutil.NumericAnnotation `json:"numericAnnotations"`
+	EntityKey          common.Hash                `json:"entityKey"`
+	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
+	Payload            []byte                     `json:"payload"`
+	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 }
 
 func BlockNumberToFilename(blockNumber uint64) string {

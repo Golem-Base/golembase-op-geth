@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
 )
@@ -93,7 +93,7 @@ func Update() *cli.Command {
 						EntityKey: common.HexToHash(c.String("key")),
 						TTL:       c.Uint64("ttl"),
 						Payload:   []byte(c.String("data")),
-						StringAnnotations: []storageutil.StringAnnotation{
+						StringAnnotations: []entity.StringAnnotation{
 							{
 								Key:   "foo",
 								Value: "bar",

@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,11 +19,11 @@ func TestStorageTransactionMarshalling(t *testing.T) {
 				{
 					TTL:     100,
 					Payload: []byte("test payload"),
-					StringAnnotations: []storageutil.StringAnnotation{
+					StringAnnotations: []entity.StringAnnotation{
 						{Key: "type", Value: "test"},
 						{Key: "name", Value: "example"},
 					},
-					NumericAnnotations: []storageutil.NumericAnnotation{
+					NumericAnnotations: []entity.NumericAnnotation{
 						{Key: "version", Value: 1},
 						{Key: "size", Value: 1024},
 					},
@@ -34,10 +34,10 @@ func TestStorageTransactionMarshalling(t *testing.T) {
 					EntityKey: common.HexToHash("0x1234567890"),
 					TTL:       200,
 					Payload:   []byte("updated payload"),
-					StringAnnotations: []storageutil.StringAnnotation{
+					StringAnnotations: []entity.StringAnnotation{
 						{Key: "status", Value: "updated"},
 					},
-					NumericAnnotations: []storageutil.NumericAnnotation{
+					NumericAnnotations: []entity.NumericAnnotation{
 						{Key: "timestamp", Value: 1678901234},
 					},
 				},

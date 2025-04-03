@@ -1,8 +1,8 @@
-package storageutil
+package entity
 
 import "github.com/ethereum/go-ethereum/common"
 
-//go:generate go run ../../rlp/rlpgen -type ActivePayload -out gen_active_payload_rlp.go
+//go:generate go run ../../../rlp/rlpgen -type ActivePayload -out gen_active_payload_rlp.go
 
 // ActivePayload represents a payload that is currently active in the storage layer.
 // This is what stored in the state.

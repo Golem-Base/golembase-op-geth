@@ -17,7 +17,7 @@ import (
 	"github.com/cucumber/godog/colors"
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/etlworld"
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/sqlitegolem"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
 )
@@ -172,13 +172,13 @@ func iCreateANewEntityInGolebase(ctx context.Context) error {
 	_, err := w.CreateEntity(ctx,
 		1000,
 		[]byte("test"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "stringTest",
 				Value: "stringTest",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "numericTest",
 				Value: 1234567890,
@@ -282,13 +282,13 @@ func anExistingEntityInTheSQLiteDatabase(ctx context.Context) error {
 	_, err := w.CreateEntity(ctx,
 		1000,
 		[]byte("test"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "stringTest",
 				Value: "stringTest",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "numericTest",
 				Value: 1234567890,
@@ -398,13 +398,13 @@ func updateTheEntityInGolembase(ctx context.Context) error {
 		w.CreatedEntityKey,
 		999,
 		[]byte("test2"),
-		[]storageutil.StringAnnotation{
+		[]entity.StringAnnotation{
 			{
 				Key:   "stringTest2",
 				Value: "stringTest2",
 			},
 		},
-		[]storageutil.NumericAnnotation{
+		[]entity.NumericAnnotation{
 			{
 				Key:   "numericTest2",
 				Value: 12345678901,

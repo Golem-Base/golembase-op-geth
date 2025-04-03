@@ -9,9 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entitiesofowner"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -38,7 +38,7 @@ func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
 
 	v := stateblob.GetBlob(stateDb, key)
 
-	ap := storageutil.ActivePayload{}
+	ap := entity.ActivePayload{}
 
 	err = rlp.DecodeBytes(v, &ap)
 	if err != nil {
@@ -48,20 +48,20 @@ func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
 	return ap.Payload, nil
 }
 
-func (api *golemBaseAPI) GetFullEntity(key common.Hash) (storageutil.ActivePayload, error) {
+func (api *golemBaseAPI) GetFullEntity(key common.Hash) (entity.ActivePayload, error) {
 	header := api.eth.blockchain.CurrentBlock()
 	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
-		return storageutil.ActivePayload{}, fmt.Errorf("failed to get state: %w", err)
+		return entity.ActivePayload{}, fmt.Errorf("failed to get state: %w", err)
 	}
 
 	v := stateblob.GetBlob(stateDb, key)
 
-	ap := storageutil.ActivePayload{}
+	ap := entity.ActivePayload{}
 
 	err = rlp.DecodeBytes(v, &ap)
 	if err != nil {
-		return storageutil.ActivePayload{}, fmt.Errorf("failed to decode active payload: %w", err)
+		return entity.ActivePayload{}, fmt.Errorf("failed to decode active payload: %w", err)
 	}
 
 	return ap, nil

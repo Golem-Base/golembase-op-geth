@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -17,8 +17,8 @@ func (w *World) CreateEntity(
 	ctx context.Context,
 	ttl uint64,
 	payload []byte,
-	stringAnnotations []storageutil.StringAnnotation,
-	numericAnnotations []storageutil.NumericAnnotation,
+	stringAnnotations []entity.StringAnnotation,
+	numericAnnotations []entity.NumericAnnotation,
 ) (*types.Receipt, error) {
 
 	client := w.GethInstance.ETHClient
