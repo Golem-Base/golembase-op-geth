@@ -1,10 +1,36 @@
-## Golem op-geth
+## 🚀 Golem Base op-geth
 
-**This is a fork of [Ethereum Optimism's op-geth](https://github.com/ethereum-optimism/op-geth), originally based on the Go Ethereum codebase.**
+This is part of the [Golem Base](https://github.com/Golem-Base) project, which is a Layer2 Network deployed on Ethereum, acting as a gateway to various Layer 3 Database Chains (DB-Chains).
+
+> **For an overview of Golem Base, check out our [Litepaper](https://golem-base.io/wp-content/uploads/2025/03/GolemBase-Litepaper.pdf).**
+
+**Note:** Golem op-geth is a fork of [Ethereum Optimism's op-geth](https://github.com/ethereum-optimism/op-geth), originally based on the Go Ethereum codebase.
 
 This fork extends the functionality of op-geth to support a custom entity storage and querying layer. It also provides an improved developer experience through a Nix flake and DevShell setup, along with an additional docker-compose for easier interaction with docker.
 
 Our fork manages entities that are structured annotation-based data objects stored on-chain with the Ethereum account trie. Entities are created, updated, queried, and expired using custom blockchain logic. We maintain an index for efficient exact-match queries. When a new entity is created, the system records the address of the account that created it and stores it within the entity's data structure. The entity activity is logged in a write-ahead log (WAL), making them ETL compatible and extractable through SQLite and MongoDB.
+
+For details on our Golem Base storage layer, please visit the [README.md](./golem-base/README.md) found in the [golem-base folder](./golem-base/).
+
+## 🏃 Running
+
+We've provided a docker-compose.yml file that builds and launches the services within several docker containers. This way you can run it with one line:
+
+```
+docker-compose up
+```
+
+For full instructions, please read our [Run Locally guide](./RUN_LOCALLY.md).
+
+## 🧑‍🚀 Get Involved
+
+Golem Base is being developed in the open — and we're just getting started. If you're interested in decentralized infrastructure, Ethereum scalability, or advancing on-chain data systems, we’d be glad to have you onboard.
+
+- 📬 [Subscribe for updates](https://golem-base.io)  
+- 🧵 [Follow us on Twitter](https://twitter.com/golemproject)  
+- 💼 [Explore Careers](https://golem.network/careers)
+
+---
 
 _The remainder of this README is a copy of the original op-geth read me from which we forked our repo._
 
