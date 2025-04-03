@@ -4,14 +4,13 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/holiman/uint256"
 )
 
 func Delete(access StateAccess, toDelete common.Hash) error {
@@ -54,14 +53,9 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 		}
 	}
 
-	expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
-
-	// create the key for the list of entities that will expire at the given block number
-	expiredEntityKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
-
-	err = keyset.RemoveValue(access, expiredEntityKey, toDelete)
+	err = entityexpiration.RemoveFromEntitiesToExpire(access, ap.ExpiresAtBlock, toDelete)
 	if err != nil {
-		return fmt.Errorf("failed to append to key list: %w", err)
+		return fmt.Errorf("failed to remove entity from entities to expire: %w", err)
 	}
 
 	err = entitiesofowner.RemoveEntity(access, ap.Owner, toDelete)

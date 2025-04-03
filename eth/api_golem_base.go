@@ -5,17 +5,16 @@ import (
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/holiman/uint256"
 )
 
 // golemBaseAPI offers helper utils
@@ -74,11 +73,7 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]commo
 		return nil, err
 	}
 
-	blockNumberBig := uint256.NewInt(blockNumber)
-
-	expiredEntityKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), blockNumberBig.Bytes())
-
-	return slices.Collect(keyset.Iterate(stateDb, expiredEntityKey)), nil
+	return slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(stateDb, blockNumber)), nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) ([]common.Hash, error) {

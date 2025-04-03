@@ -7,12 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
-	"github.com/holiman/uint256"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
 
 func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) ([]*types.Log, error) {
@@ -47,18 +45,14 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 		return nil
 	}
 
-	expiresAtBlockNumberBig := uint256.NewInt(blockNumber)
-
-	entitiesToExpireForBlockKey := crypto.Keccak256Hash([]byte("golemBaseExpiresAtBlock"), expiresAtBlockNumberBig.Bytes())
-
-	for key := range keyset.Iterator(db, entitiesToExpireForBlockKey) {
+	for key := range entityexpiration.IteratorOfEntitiesToExpireAtBlock(db, blockNumber) {
 		err := deleteEntity(key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to delete entity %s: %w", key.Hex(), err)
 		}
 	}
 
-	keyset.Clear(db, entitiesToExpireForBlockKey)
+	entityexpiration.ClearEntitiesToExpireAtBlock(db, blockNumber)
 
 	return logs, nil
 }
