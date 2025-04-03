@@ -83,6 +83,7 @@
             overmind
             mongosh
             openssl
+            goreleaser
           ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux [
             # For podman networking
             slirp4netns
