@@ -1165,9 +1165,9 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	var ap entity.ActivePayload
+	var ap entity.EntityMetaData
 
-	err := w.GethInstance.RPCClient.CallContext(ctx, &ap, "golembase_getFullEntity", w.CreatedEntityKey.Hex())
+	err := w.GethInstance.RPCClient.CallContext(ctx, &ap, "golembase_getEntityMetaData", w.CreatedEntityKey.Hex())
 	if err != nil {
 		return fmt.Errorf("failed to get entity metadata: %w", err)
 	}

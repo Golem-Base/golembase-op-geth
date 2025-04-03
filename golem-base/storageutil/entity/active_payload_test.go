@@ -12,22 +12,20 @@ import (
 func TestActivePayloadRLP(t *testing.T) {
 	tests := []struct {
 		name    string
-		payload entity.ActivePayload
+		payload entity.EntityMetaData
 	}{
 		{
 			name: "empty payload",
-			payload: entity.ActivePayload{
+			payload: entity.EntityMetaData{
 				ExpiresAtBlock:     0,
-				Payload:            []byte{},
 				StringAnnotations:  []entity.StringAnnotation{},
 				NumericAnnotations: []entity.NumericAnnotation{},
 			},
 		},
 		{
 			name: "payload with data",
-			payload: entity.ActivePayload{
+			payload: entity.EntityMetaData{
 				ExpiresAtBlock: 12345,
-				Payload:        []byte("test payload data"),
 				StringAnnotations: []entity.StringAnnotation{
 					{Key: "key1", Value: "value1"},
 					{Key: "key2", Value: "value2"},
@@ -48,13 +46,12 @@ func TestActivePayloadRLP(t *testing.T) {
 			require.NoError(t, err)
 
 			// Unmarshal back from RLP
-			var decoded entity.ActivePayload
+			var decoded entity.EntityMetaData
 			err = rlp.DecodeBytes(buf.Bytes(), &decoded)
 			require.NoError(t, err)
 
 			// Verify all fields match
 			require.Equal(t, tt.payload.ExpiresAtBlock, decoded.ExpiresAtBlock)
-			require.Equal(t, tt.payload.Payload, decoded.Payload)
 			require.Equal(t, tt.payload.StringAnnotations, decoded.StringAnnotations)
 			require.Equal(t, tt.payload.NumericAnnotations, decoded.NumericAnnotations)
 		})

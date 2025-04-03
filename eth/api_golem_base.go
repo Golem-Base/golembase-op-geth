@@ -13,8 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // golemBaseAPI offers helper utils
@@ -35,35 +33,17 @@ func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
 		return nil, err
 	}
 
-	v := stateblob.GetBlob(stateDb, key)
-
-	ap := entity.ActivePayload{}
-
-	err = rlp.DecodeBytes(v, &ap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode active payload: %w", err)
-	}
-
-	return ap.Payload, nil
+	return entity.GetPayload(stateDb, key), nil
 }
 
-func (api *golemBaseAPI) GetFullEntity(key common.Hash) (entity.ActivePayload, error) {
+func (api *golemBaseAPI) GetEntityMetaData(key common.Hash) (*entity.EntityMetaData, error) {
 	header := api.eth.blockchain.CurrentBlock()
 	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
-		return entity.ActivePayload{}, fmt.Errorf("failed to get state: %w", err)
+		return nil, fmt.Errorf("failed to get state: %w", err)
 	}
 
-	v := stateblob.GetBlob(stateDb, key)
-
-	ap := entity.ActivePayload{}
-
-	err = rlp.DecodeBytes(v, &ap)
-	if err != nil {
-		return entity.ActivePayload{}, fmt.Errorf("failed to decode active payload: %w", err)
-	}
-
-	return ap, nil
+	return entity.GetEntityMetaData(stateDb, key)
 }
 
 func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]common.Hash, error) {

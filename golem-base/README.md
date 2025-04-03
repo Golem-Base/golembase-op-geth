@@ -77,7 +77,7 @@ The implementation uses a specialized index that tracks which entities expire at
 The API methods are accessible through the following JSON-RPC endpoints:
 
 - `golembase_getStorageValue`: Retrieves payload data for a given hash key
-- `golembase_getFullEntity`: Retrieves the complete entity data including payload, TTL, and annotations for a given hash key
+- `golembase_getEntityMetaData`: Retrieves the complete entity data including payload, TTL, and annotations for a given hash key
 - `golembase_getEntitiesToExpireAtBlock`: Returns entities scheduled to expire at a specific block
 - `golembase_getEntitiesForStringAnnotationValue`: Finds entities with matching string annotations
 - `golembase_getEntitiesForNumericAnnotationValue`: Finds entities with matching numeric annotations
@@ -92,7 +92,7 @@ This JSON-RPC API provides several capabilities:
 
 1. **Storage Access**
    - `getStorageValue`: Retrieves payload data for a given hash key
-   - `getFullEntity`: Retrieves complete entity data including payload, TTL, owner Ethereum address and annotations
+   - `getEntityMetaData`: Retrieves complete entity data including payload, TTL, owner Ethereum address and annotations
 
 2. **Entity Queries**
    - `getEntitiesToExpireAtBlock`: Returns entities scheduled to expire at a specific block

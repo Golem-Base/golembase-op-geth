@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,23 +10,16 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type StateAccess = storageutil.StateAccess
-
-//go:generate go run ../../../rlp/rlpgen -type Annotations -out gen_annotations_rlp.go
-type Annotations struct {
-	String  []StringAnnotation
-	Numeric []NumericAnnotation
-}
 
 func Store(
 	access StateAccess,
 	key common.Hash,
 	sender common.Address,
-	ap ActivePayload,
+	emd EntityMetaData,
+	payload []byte,
 ) error {
 
 	err := allentities.AddEntity(access, key)
@@ -40,20 +32,17 @@ func Store(
 		return fmt.Errorf("failed to add entity to owner entities: %w", err)
 	}
 
-	buf := new(bytes.Buffer)
-	err = rlp.Encode(buf, &ap)
+	err = StoreEntityMetaData(access, key, emd)
 	if err != nil {
-		return fmt.Errorf("failed to encode active payload: %w", err)
+		return fmt.Errorf("failed to store entity meta data: %w", err)
 	}
 
-	stateblob.SetBlob(access, key, buf.Bytes())
-
-	err = entityexpiration.AddToEntitiesToExpireAtBlock(access, ap.ExpiresAtBlock, key)
+	err = entityexpiration.AddToEntitiesToExpireAtBlock(access, emd.ExpiresAtBlock, key)
 	if err != nil {
 		return fmt.Errorf("failed to add entity to entities to expire: %w", err)
 	}
 
-	for _, stringAnnotation := range ap.StringAnnotations {
+	for _, stringAnnotation := range emd.StringAnnotations {
 		err = keyset.AddValue(
 			access,
 			annotationindex.StringAnnotationIndexKey(stringAnnotation.Key, stringAnnotation.Value),
@@ -64,7 +53,7 @@ func Store(
 		}
 	}
 
-	for _, numericAnnotation := range ap.NumericAnnotations {
+	for _, numericAnnotation := range emd.NumericAnnotations {
 		err = keyset.AddValue(
 			access,
 			annotationindex.NumericAnnotationIndexKey(numericAnnotation.Key, numericAnnotation.Value),
@@ -74,6 +63,8 @@ func Store(
 			return fmt.Errorf("failed to append to key list: %w", err)
 		}
 	}
+
+	StorePayload(access, key, payload)
 
 	return nil
 }

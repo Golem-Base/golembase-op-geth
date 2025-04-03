@@ -5,11 +5,12 @@ package entity
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
-func (obj *Annotations) EncodeRLP(_w io.Writer) error {
+func (obj *EntityMetaData) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
+	w.WriteUint64(obj.ExpiresAtBlock)
 	_tmp1 := w.List()
-	for _, _tmp2 := range obj.String {
+	for _, _tmp2 := range obj.StringAnnotations {
 		_tmp3 := w.List()
 		w.WriteString(_tmp2.Key)
 		w.WriteString(_tmp2.Value)
@@ -17,13 +18,14 @@ func (obj *Annotations) EncodeRLP(_w io.Writer) error {
 	}
 	w.ListEnd(_tmp1)
 	_tmp4 := w.List()
-	for _, _tmp5 := range obj.Numeric {
+	for _, _tmp5 := range obj.NumericAnnotations {
 		_tmp6 := w.List()
 		w.WriteString(_tmp5.Key)
 		w.WriteUint64(_tmp5.Value)
 		w.ListEnd(_tmp6)
 	}
 	w.ListEnd(_tmp4)
+	w.WriteBytes(obj.Owner[:])
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

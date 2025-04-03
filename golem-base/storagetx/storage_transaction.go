@@ -70,9 +70,9 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 	logs := []*types.Log{}
 
-	storeEntity := func(key common.Hash, ap *entity.ActivePayload, emitLogs bool) error {
+	storeEntity := func(key common.Hash, ap *entity.EntityMetaData, payload []byte, emitLogs bool) error {
 
-		err := entity.Store(access, key, sender, *ap)
+		err := entity.Store(access, key, sender, *ap, payload)
 		if err != nil {
 			return fmt.Errorf("failed to store entity: %w", err)
 		}
@@ -102,15 +102,14 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 		key := crypto.Keccak256Hash(txHash.Bytes(), create.Payload, paddedI)
 
-		ap := &entity.ActivePayload{
+		ap := &entity.EntityMetaData{
 			Owner:              sender,
 			ExpiresAtBlock:     blockNumber + create.TTL,
-			Payload:            create.Payload,
 			StringAnnotations:  create.StringAnnotations,
 			NumericAnnotations: create.NumericAnnotations,
 		}
 
-		err := storeEntity(key, ap, true)
+		err := storeEntity(key, ap, create.Payload, true)
 
 		if err != nil {
 			return nil, err
@@ -155,14 +154,13 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			return nil, err
 		}
 
-		ap := &entity.ActivePayload{
+		ap := &entity.EntityMetaData{
 			ExpiresAtBlock:     blockNumber + update.TTL,
-			Payload:            update.Payload,
 			StringAnnotations:  update.StringAnnotations,
 			NumericAnnotations: update.NumericAnnotations,
 		}
 
-		err = storeEntity(update.EntityKey, ap, false)
+		err = storeEntity(update.EntityKey, ap, update.Payload, false)
 
 		if err != nil {
 			return nil, err

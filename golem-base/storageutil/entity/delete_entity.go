@@ -9,8 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func Delete(access StateAccess, toDelete common.Hash) error {
@@ -19,16 +17,12 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 		return fmt.Errorf("failed to remove entity from all entities: %w", err)
 	}
 
-	v := stateblob.GetBlob(access, toDelete)
-
-	ap := ActivePayload{}
-
-	err = rlp.DecodeBytes(v, &ap)
+	md, err := GetEntityMetaData(access, toDelete)
 	if err != nil {
-		return fmt.Errorf("failed to decode active payload for %s: %w", toDelete.Hex(), err)
+		return fmt.Errorf("failed to get entity meta data: %w", err)
 	}
 
-	for _, stringAnnotation := range ap.StringAnnotations {
+	for _, stringAnnotation := range md.StringAnnotations {
 		setKey := annotationindex.StringAnnotationIndexKey(stringAnnotation.Key, stringAnnotation.Value)
 		err := keyset.RemoveValue(
 			access,
@@ -41,7 +35,7 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 
 	}
 
-	for _, numericAnnotation := range ap.NumericAnnotations {
+	for _, numericAnnotation := range md.NumericAnnotations {
 		setKeys := annotationindex.NumericAnnotationIndexKey(numericAnnotation.Key, numericAnnotation.Value)
 		err := keyset.RemoveValue(
 			access,
@@ -53,17 +47,17 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 		}
 	}
 
-	err = entityexpiration.RemoveFromEntitiesToExpire(access, ap.ExpiresAtBlock, toDelete)
+	err = entityexpiration.RemoveFromEntitiesToExpire(access, md.ExpiresAtBlock, toDelete)
 	if err != nil {
 		return fmt.Errorf("failed to remove entity from entities to expire: %w", err)
 	}
 
-	err = entitiesofowner.RemoveEntity(access, ap.Owner, toDelete)
+	err = entitiesofowner.RemoveEntity(access, md.Owner, toDelete)
 	if err != nil {
 		return fmt.Errorf("failed to remove entity from owner entities: %w", err)
 	}
 
-	stateblob.DeleteBlob(access, toDelete)
+	DeletePayload(access, toDelete)
 
 	return nil
 }
