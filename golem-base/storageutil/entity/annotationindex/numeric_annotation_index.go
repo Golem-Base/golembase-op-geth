@@ -10,5 +10,5 @@ import (
 var NumericAnnotationIndexSalt = []byte("golemBaseNumericAnnotation")
 
 func NumericAnnotationIndexKey(key string, value uint64) common.Hash {
-	return crypto.Keccak256Hash(NumericAnnotationIndexSalt, []byte(key), binary.BigEndian.AppendUint64(nil, value))
+	return crypto.Keccak256Hash(NumericAnnotationIndexSalt, []byte(key), AnnotationSeparator, binary.BigEndian.AppendUint64(nil, value))
 }

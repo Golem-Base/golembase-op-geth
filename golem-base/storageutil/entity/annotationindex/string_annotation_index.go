@@ -6,7 +6,8 @@ import (
 )
 
 var StringAnnotationIndexSalt = []byte("golemBaseStringAnnotation")
+var AnnotationSeparator = []byte("|")
 
 func StringAnnotationIndexKey(key, value string) common.Hash {
-	return crypto.Keccak256Hash(StringAnnotationIndexSalt, []byte(key), []byte(value))
+	return crypto.Keccak256Hash(StringAnnotationIndexSalt, []byte(key), AnnotationSeparator, []byte(value))
 }
