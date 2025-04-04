@@ -6,13 +6,15 @@ This is part of the [Golem Base](https://github.com/Golem-Base) project, which i
 
 **Note:** Golem op-geth is a fork of [Ethereum Optimism's op-geth](https://github.com/ethereum-optimism/op-geth), originally based on the Go Ethereum codebase.
 
-This fork extends the functionality of op-geth to support a custom entity storage and querying layer. It also provides an improved developer experience through a Nix flake and DevShell setup, along with an additional docker-compose for easier interaction with docker.
+This fork extends the functionality of op-geth to support a custom entity storage and querying layer. It also provides an improved developer experience through a Nix flake and DevShell setup, along with an additional docker-compose for easier local testing using docker.
 
-Our fork manages entities that are structured annotation-based data objects stored on-chain with the Ethereum account trie. Entities are created, updated, queried, and expired using custom blockchain logic. We maintain an index for efficient exact-match queries. When a new entity is created, the system records the address of the account that created it and stores it within the entity's data structure. The entity activity is logged in a write-ahead log (WAL), making them ETL compatible and extractable through SQLite and MongoDB.
+Our fork manages entities that are structured indexed data objects stored on-chain within the Ethereums account state. Entities are created, updated, deleted and auto-expired using custom transaction processing.
+
+We also have added RPC methods to search and retrieve stored data.
 
 For details on our Golem Base storage layer, please visit the [README.md](./golem-base/README.md) found in the [golem-base folder](./golem-base/).
 
-## 🏃 Running
+## 🏃 Running Locally
 
 We've provided a docker-compose.yml file that builds and launches the services within several docker containers. This way you can run it with one line:
 
