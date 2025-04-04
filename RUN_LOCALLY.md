@@ -2,9 +2,13 @@
 
 This guide explains how to run OP-Geth locally with MongoDB and SQLite ETL services using Docker Compose.
 
+> **Tip:** We also have a [Golem Base CLI](./cmd/golembase/README.md) available for interacting with the Golem Base storage system. 
+
 ## Services Overview
 
 ### Core Services
+
+The docker-compose file defines the following services:
 
 - **op-geth**: The main Ethereum node service running in dev mode
 - **mongodb**: MongoDB instance configured with replica set
@@ -13,6 +17,8 @@ This guide explains how to run OP-Geth locally with MongoDB and SQLite ETL servi
 - **rpcplorer**: Web interface for exploring blockchain data
 
 ### Supporting Services
+
+Additionally the following supporting service is included:
 
 - **setup**: Initializes MongoDB keyfile for replica set authentication
 
@@ -29,6 +35,11 @@ This guide explains how to run OP-Geth locally with MongoDB and SQLite ETL servi
    docker-compose up
    ```
 
+   Or optionally provide the -d option to run in detached state:
+   ```bash
+   docker-compose up -d
+   ```
+
 ## Service Details
 
 ### OP-Geth
@@ -40,7 +51,7 @@ This guide explains how to run OP-Geth locally with MongoDB and SQLite ETL servi
 ### MongoDB
 - Version: 8.0.6
 - Configured with replica set (rs0)
-- Exposes port 27017
+- Exposes port 27017 (Note: If you already have an instance of MongoDB running, you will want to either shut it down, or change the host port number here, which is the first in the pair.)
 - Uses authentication (admin/password)
 - Includes health checks for replica set status
 
@@ -54,12 +65,12 @@ This guide explains how to run OP-Geth locally with MongoDB and SQLite ETL servi
 
 ### RPC Explorer
 - Web interface for exploring blockchain data
-- Exposes port 8080
+- Exposes port 8080 (Note: If port 8080 is already in use on your machine, change the host port number, which is the first in the pair.)
 - Connects to op-geth RPC endpoint
 
 ## Volumes
 
-The following volumes are created and managed by Docker Compose:
+The following volumes are created by the docker-compose file and managed by Docker Compose:
 - `mongodb_keyfile`: Stores MongoDB replica set keyfile
 - `mongodb_data`: Persistent storage for MongoDB data
 - `golembase_wal`: Write-ahead log storage
