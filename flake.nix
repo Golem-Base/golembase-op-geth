@@ -6,7 +6,7 @@
     systems.url = "github:nix-systems/default";
 
     rpcplorer = {
-      url = "git+ssh://git@github.com/Golem-Base/rpcplorer.git";
+      url = "github:Golem-Base/rpcplorer/v0.0.3";
       inputs.systems.follows = "systems";
     };
   };
