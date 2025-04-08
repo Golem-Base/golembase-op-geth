@@ -11,7 +11,7 @@ on:
 jobs:
   nix-build:
     name: Build with Nix
-    runs-on: self-hosted
+    runs-on: cluster-runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
