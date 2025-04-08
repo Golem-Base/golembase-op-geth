@@ -177,17 +177,18 @@
         "templ": "templ"
       },
       "locked": {
-        "lastModified": 1742565092,
-        "narHash": "sha256-k+WJFIsSe6Y51KrShhSwZtU8hMt2F1oaa/A+7XfUZJc=",
-        "ref": "refs/heads/main",
-        "rev": "26295e35875329e57fa675ab6c864994ab9d1d79",
-        "revCount": 31,
-        "type": "git",
-        "url": "ssh://git@github.com/Golem-Base/rpcplorer.git"
+        "lastModified": 1743494572,
+        "narHash": "sha256-Mcc7TntfCYYIiX5oXz6GRDwU4/8/8mBK6tSCv+KGJnM=",
+        "owner": "Golem-Base",
+        "repo": "rpcplorer",
+        "rev": "3461c52f88ea5d05581058743af7c8407530d488",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "ssh://git@github.com/Golem-Base/rpcplorer.git"
+        "owner": "Golem-Base",
+        "ref": "v0.0.3",
+        "repo": "rpcplorer",
+        "type": "github"
       }
     },
     "systems": {

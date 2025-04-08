@@ -19,9 +19,11 @@ jobs:
           fetch-depth: 0
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v16
+        env:
+          DOCKER_HOST: "unix:///var/run/docker.sock.disabled"
         with:
           planner: "linux"
-          init: "none"
+          start-daemon: false
 
       - run: sudo chown -R $(id -u):$(id -g) /nix
       - run: ls -la /nix
