@@ -8,9 +8,17 @@ on:
 
 jobs:
   build:
-    runs-on: cluster-runner
+    runs-on: 
+      group: Default
+      labels: cluster-runner
     steps:
       - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+        with:
+          planner: "linux"
+          init: "none"
+      - run: sudo chown -R $(id -u):$(id -g) /nix
       - name: Login to Docker Registry
         run: |
           echo "${{ secrets.QUAY_IO_PASSWORD }}" | docker login quay.io -u ${{ secrets.QUAY_IO_USERNAME }} --password-stdin
