@@ -1,4 +1,4 @@
-name: Self-hosted runner
+name: Run tests and build Docker images
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     types: [published]
 
 jobs:
-  build:
+  test:
     runs-on: 
       group: Default
       labels: cluster-runner
@@ -21,13 +21,22 @@ jobs:
           planner: "linux"
           start-daemon: false
       - run: sudo chown -R $(id -u):$(id -g) /nix
-      - name: Login to Docker Registry
-        run: |
-          echo "${{ secrets.QUAY_IO_PASSWORD }}" | docker login quay.io -u ${{ secrets.QUAY_IO_USERNAME }} --password-stdin
       - name: Run tests
         # Some tests fail on the self-hosted runner, but because they're not relevant to our work, we disable them.
         run: |
           nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...
+
+  docker:
+    runs-on:
+      group: Default
+      labels: cluster-runner
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to Docker Registry
+        run: |
+          echo "${{ secrets.QUAY_IO_PASSWORD }}" | docker login quay.io -u ${{ secrets.QUAY_IO_USERNAME }} --password-stdin
+      - name: Build and push Docker images
+        run: |
           # Only build and push docker images for main branch and tags, not for PRs
           if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/* ]]; then
             SHORT_COMMIT=$(git rev-parse --short HEAD)
