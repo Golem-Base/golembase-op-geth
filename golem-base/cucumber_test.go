@@ -161,6 +161,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I should see an error containing "([^"]*)"$`, iShouldSeeAnErrorContaining)
 	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
 	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
+	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
+
 }
 
 func iSearchForEntitiesWithTheInvalidQuery(ctx context.Context, query *godog.DocString) error {
@@ -1177,4 +1179,23 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
+
+	w := testutil.GetWorld(ctx)
+
+	var entityKeys []common.Hash
+
+	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getEntitiesOfOwner", w.FundedAccount.Address)
+	if err != nil {
+		return fmt.Errorf("failed to get entity metadata: %w", err)
+	}
+
+	if len(entityKeys) != 0 {
+		return fmt.Errorf("expected 0 entities, but got %d", len(entityKeys))
+	}
+
+	return nil
+
 }

@@ -14,3 +14,4 @@ Feature: deleting entities
     Then the entity should be deleted
     And the number of entities should be 0
     And the list of all entities should be empty
+    And the owner should not have any entities
