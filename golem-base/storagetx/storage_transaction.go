@@ -149,7 +149,13 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for _, update := range tx.Update {
-		err := deleteEntity(update.EntityKey, false)
+
+		oldMetaData, err := entity.GetEntityMetaData(access, update.EntityKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get entity meta data for update %s: %w", update.EntityKey.Hex(), err)
+		}
+
+		err = deleteEntity(update.EntityKey, false)
 		if err != nil {
 			return nil, err
 		}
@@ -158,6 +164,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			ExpiresAtBlock:     blockNumber + update.TTL,
 			StringAnnotations:  update.StringAnnotations,
 			NumericAnnotations: update.NumericAnnotations,
+			Owner:              oldMetaData.Owner,
 		}
 
 		err = storeEntity(update.EntityKey, ap, update.Payload, false)

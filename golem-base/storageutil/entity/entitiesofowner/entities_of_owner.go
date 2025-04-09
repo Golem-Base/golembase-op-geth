@@ -10,7 +10,7 @@ import (
 
 type StateAccess = storageutil.StateAccess
 
-var OwnerEntitiesSalt = []byte("golemBase.allEntities")
+var OwnerEntitiesSalt = []byte("golemBase.entitiesOfOwner")
 
 func AddEntity(db StateAccess, owner common.Address, entity common.Hash) error {
 	ownerKey := crypto.Keccak256Hash(OwnerEntitiesSalt, owner.Bytes())
