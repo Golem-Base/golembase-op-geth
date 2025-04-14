@@ -90,14 +90,11 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 			expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
 
-			data := make([]byte, 32)
-			expiresAtBlockNumberBig.PutUint256(data)
-
 			// create the log for the created entity
 			log := &types.Log{
 				Address:     address.GolemBaseStorageProcessorAddress,
 				Topics:      []common.Hash{GolemBaseStorageEntityCreated, key},
-				Data:        data,
+				Data:        expiresAtBlockNumberBig.Bytes(),
 				BlockNumber: blockNumber,
 			}
 			logs = append(logs, log)
