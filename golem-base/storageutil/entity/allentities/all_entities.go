@@ -37,3 +37,7 @@ func RemoveEntity(db StateAccess, hash common.Hash) error {
 func Iterate(db StateAccess) func(yield func(hash common.Hash) bool) {
 	return keyset.Iterate(db, AllEntitiesKey)
 }
+
+func Contains(db StateAccess, hash common.Hash) bool {
+	return keyset.ContainsValue(db, AllEntitiesKey, hash)
+}

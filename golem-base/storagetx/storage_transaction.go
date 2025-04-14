@@ -26,6 +26,9 @@ var GolemBaseStorageEntityDeleted = crypto.Keccak256Hash([]byte("GolemBaseStorag
 // GolemBaseStorageEntityUpdated is the event signature for entity update logs.
 var GolemBaseStorageEntityUpdated = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityUpdated(uint256,uint256)"))
 
+// GolemBaseStorageEntityTTLExtended is the event signature for extending TTL of an entity.
+var GolemBaseStorageEntityTTLExtended = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityTTLExptended(uint256,uint256)"))
+
 // StorageTransaction represents a transaction that can be applied to the storage layer.
 // It contains a list of Create operations, a list of Update operations and a list of Delete operations.
 //
@@ -43,6 +46,7 @@ type StorageTransaction struct {
 	Create []Create      `json:"create"`
 	Update []Update      `json:"update"`
 	Delete []common.Hash `json:"delete"`
+	Extend []ExtendTTL   `json:"extend"`
 }
 
 type Create struct {
@@ -58,6 +62,11 @@ type Update struct {
 	Payload            []byte                     `json:"payload"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
+}
+
+type ExtendTTL struct {
+	EntityKey      common.Hash `json:"entityKey"`
+	NumberOfBlocks uint64      `json:"numberOfBlocks"`
 }
 
 func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
@@ -81,11 +90,14 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 			expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
 
+			data := make([]byte, 32)
+			expiresAtBlockNumberBig.PutUint256(data)
+
 			// create the log for the created entity
 			log := &types.Log{
 				Address:     address.GolemBaseStorageProcessorAddress,
 				Topics:      []common.Hash{GolemBaseStorageEntityCreated, key},
-				Data:        expiresAtBlockNumberBig.Bytes(),
+				Data:        data,
 				BlockNumber: blockNumber,
 			}
 			logs = append(logs, log)
@@ -182,7 +194,29 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 	}
 
-	// TODO: implement update
+	for _, extend := range tx.Extend {
+		newExpiresAtBlock, err := entity.ExtendTTL(access, extend.EntityKey, extend.NumberOfBlocks)
+		if err != nil {
+			return nil, err
+		}
+
+		oldExpiresAtBlock := newExpiresAtBlock - extend.NumberOfBlocks
+
+		oldExpiresAtBlockBig := uint256.NewInt(oldExpiresAtBlock)
+		newExpiresAtBlockBig := uint256.NewInt(newExpiresAtBlock)
+
+		data := make([]byte, 64)
+
+		oldExpiresAtBlockBig.PutUint256(data[:32])
+		newExpiresAtBlockBig.PutUint256(data[32:])
+
+		logs = append(logs, &types.Log{
+			Address:     address.GolemBaseStorageProcessorAddress,
+			Topics:      []common.Hash{GolemBaseStorageEntityTTLExtended, extend.EntityKey},
+			Data:        data,
+			BlockNumber: blockNumber,
+		})
+	}
 
 	return logs, nil
 }

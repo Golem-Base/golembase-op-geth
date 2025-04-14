@@ -162,6 +162,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
 	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
 	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
+	ctx.Step(`^I submit a transaction to extend TTL of the entity by (\d+) blocks$`, iSubmitATransactionToExtendTTLOfTheEntityByBlocks)
+	ctx.Step(`^the entity\'s TTL should be extended by (\d+) blocks$`, theEntitysTTLShouldBeExtendedByBlocks)
 
 }
 
@@ -1198,4 +1200,47 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 
 	return nil
 
+}
+
+func iSubmitATransactionToExtendTTLOfTheEntityByBlocks(ctx context.Context, blockCount int) error {
+	w := testutil.GetWorld(ctx)
+
+	_, err := w.ExtendTTL(
+		ctx,
+		w.CreatedEntityKey,
+		uint64(blockCount),
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to extend TTL: %w", err)
+	}
+
+	return nil
+}
+
+func theEntitysTTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks int) error {
+	w := testutil.GetWorld(ctx)
+
+	if w.LastReceipt == nil {
+		return fmt.Errorf("no transaction receipt found")
+	}
+
+	if len(w.LastReceipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in transaction receipt")
+	}
+
+	key := w.LastReceipt.Logs[0].Topics[1]
+
+	if key != w.CreatedEntityKey {
+		return fmt.Errorf("expected entity key to be %s, but got %s", w.CreatedEntityKey.Hex(), key.Hex())
+	}
+
+	oldExpiresAtBlock := new(big.Int).SetBytes(w.LastReceipt.Logs[0].Data[:32])
+	newExpiresAtBlock := new(big.Int).SetBytes(w.LastReceipt.Logs[0].Data[32:])
+
+	if oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks) != newExpiresAtBlock.Uint64() {
+		return fmt.Errorf("expected entity to expire at block %d, but got %d", oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks), newExpiresAtBlock.Uint64())
+	}
+
+	return nil
 }
