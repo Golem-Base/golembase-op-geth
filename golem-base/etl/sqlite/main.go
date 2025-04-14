@@ -233,6 +233,17 @@ func main() {
 							if err != nil {
 								return fmt.Errorf("failed to delete string annotations: %w", err)
 							}
+						case op.Extend != nil:
+							log.Info("extend TTL", "entity", op.Extend.EntityKey.Hex())
+
+							// Update the entity with the new expiry time
+							err = txDB.UpdateEntityExpiresAt(ctx, sqlitegolem.UpdateEntityExpiresAtParams{
+								ExpiresAt: int64(op.Extend.NewExpiresAt),
+								Key:       op.Extend.EntityKey.Hex(),
+							})
+							if err != nil {
+								return fmt.Errorf("failed to extend entity TTL: %w", err)
+							}
 						}
 
 						log.Info("operation", "operation", op)

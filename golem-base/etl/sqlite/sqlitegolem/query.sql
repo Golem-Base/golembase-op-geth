@@ -28,6 +28,9 @@ DELETE FROM string_annotations WHERE entity_key = ?;
 -- name: DeleteNumericAnnotations :exec
 DELETE FROM numeric_annotations WHERE entity_key = ?;
 
+-- name: UpdateEntityExpiresAt :exec
+UPDATE entities SET expires_at = ? WHERE key = ?;
+
 -- name: GetProcessingStatus :one
 SELECT last_processed_block_number, last_processed_block_hash FROM processing_status WHERE network = ?;
 

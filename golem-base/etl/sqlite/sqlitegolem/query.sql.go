@@ -285,6 +285,20 @@ func (q *Queries) StringAnnotationsForEntityExists(ctx context.Context, entityKe
 	return column_1, err
 }
 
+const updateEntityExpiresAt = `-- name: UpdateEntityExpiresAt :exec
+UPDATE entities SET expires_at = ? WHERE key = ?
+`
+
+type UpdateEntityExpiresAtParams struct {
+	ExpiresAt int64
+	Key       string
+}
+
+func (q *Queries) UpdateEntityExpiresAt(ctx context.Context, arg UpdateEntityExpiresAtParams) error {
+	_, err := q.db.ExecContext(ctx, updateEntityExpiresAt, arg.ExpiresAt, arg.Key)
+	return err
+}
+
 const updateProcessingStatus = `-- name: UpdateProcessingStatus :exec
 UPDATE processing_status SET last_processed_block_number = ?, last_processed_block_hash = ? WHERE network = ?
 `

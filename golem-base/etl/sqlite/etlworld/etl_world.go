@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
 )
 
@@ -12,6 +14,7 @@ type ETLWorld struct {
 	*testutil.World
 	sqlliteETLBinaryPath string
 	etlProcess           *etlProcess
+	OriginalExpiryBlock  int64 // Store original expiry block for TTL extension tests
 }
 
 func NewETLWorld(
@@ -56,4 +59,13 @@ func (w *ETLWorld) AddLogsToTestError(err error) error {
 func (w *ETLWorld) Shutdown() {
 	w.etlProcess.cleanup()
 	w.World.Shutdown()
+}
+
+// ExtendEntityTTL extends the TTL of an entity by the specified number of blocks
+func (w *ETLWorld) ExtendEntityTTL(
+	ctx context.Context,
+	key common.Hash,
+	numberOfBlocks uint64,
+) (*types.Receipt, error) {
+	return w.World.ExtendTTL(ctx, key, numberOfBlocks)
 }

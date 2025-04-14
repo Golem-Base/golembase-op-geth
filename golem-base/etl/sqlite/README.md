@@ -8,6 +8,7 @@ This program implements an Extract, Transform, Load (ETL) process that processes
 - Stores entity data and annotations in SQLite
 - Supports numeric and string annotations for entities
 - Handles entity lifecycle operations (create, update, delete)
+- Supports TTL extension for entities
 - Maintains processing status to track progress
 
 ## Requirements
@@ -79,10 +80,20 @@ The following indexes are created for efficient querying:
 3. If no status exists, initializes with genesis block
 4. Processes WAL files sequentially
 5. For each block:
-   - Processes all operations (create, update, delete)
+   - Processes all operations (create, update, delete, extend TTL)
    - Handles entity data and annotations
+   - For TTL extensions, updates the expiration block of the entity
    - Updates processing status
 6. Uses SQLite transactions to ensure data consistency
+
+## Supported Operations
+
+The ETL process handles the following operations from the WAL:
+
+1. **Create**: Creates a new entity with associated annotations
+2. **Update**: Updates an existing entity's payload and annotations
+3. **Delete**: Removes an entity and its annotations from the database
+4. **Extend TTL**: Updates an entity's expiration block without modifying its payload or annotations
 
 ## Error Handling
 

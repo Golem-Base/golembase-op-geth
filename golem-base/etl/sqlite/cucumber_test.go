@@ -155,6 +155,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the entity should be deleted in the SQLite database$`, theEntityShouldBeDeletedInTheSQLiteDatabase)
 	ctx.Step(`^the owner address should be stored in the SQLite database$`, theOwnerAddressShouldBeStoredInTheSQLiteDatabase)
 	ctx.Step(`^the owner address should be preserved in the SQLite database$`, theOwnerAddressShouldBePreservedInTheSQLiteDatabase)
+	ctx.Step(`^a new entity in Golebase$`, aNewEntityInGolebase)
+	ctx.Step(`^update the TTL of the entity in Golembase$`, updateTheTTLOfTheEntityInGolembase)
+	ctx.Step(`^the TTL of the entity should be extended in the SQLite database$`, theTTLOfTheEntityShouldBeExtendedInTheSQLiteDatabase)
 }
 
 func aRunningETLToSQLite() error {
@@ -532,4 +535,91 @@ func theOwnerAddressShouldBePreservedInTheSQLiteDatabase(ctx context.Context) er
 
 		return nil
 	})
+}
+
+func aNewEntityInGolebase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	_, err := w.CreateEntity(ctx,
+		1000,
+		[]byte("test-ttl"),
+		[]entity.StringAnnotation{
+			{
+				Key:   "ttlTest",
+				Value: "ttlTest",
+			},
+		},
+		[]entity.NumericAnnotation{
+			{
+				Key:   "ttlTest",
+				Value: 1000,
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create entity: %w", err)
+	}
+
+	return nil
+}
+
+func updateTheTTLOfTheEntityInGolembase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+
+	// Record the original expiry block before extension
+	err := w.WithDB(ctx, func(db *sql.DB) error {
+		gl := sqlitegolem.New(db)
+		entity, err := gl.GetEntity(ctx, w.CreatedEntityKey.Hex())
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
+		w.OriginalExpiryBlock = entity.ExpiresAt
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get original expiry block: %w", err)
+	}
+
+	// Extend the TTL by 500 blocks
+	_, err = w.ExtendEntityTTL(ctx, w.CreatedEntityKey, 500)
+	if err != nil {
+		return fmt.Errorf("failed to extend entity TTL: %w", err)
+	}
+
+	return nil
+}
+
+func theTTLOfTheEntityShouldBeExtendedInTheSQLiteDatabase(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	w := etlworld.GetWorld(ctx)
+
+	bo := backoff.WithContext(backoff.NewConstantBackOff(200*time.Millisecond), ctx)
+
+	err := backoff.Retry(func() error {
+		err := w.WithDB(ctx, func(db *sql.DB) error {
+			gl := sqlitegolem.New(db)
+			entity, err := gl.GetEntity(ctx, w.CreatedEntityKey.Hex())
+			if err != nil {
+				return fmt.Errorf("failed to get entity: %w", err)
+			}
+
+			if entity.ExpiresAt <= w.OriginalExpiryBlock {
+				return fmt.Errorf("entity TTL was not extended, original: %v, current: %v",
+					w.OriginalExpiryBlock, entity.ExpiresAt)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to check entity TTL in database: %w", err)
+		}
+		return nil
+	}, bo)
+	if err != nil {
+		return fmt.Errorf("failed to check entity TTL in database: %w", err)
+	}
+
+	return nil
 }
