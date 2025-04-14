@@ -234,6 +234,29 @@ func main() {
 								if err != nil {
 									return nil, fmt.Errorf("failed to delete entity: %w", err)
 								}
+
+							case op.Extend != nil:
+								log.Info("extend TTL", "entity", op.Extend.EntityKey.Hex(), "from", op.Extend.OldExpiresAt, "to", op.Extend.NewExpiresAt)
+
+								// Get the existing entity
+								entity, err := mongoDriver.GetEntity(txCtx, op.Extend.EntityKey.Hex())
+								if err != nil {
+									return nil, fmt.Errorf("failed to get entity for TTL extension: %w", err)
+								}
+
+								// Update the entity's expiry time to the new value
+								entity.ExpiresAt = int64(op.Extend.NewExpiresAt)
+
+								// Delete and reinsert with updated expiry
+								err = mongoDriver.DeleteEntity(txCtx, op.Extend.EntityKey.Hex())
+								if err != nil {
+									return nil, fmt.Errorf("failed to delete entity before TTL extension: %w", err)
+								}
+
+								err = mongoDriver.InsertEntity(txCtx, entity)
+								if err != nil {
+									return nil, fmt.Errorf("failed to insert entity with extended TTL: %w", err)
+								}
 							}
 
 							log.Info("operation", "operation", op)

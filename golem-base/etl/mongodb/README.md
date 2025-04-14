@@ -8,6 +8,7 @@ This program implements an Extract, Transform, Load (ETL) process that processes
 - Stores entity data and annotations in MongoDB
 - Supports numeric and string annotations for entities
 - Handles entity lifecycle operations (create, update, delete)
+- Supports TTL extension operations for entities
 - Maintains processing status to track progress
 
 ## Requirements
@@ -85,7 +86,7 @@ Entity documents in MongoDB include:
 - `numericAnnotations`: Numeric annotations for the entity
 - `created_at`: Timestamp when the entity was created
 - `updated_at`: Timestamp when the entity was last updated
-- `expires_at`: Expiration time for the entity (if applicable)
+- `expires_at`: Expiration time for the entity (block number)
 - `owner_address`: The Ethereum address of the entity owner (hex string)
 
 The following indexes are created for efficient querying:
@@ -101,10 +102,21 @@ The following indexes are created for efficient querying:
 3. If no status exists, initializes with genesis block
 4. Processes WAL files sequentially
 5. For each block:
-   - Processes all operations (create, update, delete)
+   - Processes all operations (create, update, delete, extend TTL)
    - Handles entity data and annotations
+   - For TTL extensions, updates the entity's expiration block number
    - Updates processing status
 6. Uses MongoDB transactions to ensure data consistency
+
+## TTL Extension
+
+The ETL supports entity Time-To-Live (TTL) extension operations:
+
+- When an entity's TTL is extended in Golembase, the extension is recorded in the WAL
+- The ETL processes these extension operations, updating the entity's `expires_at` field
+- The original owner is preserved during TTL extension
+- TTL extension operations are processed atomically within MongoDB transactions
+- The ETL maintains consistency between Golembase and MongoDB for entity expiration
 
 ## Error Handling
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/etl/mongodb/mongogolem"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
@@ -14,14 +16,16 @@ import (
 // ETLWorld is an environment for integration testing the MongoDB ETL.
 type ETLWorld struct {
 	*testutil.World
-	mongoContainer     *mongodb.MongoDBContainer
-	mongoURI           string
-	mongoClient        *mongo.Client
-	mongoDatabase      *mongo.Database
-	mongoDriver        *mongogolem.MongoGolem
-	mongoETLBinaryPath string
-	etlProcess         *etlProcess
-	dbName             string
+	mongoContainer        *mongodb.MongoDBContainer
+	mongoURI              string
+	mongoClient           *mongo.Client
+	mongoDatabase         *mongo.Database
+	mongoDriver           *mongogolem.MongoGolem
+	mongoETLBinaryPath    string
+	etlProcess            *etlProcess
+	dbName                string
+	InitialExpiresAtBlock uint64
+	TTLExtendedBy         uint64
 }
 
 // NewETLWorld creates a new ETL world for testing with MongoDB.
@@ -138,4 +142,10 @@ func (w *ETLWorld) Shutdown() {
 // GetMongoDriver returns the MongoDB driver for direct database operations
 func (w *ETLWorld) GetMongoDriver() *mongogolem.MongoGolem {
 	return w.mongoDriver
+}
+
+// ExtendTTL extends the TTL of an entity in the Golembase network.
+func (w *ETLWorld) ExtendTTL(ctx context.Context, key common.Hash, numberOfBlocks uint64) (*types.Receipt, error) {
+	w.TTLExtendedBy = numberOfBlocks
+	return w.World.ExtendTTL(ctx, key, numberOfBlocks)
 }

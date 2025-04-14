@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/etl/mongodb/etlworld"
 	"github.com/ethereum/go-ethereum/golem-base/etl/mongodb/mongogolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
+	"github.com/holiman/uint256"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -158,7 +159,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the owner address should be stored in the Mongodb database$`, theOwnerAddressShouldBeStoredInTheMongodbDatabase)
 	ctx.Step(`^the owner address should be preserved in the Mongodb database$`, theOwnerAddressShouldBePreservedInTheMongodbDatabase)
 	ctx.Step(`^a new entity in Golebase$`, aNewEntityInGolebase)
-
+	ctx.Step(`^update the TTL of the entity in Golembase$`, updateTheTTLOfTheEntityInGolembase)
+	ctx.Step(`^the TTL of the entity should be extended in the Mongodb database$`, theTTLOfTheEntityShouldBeExtendedInTheMongodbDatabase)
 }
 
 func aRunningETLToMongodb() error {
@@ -578,7 +580,7 @@ func theOwnerAddressShouldBePreservedInTheMongodbDatabase(ctx context.Context) e
 
 func aNewEntityInGolebase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
-	_, err := w.CreateEntity(ctx,
+	receipt, err := w.CreateEntity(ctx,
 		1000,
 		[]byte(`{"test": "value", "number": 123}`),
 		[]entity.StringAnnotation{
@@ -598,6 +600,58 @@ func aNewEntityInGolebase(ctx context.Context) error {
 		return fmt.Errorf("failed to create entity: %w", err)
 	}
 
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	initialExpiresAtBlock := uint256.NewInt(0).SetBytes(receipt.Logs[0].Data)
+	w.InitialExpiresAtBlock = initialExpiresAtBlock.Uint64()
+
 	return nil
 
+}
+
+func updateTheTTLOfTheEntityInGolembase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+
+	_, err := w.ExtendTTL(ctx, w.CreatedEntityKey, 500) // Extend by 500 blocks
+	if err != nil {
+		return fmt.Errorf("failed to extend TTL: %w", err)
+	}
+	return nil
+}
+
+func theTTLOfTheEntityShouldBeExtendedInTheMongodbDatabase(ctx context.Context) error {
+	w := etlworld.GetWorld(ctx)
+	entityKey := w.CreatedEntityKey
+
+	expectedExpiresAt := w.InitialExpiresAtBlock + w.TTLExtendedBy
+
+	return w.AccessMongodb(func(mongo *mongogolem.MongoGolem) error {
+		timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		bo := backoff.WithContext(backoff.NewConstantBackOff(200*time.Millisecond), timeoutCtx)
+
+		return backoff.Retry(func() error {
+			collection := mongo.Collections().Entities
+			filter := bson.M{"_id": entityKey.Hex()}
+			res := collection.FindOne(timeoutCtx, filter)
+			if res.Err() != nil {
+				return fmt.Errorf("failed to find entity: %w", res.Err())
+			}
+
+			var entity Entity
+			err := res.Decode(&entity)
+			if err != nil {
+				return fmt.Errorf("failed to decode entity: %w", err)
+			}
+
+			if uint64(entity.ExpiresAt) != expectedExpiresAt {
+				return fmt.Errorf("expected expires_at to be %d, got %d", expectedExpiresAt, entity.ExpiresAt)
+			}
+
+			return nil
+		}, bo)
+	})
 }
