@@ -34,6 +34,10 @@ The transaction data field contains a StorageTransaction structure encoded using
 
 - `Delete`: A list of entity keys (common.Hash) to be removed from storage
 
+- `Extend`: A list of ExtendTTL operations, each containing:
+  - `EntityKey`: The key of the entity to extend TTL for
+  - `NumberOfBlocks`: Number of blocks to extend the TTL by
+
 The transaction is atomic - all operations succeed or the entire transaction fails. Entity keys for Create operations are derived from the transaction hash, payload content, and operation index, making it unique across the whole blockchain. Annotations enable efficient querying of stored data through specialized indexes.
 
 ### Emitted Logs
@@ -57,6 +61,12 @@ When storage transactions are executed, the system emits logs to track entity li
   - Event topic: `0x0297b0e6eaf1bc2289906a8123b8ff5b19e568a60d002d47df44f8294422af93`
   - Topics: `[GolemBaseStorageEntityDeleted, entityKey]`
   - Data: Empty
+
+- **GolemBaseStorageEntityTTLExtended**: Emitted when an entity's TTL is extended
+  - Event signature: `GolemBaseStorageEntityTTLExtended(bytes32 entityKey, uint256 oldExpirationBlock, uint256 newExpirationBlock)`
+  - Event topic: `0x49f78ff301f2020db26cdf781a7e801d1015e0b851fe4117c7740837ed6724e9`
+  - Topics: `[GolemBaseStorageEntityTTLExtended, entityKey]`
+  - Data: Contains both the old and new expiration block numbers
 
 These logs enable efficient tracking of storage changes and can be used by applications to monitor entity lifecycle events. The event signatures are defined as keccak256 hashes of their respective function signatures.
 
