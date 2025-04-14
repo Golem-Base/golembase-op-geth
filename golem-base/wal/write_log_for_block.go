@@ -30,6 +30,7 @@ type Operation struct {
 	Create *Create      `json:"create,omitempty"`
 	Update *Update      `json:"update,omitempty"`
 	Delete *common.Hash `json:"delete,omitempty"`
+	Extend *ExtendTTL   `json:"extend,omitempty"`
 }
 
 type Create struct {
@@ -47,6 +48,12 @@ type Update struct {
 	Payload            []byte                     `json:"payload"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
+}
+
+type ExtendTTL struct {
+	EntityKey    common.Hash `json:"entityKey"`
+	OldExpiresAt uint64      `json:"oldExpiresAt"`
+	NewExpiresAt uint64      `json:"newExpiresAt"`
 }
 
 func BlockNumberToFilename(blockNumber uint64) string {
@@ -144,6 +151,7 @@ func WriteLogForBlock(dir string, block *types.Block, chainID *big.Int, receipts
 
 			createdLogs := []*types.Log{}
 			updatedLogs := []*types.Log{}
+			extendedLogs := []*types.Log{}
 
 			for _, log := range receipt.Logs {
 				if len(log.Topics) < 2 {
@@ -156,6 +164,10 @@ func WriteLogForBlock(dir string, block *types.Block, chainID *big.Int, receipts
 
 				if log.Topics[0] == storagetx.GolemBaseStorageEntityUpdated {
 					updatedLogs = append(updatedLogs, log)
+				}
+
+				if log.Topics[0] == storagetx.GolemBaseStorageEntityTTLExtended {
+					extendedLogs = append(extendedLogs, log)
 				}
 
 			}
@@ -190,6 +202,15 @@ func WriteLogForBlock(dir string, block *types.Block, chainID *big.Int, receipts
 
 			}
 
+			for _, del := range stx.Delete {
+				err := enc.Encode(Operation{
+					Delete: &del,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to encode delete operation: %w", err)
+				}
+			}
+
 			for i, update := range stx.Update {
 
 				log := updatedLogs[i]
@@ -213,12 +234,27 @@ func WriteLogForBlock(dir string, block *types.Block, chainID *big.Int, receipts
 				}
 			}
 
-			for _, del := range stx.Delete {
+			for i, extend := range stx.Extend {
+
+				log := extendedLogs[i]
+
+				oldExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[:32])
+				oldExpiresAt := oldExpiresAtU256.Uint64()
+
+				newExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[32:])
+				newExpiresAt := newExpiresAtU256.Uint64()
+
+				ex := ExtendTTL{
+					EntityKey:    extend.EntityKey,
+					OldExpiresAt: oldExpiresAt,
+					NewExpiresAt: newExpiresAt,
+				}
+
 				err := enc.Encode(Operation{
-					Delete: &del,
+					Extend: &ex,
 				})
 				if err != nil {
-					return fmt.Errorf("failed to encode delete operation: %w", err)
+					return fmt.Errorf("failed to encode extend operation: %w", err)
 				}
 			}
 
