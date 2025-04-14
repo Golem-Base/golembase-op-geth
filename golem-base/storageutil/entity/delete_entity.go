@@ -12,14 +12,14 @@ import (
 )
 
 func Delete(access StateAccess, toDelete common.Hash) error {
-	err := allentities.RemoveEntity(access, toDelete)
-	if err != nil {
-		return fmt.Errorf("failed to remove entity from all entities: %w", err)
-	}
-
 	md, err := GetEntityMetaData(access, toDelete)
 	if err != nil {
 		return fmt.Errorf("failed to get entity meta data: %w", err)
+	}
+
+	err = allentities.RemoveEntity(access, toDelete)
+	if err != nil {
+		return fmt.Errorf("failed to remove entity from all entities: %w", err)
 	}
 
 	for _, stringAnnotation := range md.StringAnnotations {
