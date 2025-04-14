@@ -50,7 +50,7 @@ func (w *World) DeleteEntity(
 		Nonce:      nonce,
 		GasTipCap:  big.NewInt(1e9), // 1 Gwei
 		GasFeeCap:  big.NewInt(5e9), // 5 Gwei
-		Gas:        22480,
+		Gas:        122480,
 		To:         &address.GolemBaseStorageProcessorAddress,
 		Value:      big.NewInt(0), // No ETH transfer needed
 		Data:       rlpData,
