@@ -68,6 +68,16 @@ Additionally the following supporting service is included:
 - Exposes port 8080 (Note: If port 8080 is already in use on your machine, change the host port number, which is the first in the pair.)
 - Connects to op-geth RPC endpoint
 
+**Tip:** RPC Explorer is a realtime explorer that connects directly to your local node. You can open RPC Explorer right in the browser. After the services have all started up, simply go to http://localhost:8080/. Here are some features:
+
+- **Block Explorer:** View detailed information about blocks, including transactions, gas usage, miner data, and more.
+- **Transaction Explorer:** Examine transaction details, including status, gas costs, input data, and involved addresses.
+- **Address Explorer:** View basic address information including balance, transaction count (nonce), and contract status.
+- **Smart Search:** Instant navigation using the search bar that automatically detects and redirects to addresses, transactions, or blocks.
+- **Real-time Updates:** Auto-refreshing display of latest blocks and transactions.
+
+You can learn more [here](https://github.com/Golem-Base/rpcplorer).
+
 ## Volumes
 
 The following volumes are created by the docker-compose file and managed by Docker Compose:
