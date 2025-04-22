@@ -2,6 +2,7 @@ package stateblob
 
 import (
 	"encoding/binary"
+	"io"
 	"iter"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -125,4 +126,49 @@ func DeleteBlob(db StateAccess, key common.Hash) {
 		db.SetState(GolemDBAddress, keyInt.Bytes32(), emptyHash)
 		keyInt.AddUint64(keyInt, 1)
 	}
+}
+
+func GetBlobSize(db StateAccess, key common.Hash) uint64 {
+	head := db.GetState(GolemDBAddress, key)
+	if head == emptyHash {
+		return 0
+	}
+
+	if head[31]&0x01 == 0 {
+		return uint64(head[31] / 2)
+	}
+
+	length := binary.BigEndian.Uint64(head[24:])
+	return (length - 1) / 2
+}
+
+func WriteTo(db StateAccess, key common.Hash, w io.Writer) error {
+
+	head := db.GetState(GolemDBAddress, key)
+	if head == emptyHash {
+		return nil
+	}
+
+	if head[31]&0x01 == 0 {
+		_, err := w.Write(head[:head[31]/2])
+		return err
+	}
+
+	remaining := binary.BigEndian.Uint64(head[24:]) / 2
+
+	keyInt := uint256.NewInt(0).SetBytes32(key.Bytes())
+	keyInt.AddUint64(keyInt, 1)
+
+	for remaining > 0 {
+		chunk := db.GetState(GolemDBAddress, keyInt.Bytes32())
+		toWrite := min(remaining, 32)
+		_, err := w.Write(chunk[:toWrite])
+		if err != nil {
+			return err
+		}
+		remaining -= toWrite
+		keyInt.AddUint64(keyInt, 1)
+	}
+
+	return nil
 }
