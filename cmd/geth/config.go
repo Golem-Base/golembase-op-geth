@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
+	"github.com/ethereum/go-ethereum/golem-base/restful"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
@@ -304,39 +304,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 			w.Write([]byte("Hello, World!"))
 		})
 
-		mux.HandleFunc("GET /golembase/entity/{key}", func(w http.ResponseWriter, r *http.Request) {
-
-			key := common.HexToHash(r.PathValue("key"))
-
-			log.Info("GET /golembase/entity", "key", key)
-
-			ctx := r.Context()
-
-			stateDb, _, err := backend.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			size := entity.GetPayloadSize(stateDb, key)
-
-			log.Info("GET /golembase/entity", "size", size)
-
-			if size == 0 {
-				http.Error(w, "Entity not found", http.StatusNotFound)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
-
-			err = entity.WritePayloadTo(stateDb, key, w)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-		})
+		restful.RegisterHandlers(mux, backend)
 
 		s := &http.Server{
 			Addr:    ":31080",
