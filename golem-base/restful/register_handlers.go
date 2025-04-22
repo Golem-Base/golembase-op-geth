@@ -9,4 +9,5 @@ import (
 func RegisterHandlers(mux *http.ServeMux, backend *eth.EthAPIBackend) {
 	RegisterGetEntity(mux, backend)
 	RegisterQuery(mux, backend)
+	RegisterAllEntities(mux, backend)
 }

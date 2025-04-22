@@ -3,12 +3,12 @@ package restful
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"mime/multipart"
 	"net/http"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
@@ -24,30 +24,22 @@ type Query struct {
 
 type queryDataSource struct {
 	ctx     context.Context
-	backend *eth.EthAPIBackend
+	stateDb *state.StateDB
 }
 
 func (ds queryDataSource) GetKeysForStringAnnotation(key, value string) ([]common.Hash, error) {
-	stateDb, _, err := ds.backend.StateAndHeaderByNumber(ds.ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get state and header: %w", err)
-	}
 
 	entitySetKey := annotationindex.StringAnnotationIndexKey(key, value)
 
-	return slices.Collect(keyset.Iterate(stateDb, entitySetKey)), nil
+	return slices.Collect(keyset.Iterate(ds.stateDb, entitySetKey)), nil
 
 }
 
 func (ds queryDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
-	stateDb, _, err := ds.backend.StateAndHeaderByNumber(ds.ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get state and header: %w", err)
-	}
 
 	entitySetKey := annotationindex.NumericAnnotationIndexKey(key, value)
 
-	return slices.Collect(keyset.Iterate(stateDb, entitySetKey)), nil
+	return slices.Collect(keyset.Iterate(ds.stateDb, entitySetKey)), nil
 
 }
 
@@ -63,9 +55,16 @@ func RegisterQuery(mux *http.ServeMux, backend *eth.EthAPIBackend) {
 			return
 		}
 
+		stateDb, _, err := backend.StateAndHeaderByNumber(r.Context(), rpc.LatestBlockNumber)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Error("Failed to get state and header", "error", err)
+			return
+		}
+
 		ds := queryDataSource{
 			ctx:     r.Context(),
-			backend: backend,
+			stateDb: stateDb,
 		}
 
 		expr, err := query.Parse(q.Query)
@@ -79,13 +78,6 @@ func RegisterQuery(mux *http.ServeMux, backend *eth.EthAPIBackend) {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Error("Failed to evaluate query", "error", err)
-			return
-		}
-
-		stateDb, _, err := backend.StateAndHeaderByNumber(r.Context(), rpc.LatestBlockNumber)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Error("Failed to get state and header", "error", err)
 			return
 		}
 
