@@ -53,7 +53,11 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]commo
 		return nil, err
 	}
 
-	return slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(stateDb, blockNumber)), nil
+	out := slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(stateDb, blockNumber))
+	if out == nil {
+		out = make([]common.Hash, 0)
+	}
+	return out, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) ([]common.Hash, error) {
@@ -65,7 +69,11 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) 
 
 	entitySetKey := annotationindex.StringAnnotationIndexKey(key, value)
 
-	return slices.Collect(keyset.Iterate(stateDb, entitySetKey)), nil
+	out := slices.Collect(keyset.Iterate(stateDb, entitySetKey))
+	if out == nil {
+		out = make([]common.Hash, 0)
+	}
+	return out, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value uint64) ([]common.Hash, error) {
@@ -77,7 +85,11 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value 
 
 	entityKeys := annotationindex.NumericAnnotationIndexKey(key, value)
 
-	return slices.Collect(keyset.Iterate(stateDb, entityKeys)), nil
+	out := slices.Collect(keyset.Iterate(stateDb, entityKeys))
+	if out == nil {
+		out = make([]common.Hash, 0)
+	}
+	return out, nil
 }
 
 func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, error) {
@@ -88,14 +100,14 @@ func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, er
 	}
 
 	ds := &golemBaseDataSource{api: api}
-	entites, err := expr.Evaluate(ds)
+	entities, err := expr.Evaluate(ds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate query: %w", err)
 	}
 
-	var searchResults []golemtype.SearchResult
+	searchResults := make([]golemtype.SearchResult, 0)
 
-	for _, key := range entites {
+	for _, key := range entities {
 		v, err := api.GetStorageValue(key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get storage value for key %s: %w", key.Hex(), err)
@@ -149,6 +161,9 @@ func (api *golemBaseAPI) GetAllEntityKeys() ([]common.Hash, error) {
 		entityKeys = append(entityKeys, hash)
 	}
 
+	if entityKeys == nil {
+		entityKeys = make([]common.Hash, 0)
+	}
 	return entityKeys, nil
 }
 
@@ -158,5 +173,10 @@ func (api *golemBaseAPI) GetEntitiesOfOwner(owner common.Address) ([]common.Hash
 		return nil, fmt.Errorf("failed to get state: %w", err)
 	}
 
-	return slices.Collect(entitiesofowner.Iterate(stateDb, owner)), nil
+	entityKeys := slices.Collect(entitiesofowner.Iterate(stateDb, owner))
+
+	if entityKeys == nil {
+		entityKeys = make([]common.Hash, 0)
+	}
+	return entityKeys, nil
 }
