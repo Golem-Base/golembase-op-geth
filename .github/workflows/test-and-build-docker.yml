@@ -10,7 +10,7 @@ jobs:
   test:
     runs-on: 
       group: Default
-      labels: prod-cluster-runner
+      labels: cluster-runner
     steps:
       - uses: actions/checkout@v4
       - name: Install Nix
@@ -29,7 +29,7 @@ jobs:
   docker:
     runs-on:
       group: Default
-      labels: prod-cluster-runner
+      labels: cluster-runner
     steps:
       - uses: actions/checkout@v4
       - name: Login to Docker Registry
