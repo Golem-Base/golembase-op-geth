@@ -1,6 +1,6 @@
 # Running OP-Geth Locally with Docker Compose
 
-This guide explains how to run OP-Geth locally with MongoDB and SQLite ETL services using Docker Compose.
+This guide explains how to run OP-Geth locally in [dev mode](https://geth.ethereum.org/docs/developers/dapp-developer/dev-mode) with MongoDB and SQLite ETL services using Docker Compose.
 
 > **Tip:** We also have a [Golem Base CLI](./cmd/golembase/README.md) available for interacting with the Golem Base storage system. 
 
@@ -10,7 +10,7 @@ This guide explains how to run OP-Geth locally with MongoDB and SQLite ETL servi
 
 The docker-compose file defines the following services:
 
-- **op-geth**: The main Ethereum node service running in dev mode
+- **op-geth**: The main Ethereum node service running in [dev mode](https://geth.ethereum.org/docs/developers/dapp-developer/dev-mode)
 - **mongodb**: MongoDB instance configured with replica set
 - **mongodb-etl**: Service for syncing blockchain data to MongoDB
 - **sqlite-etl**: Service for syncing blockchain data to SQLite
