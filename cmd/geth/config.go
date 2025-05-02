@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
@@ -297,21 +298,30 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		}
 	}
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Hello, World!"))
-		})
+	if ctx.IsSet(utils.RESTEnabledFlag.Name) {
+		addr := ctx.String(utils.RESTListenAddrFlag.Name)
+		port := ctx.Int(utils.RESTPortFlag.Name)
 
+		l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
+		if err != nil {
+			utils.Fatalf("failed to listen on %s:%d: %v", addr, port, err)
+		}
+
+		mux := http.NewServeMux()
 		restful.RegisterHandlers(mux, backend)
 
-		s := &http.Server{
-			Addr:    ":31080",
+		server := &http.Server{
+			Addr:    fmt.Sprintf("%s:%d", addr, port),
 			Handler: mux,
 		}
-		s.ListenAndServe()
-	}()
+
+		go func() {
+			err := server.Serve(l)
+			if err != nil {
+				log.Error("failed to serve RESTful HTTP server", "error", err)
+			}
+		}()
+	}
 
 	return stack
 }

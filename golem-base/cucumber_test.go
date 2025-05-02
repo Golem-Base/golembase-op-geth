@@ -3,9 +3,14 @@ package golembase_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
+	"mime"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"mime/multipart"
 
 	"github.com/alecthomas/repr"
 	"github.com/cucumber/godog"
@@ -164,7 +171,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
 	ctx.Step(`^I submit a transaction to extend TTL of the entity by (\d+) blocks$`, iSubmitATransactionToExtendTTLOfTheEntityByBlocks)
 	ctx.Step(`^the entity\'s TTL should be extended by (\d+) blocks$`, theEntitysTTLShouldBeExtendedByBlocks)
-
+	ctx.Step(`^I should be able to see the entity in the RESTful API$`, iShouldBeAbleToSeeTheEntityInTheRESTfulAPI)
+	ctx.Step(`^the entity should be in the list of entities of the owner in the RESTful API$`, theEntityShouldBeInTheListOfEntitiesOfTheOwnerInTheRESTfulAPI)
 }
 
 func iSearchForEntitiesWithTheInvalidQuery(ctx context.Context, query *godog.DocString) error {
@@ -1240,6 +1248,112 @@ func theEntitysTTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks i
 
 	if oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks) != newExpiresAtBlock.Uint64() {
 		return fmt.Errorf("expected entity to expire at block %d, but got %d", oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks), newExpiresAtBlock.Uint64())
+	}
+
+	return nil
+}
+
+func iShouldBeAbleToSeeTheEntityInTheRESTfulAPI(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	baseURL := w.GethInstance.RESTEndpoint
+
+	u, err := url.JoinPath(baseURL, "golembase", "entity", w.CreatedEntityKey.Hex())
+	if err != nil {
+		return fmt.Errorf("failed to join path: %w", err)
+	}
+
+	resp, err := http.Get(u)
+	if err != nil {
+		return fmt.Errorf("failed to get entity: %w", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected status code %d, but got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body: %w", err)
+	}
+
+	if string(body) != "test payload" {
+		return fmt.Errorf("expected body to be 'test payload', but got %s", string(body))
+	}
+
+	return nil
+}
+
+func theEntityShouldBeInTheListOfEntitiesOfTheOwnerInTheRESTfulAPI(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	baseURL := w.GethInstance.RESTEndpoint
+
+	u, err := url.JoinPath(baseURL, "golembase", "all_entities", w.FundedAccount.Address.Hex())
+	if err != nil {
+		return fmt.Errorf("failed to join path: %w", err)
+	}
+
+	resp, err := http.Get(u)
+	if err != nil {
+		return fmt.Errorf("failed to get entities: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected status code %d, but got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if mediaType != "multipart/form-data" {
+		return fmt.Errorf("expected content type to be 'multipart/form-data', but got %s", mediaType)
+	}
+
+	boundary, ok := params["boundary"]
+	if !ok {
+		return fmt.Errorf("no boundary found in content type")
+	}
+
+	// Parse multipart response
+	reader := multipart.NewReader(resp.Body, boundary)
+
+	// Count parts and verify payload
+	partCount := 0
+	var foundPayload string
+
+	for {
+		part, err := reader.NextRawPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read part: %w", err)
+		}
+
+		partCount++
+		if partCount > 1 {
+			return fmt.Errorf("expected only one entity, but found multiple parts")
+		}
+
+		payload, err := io.ReadAll(part)
+		if err != nil {
+			return fmt.Errorf("failed to read payload: %w", err)
+		}
+		foundPayload = string(payload)
+	}
+
+	if partCount == 0 {
+		return fmt.Errorf("no entities found in response")
+	}
+
+	if foundPayload != "test payload" {
+		return fmt.Errorf("expected payload to be 'test payload', but got '%s'", foundPayload)
 	}
 
 	return nil

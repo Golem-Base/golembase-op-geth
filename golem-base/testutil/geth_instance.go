@@ -28,11 +28,12 @@ import (
 
 type GethInstance struct {
 	*gethProcess
-	shutdown    func()
-	ETHClient   *ethclient.Client
-	RPCClient   *rpc.Client
-	RPCEndpoint string
-	WALDir      string
+	shutdown     func()
+	ETHClient    *ethclient.Client
+	RPCClient    *rpc.Client
+	RPCEndpoint  string
+	RESTEndpoint string
+	WALDir       string
 }
 
 type gethProcess struct {
@@ -63,6 +64,9 @@ func startGethInstance(ctx context.Context, gethPath string) (_ *GethInstance, e
 		"--http.api", "eth,web3,net,debug,golembase", // Enable necessary APIs
 		"--verbosity", "3", // Increase logging to see HTTP endpoint
 		"--golembase.writeaheadlog", walDir,
+		"--rest",
+		"--rest.addr", "0.0.0.0",
+		"--rest.port", "7545",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start geth: %w", err)
@@ -113,12 +117,13 @@ func startGethInstance(ctx context.Context, gethPath string) (_ *GethInstance, e
 	}
 
 	gi := &GethInstance{
-		gethProcess: geth,
-		ETHClient:   client,
-		RPCClient:   rpcClient,
-		RPCEndpoint: endpoint,
-		shutdown:    cleanup,
-		WALDir:      walDir,
+		gethProcess:  geth,
+		ETHClient:    client,
+		RPCClient:    rpcClient,
+		RPCEndpoint:  endpoint,
+		RESTEndpoint: "http://localhost:7545",
+		shutdown:     cleanup,
+		WALDir:       walDir,
 	}
 
 	return gi, nil

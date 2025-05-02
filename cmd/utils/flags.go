@@ -706,6 +706,23 @@ var (
 		Value:    "",
 		Category: flags.APICategory,
 	}
+	RESTEnabledFlag = &cli.BoolFlag{
+		Name:     "rest",
+		Usage:    "Enable the RESTful HTTP server",
+		Category: flags.APICategory,
+	}
+	RESTListenAddrFlag = &cli.StringFlag{
+		Name:     "rest.addr",
+		Usage:    "RESTful server listening interface",
+		Value:    node.DefaultRESTHost,
+		Category: flags.APICategory,
+	}
+	RESTPortFlag = &cli.IntFlag{
+		Name:     "rest.port",
+		Usage:    "RESTful server listening port",
+		Value:    node.DefaultRESTPort,
+		Category: flags.APICategory,
+	}
 	GraphQLEnabledFlag = &cli.BoolFlag{
 		Name:     "graphql",
 		Usage:    "Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.",
