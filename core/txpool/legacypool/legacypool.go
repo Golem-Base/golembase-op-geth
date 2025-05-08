@@ -54,7 +54,8 @@ const (
 	// non-trivial consequences: larger transactions are significantly harder and
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
-	txMaxSize = 16 * txSlotSize // 512KB
+	// txMaxSize = 16 * txSlotSize // 512KB
+	txMaxSize = 4 * txSlotSize // 128KB
 )
 
 var (
