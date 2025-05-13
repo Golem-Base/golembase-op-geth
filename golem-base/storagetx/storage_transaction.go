@@ -87,14 +87,16 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 		}
 
 		if emitLogs {
-
 			expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
+
+			data := make([]byte, 32)
+			expiresAtBlockNumberBig.PutUint256(data[:32])
 
 			// create the log for the created entity
 			log := &types.Log{
 				Address:     address.GolemBaseStorageProcessorAddress,
 				Topics:      []common.Hash{GolemBaseStorageEntityCreated, key},
-				Data:        expiresAtBlockNumberBig.Bytes(),
+				Data:        data,
 				BlockNumber: blockNumber,
 			}
 			logs = append(logs, log)
@@ -182,10 +184,14 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			return nil, err
 		}
 
+		expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
+		data := make([]byte, 32)
+		expiresAtBlockNumberBig.PutUint256(data[:32])
+
 		logs = append(logs, &types.Log{
 			Address:     address.GolemBaseStorageProcessorAddress,
 			Topics:      []common.Hash{GolemBaseStorageEntityUpdated, update.EntityKey},
-			Data:        common.BigToHash(big.NewInt(int64(ap.ExpiresAtBlock))).Bytes(),
+			Data:        data,
 			BlockNumber: blockNumber,
 		})
 
