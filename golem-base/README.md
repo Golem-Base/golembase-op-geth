@@ -213,5 +213,6 @@ The entity will be stored with:
 - A default string annotation (key: "foo", value: "bar")
 - The entity key derived from the transaction hash, payload, and operation index
 
+
 Once created, you can query and interact with the entity using the JSON-RPC API methods described earlier.
 
