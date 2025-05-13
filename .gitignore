@@ -58,3 +58,6 @@ profile.cov
 logs/
 
 tests/spec-tests/
+
+.direnv
+.envrc.local

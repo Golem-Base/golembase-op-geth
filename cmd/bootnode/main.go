@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -122,32 +124,29 @@ func main() {
 		}
 	}
 
-	printNotice(&nodeKey.PublicKey, *listenerAddr)
 	cfg := discover.Config{
 		PrivateKey:  nodeKey,
 		NetRestrict: restrictList,
 	}
 	if *runv5 {
-		if _, err := discover.ListenV5(conn, ln, cfg); err != nil {
+		v5, err := discover.ListenV5(conn, ln, cfg)
+		if err != nil {
 			utils.Fatalf("%v", err)
 		}
+		log.Info("Listening on discV5", "enr", v5.Self().String())
 	} else {
-		if _, err := discover.ListenUDP(conn, ln, cfg); err != nil {
+		v4, err := discover.ListenUDP(conn, ln, cfg)
+		if err != nil {
 			utils.Fatalf("%v", err)
 		}
+		log.Info("Listening on discV4", "enr", v4.Self().URLv4())
 	}
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGTERM, os.Interrupt)
 
-	select {}
-}
-
-func printNotice(nodeKey *ecdsa.PublicKey, addr net.UDPAddr) {
-	if addr.IP.IsUnspecified() {
-		addr.IP = net.IP{127, 0, 0, 1}
-	}
-	n := enode.NewV4(nodeKey, addr.IP, 0, addr.Port)
-	fmt.Println(n.URLv4())
-	fmt.Println("Note: you're using cmd/bootnode, a developer tool.")
-	fmt.Println("We recommend using a regular node as bootstrap node for production deployments.")
+	log.Info("Bootstrap node running, press Ctrl+C to quit")
+	<-sigc
+	log.Info("Received termination signal, shutting down")
 }
 
 func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) *net.UDPAddr {
