@@ -32,13 +32,14 @@ func BytesTo32ByteSequence(value []byte) iter.Seq[common.Hash] {
 		if len(value) <= 31 {
 			// Create a 32-byte array with the data and length
 			data := common.RightPadBytes(value, 32)
-			// Set the length in the last byte (2*n+1 for small payloads)
+			// Set the length in the last byte (2*n for small payloads)
 			data[31] = byte(len(value) * 2)
 			yield(common.BytesToHash(data))
 			return
 		}
 
 		// For large values, first chunk contains the length
+		// Use the length 2*n+1 for larger payloads
 		length := uint256.NewInt(uint64(len(value)*2 + 1))
 		if !yield(common.BytesToHash(length.Bytes())) {
 			return
