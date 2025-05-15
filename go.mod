@@ -1,4 +1,4 @@
-module github.com/ethereum/go-ethereum
+module github.com/Golem-Base/golembase-op-geth
 
 go 1.23.0
 
