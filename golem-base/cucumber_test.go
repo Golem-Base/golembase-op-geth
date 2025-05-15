@@ -162,8 +162,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
 	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
 	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
-	ctx.Step(`^I submit a transaction to extend TTL of the entity by (\d+) blocks$`, iSubmitATransactionToExtendTTLOfTheEntityByBlocks)
-	ctx.Step(`^the entity\'s TTL should be extended by (\d+) blocks$`, theEntitysTTLShouldBeExtendedByBlocks)
+	ctx.Step(`^I submit a transaction to extend BTL of the entity by (\d+) blocks$`, iSubmitATransactionToExtendBTLOfTheEntityByBlocks)
+	ctx.Step(`^the entity\'s BTL should be extended by (\d+) blocks$`, theEntitysBTLShouldBeExtendedByBlocks)
 
 }
 
@@ -1202,23 +1202,23 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 
 }
 
-func iSubmitATransactionToExtendTTLOfTheEntityByBlocks(ctx context.Context, blockCount int) error {
+func iSubmitATransactionToExtendBTLOfTheEntityByBlocks(ctx context.Context, blockCount int) error {
 	w := testutil.GetWorld(ctx)
 
-	_, err := w.ExtendTTL(
+	_, err := w.ExtendBTL(
 		ctx,
 		w.CreatedEntityKey,
 		uint64(blockCount),
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to extend TTL: %w", err)
+		return fmt.Errorf("failed to extend BTL: %w", err)
 	}
 
 	return nil
 }
 
-func theEntitysTTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks int) error {
+func theEntitysBTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks int) error {
 	w := testutil.GetWorld(ctx)
 
 	if w.LastReceipt == nil {

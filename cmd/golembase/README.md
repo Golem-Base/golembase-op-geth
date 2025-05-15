@@ -31,7 +31,7 @@ The CLI follows the XDG Base Directory Specification for storing configuration f
 ### Entity Management
 
 - `entity create`: Creates a new entity in Golem Base
-  - Creates entity with default data and TTL (100 blocks)
+  - Creates entity with default data and BTL (100 blocks)
   - Signs and submits transaction to the node
   - Optional flags:
     - `--node-url`: Specify different node URL

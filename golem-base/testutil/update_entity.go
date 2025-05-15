@@ -41,7 +41,7 @@ func (w *World) UpdateEntity(
 		Update: []storagetx.Update{
 			{
 				EntityKey:          key,
-				TTL:                ttl,
+				BTL:                ttl,
 				Payload:            payload,
 				StringAnnotations:  stringAnnotations,
 				NumericAnnotations: numericAnnotations,
