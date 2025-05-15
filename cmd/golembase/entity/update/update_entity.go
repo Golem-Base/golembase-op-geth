@@ -91,7 +91,7 @@ func Update() *cli.Command {
 				Update: []storagetx.Update{
 					{
 						EntityKey: common.HexToHash(c.String("key")),
-						BTL:       c.Uint64("ttl"),
+						BTL:       cfg.btl,
 						Payload:   []byte(c.String("data")),
 						StringAnnotations: []entity.StringAnnotation{
 							{

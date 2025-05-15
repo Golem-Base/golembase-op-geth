@@ -29,10 +29,6 @@ var GolemBaseStorageEntityUpdated = crypto.Keccak256Hash([]byte("GolemBaseStorag
 // GolemBaseStorageEntityBTLExtended is the event signature for extending BTL of an entity.
 var GolemBaseStorageEntityBTLExtended = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityBTLExptended(uint256,uint256)"))
 
-func init() {
-	panic(GolemBaseStorageEntityBTLExtended.Hex())
-}
-
 // StorageTransaction represents a transaction that can be applied to the storage layer.
 // It contains a list of Create operations, a list of Update operations and a list of Delete operations.
 //

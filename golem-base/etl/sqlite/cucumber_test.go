@@ -541,16 +541,16 @@ func aNewEntityInGolebase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
 	_, err := w.CreateEntity(ctx,
 		1000,
-		[]byte("test-ttl"),
+		[]byte("test-btl"),
 		[]entity.StringAnnotation{
 			{
-				Key:   "ttlTest",
-				Value: "ttlTest",
+				Key:   "btlTest",
+				Value: "btlTest",
 			},
 		},
 		[]entity.NumericAnnotation{
 			{
-				Key:   "ttlTest",
+				Key:   "btlTest",
 				Value: 1000,
 			},
 		},

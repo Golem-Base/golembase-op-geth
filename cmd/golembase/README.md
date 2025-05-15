@@ -36,7 +36,7 @@ The CLI follows the XDG Base Directory Specification for storing configuration f
   - Optional flags:
     - `--node-url`: Specify different node URL
     - `--data`: Custom payload data
-    - `--ttl`: Custom time-to-live value in blocks
+    - `--btl`: Custom time-to-live value in blocks
 
 ### Query Operations
 
@@ -67,7 +67,7 @@ golembase account fund
 
 3. Create a new entity:
 ```bash
-golembase entity create --data "custom data" --ttl 200
+golembase entity create --data "custom data" --btl 200
 ```
 
 4. Display entity payload:
