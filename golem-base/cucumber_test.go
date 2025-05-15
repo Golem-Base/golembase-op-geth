@@ -141,8 +141,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the payload of the entity should be changed$`, thePayloadOfTheEntityShouldBeChanged)
 	ctx.Step(`^I submit a transaction to update the entity, changing the annotations$`, iSubmitATransactionToUpdateTheEntityChangingTheAnnotations)
 	ctx.Step(`^the annotations of the entity should be changed$`, theAnnotationsOfTheEntityShouldBeChanged)
-	ctx.Step(`^I submit a transaction to update the entity, changing the ttl of the entity$`, iSubmitATransactionToUpdateTheEntityChangingTheTtlOfTheEntity)
-	ctx.Step(`^the ttl of the entity should be changed$`, theTtlOfTheEntityShouldBeChanged)
+	ctx.Step(`^I submit a transaction to update the entity, changing the btl of the entity$`, iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity)
+	ctx.Step(`^the btl of the entity should be changed$`, theBtlOfTheEntityShouldBeChanged)
 	ctx.Step(`^submit a transaction to create an entity of (\d+)K$`, submitATransactionToCreateAnEntityOfK)
 	ctx.Step(`^the entity creation should not fail$`, theEntityCreationShouldNotFail)
 	ctx.Step(`^I search for entities with the query$`, iSearchForEntitiesWithTheQuery)
@@ -708,7 +708,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	return nil
 }
 
-func iSubmitATransactionToUpdateTheEntityChangingTheTtlOfTheEntity(ctx context.Context) error {
+func iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
 	_, err := w.UpdateEntity(
@@ -737,7 +737,7 @@ func iSubmitATransactionToUpdateTheEntityChangingTheTtlOfTheEntity(ctx context.C
 	return nil
 }
 
-func theTtlOfTheEntityShouldBeChanged(ctx context.Context) error {
+func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
 
