@@ -984,7 +984,7 @@ func theWriteaheadLogForTheCreateShouldBeCreated(ctx context.Context) error {
 			{
 				Create: &wal.Create{
 					EntityKey:      w.CreatedEntityKey,
-					ExpiresAtBlock: 102,
+					ExpiresAtBlock: 103,
 					Payload:        []byte("test payload"),
 					StringAnnotations: []entity.StringAnnotation{
 						{Key: "test_key", Value: "test_value"},
@@ -1042,7 +1042,7 @@ func theWriteaheadLogForTheUpdateShouldBeCreated(ctx context.Context) error {
 			{
 				Update: &wal.Update{
 					EntityKey:      w.CreatedEntityKey,
-					ExpiresAtBlock: 103,
+					ExpiresAtBlock: 104,
 					Payload:        []byte("new payload"),
 					StringAnnotations: []entity.StringAnnotation{
 						{Key: "test_key", Value: "test_value"},
