@@ -64,7 +64,7 @@ When storage transactions are executed, the system emits logs to track entity li
 
 - **GolemBaseStorageEntityBTLExtended**: Emitted when an entity's BTL is extended
   - Event signature: `GolemBaseStorageEntityBTLExtended(uint256 entityKey, uint256 oldExpirationBlock, uint256 newExpirationBlock)`
-  - Event topic: `0x59e1f1f7ff9674612ab2457a6a68a8edd1360241e739f09fae1082ea4498f230`
+  - Event topic: `0x835bfca6df78ffac92635dcc105a6a8c4fd715e054e18ef60448b0a6dce30c8d`
   - Topics: `[GolemBaseStorageEntityBTLExtended, entityKey]`
   - Data: Contains both the old and new expiration block numbers
 
@@ -214,4 +214,3 @@ The entity will be stored with:
 - The entity key derived from the transaction hash, payload, and operation index
 
 Once created, you can query and interact with the entity using the JSON-RPC API methods described earlier.
-
