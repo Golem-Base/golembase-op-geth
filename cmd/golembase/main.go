@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/golembase/blocks"
 	"github.com/ethereum/go-ethereum/cmd/golembase/cat"
 	"github.com/ethereum/go-ethereum/cmd/golembase/entity"
+	"github.com/ethereum/go-ethereum/cmd/golembase/integrity"
 	"github.com/ethereum/go-ethereum/cmd/golembase/query"
 	"github.com/urfave/cli/v2"
 )
@@ -25,6 +26,7 @@ func main() {
 			blocks.Blocks(),
 			cat.Cat(),
 			query.Query(),
+			integrity.Integrity(),
 		},
 	}
 
