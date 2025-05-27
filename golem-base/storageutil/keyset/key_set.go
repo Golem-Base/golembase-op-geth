@@ -123,19 +123,29 @@ func RemoveValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 	lastElementAddress.Add(lastElementAddress, arrayLen)
 	lastElementValue := db.GetState(storageutil.GolemDBAddress, lastElementAddress.Bytes32())
 
-	// store the last element in the place of the value to remove
-	db.SetState(storageutil.GolemDBAddress, toRemoveAddress.Bytes32(), lastElementValue)
+	// Special case when the item being removed is the last in the array
+	if toRemoveAddress == lastElementAddress {
+		// decrement the length of the array
+		arrayLen.SubUint64(arrayLen, 1)
+		db.SetState(storageutil.GolemDBAddress, setKey, arrayLen.Bytes32())
 
-	// decrement the length of the array
-	arrayLen.SubUint64(arrayLen, 1)
-	db.SetState(storageutil.GolemDBAddress, setKey, arrayLen.Bytes32())
+		// clear last slot in the array
+		db.SetState(storageutil.GolemDBAddress, lastElementAddress.Bytes32(), zeroHash)
+	} else {
+		// store the last element in the place of the value to remove
+		db.SetState(storageutil.GolemDBAddress, toRemoveAddress.Bytes32(), lastElementValue)
 
-	// update the mapping for the last element
-	lastElementMapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], lastElementValue[:])
-	db.SetState(storageutil.GolemDBAddress, lastElementMapKey, arrayIndex.Bytes32())
+		// decrement the length of the array
+		arrayLen.SubUint64(arrayLen, 1)
+		db.SetState(storageutil.GolemDBAddress, setKey, arrayLen.Bytes32())
 
-	// clear last slot in the array
-	db.SetState(storageutil.GolemDBAddress, lastElementAddress.Bytes32(), zeroHash)
+		// update the mapping for the last element
+		lastElementMapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], lastElementValue[:])
+		db.SetState(storageutil.GolemDBAddress, lastElementMapKey, arrayIndex.Bytes32())
+
+		// clear last slot in the array
+		db.SetState(storageutil.GolemDBAddress, lastElementAddress.Bytes32(), zeroHash)
+	}
 
 	return nil
 
