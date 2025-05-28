@@ -18,11 +18,12 @@ type StateAccess = storageutil.StateAccess
 
 var zeroHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 var oneUint256 = new(uint256.Int).SetUint64(1)
+var MapKeyPrefix = []byte("golemBase.keyset.map")
 
 // ContainsValue checks if the given value exists in the set identified by setKey.
 // It returns true if the value is present in the set, false otherwise.
 func ContainsValue(db StateAccess, setKey common.Hash, value common.Hash) bool {
-	mapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], value[:])
+	mapKey := crypto.Keccak256Hash(MapKeyPrefix, setKey[:], value[:])
 	valueIndex := db.GetState(storageutil.GolemDBAddress, mapKey)
 	return valueIndex != zeroHash
 }
@@ -46,7 +47,7 @@ func AddValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 	// store the new length
 	db.SetState(storageutil.GolemDBAddress, setKey, lenValueInt.Bytes32())
 
-	mapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], value[:])
+	mapKey := crypto.Keccak256Hash(MapKeyPrefix, setKey[:], value[:])
 
 	mapValue := db.GetState(storageutil.GolemDBAddress, mapKey)
 	if mapValue != zeroHash {
@@ -92,7 +93,7 @@ func RemoveValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 
 	arrayLen := new(uint256.Int).SetBytes(arrayLenAsHash[:])
 
-	mapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], value[:])
+	mapKey := crypto.Keccak256Hash(MapKeyPrefix, setKey[:], value[:])
 
 	// if the set is empty, set the map and the set to zero
 	if arrayLen.Cmp(oneUint256) == 0 {
@@ -131,7 +132,7 @@ func RemoveValue(db StateAccess, setKey common.Hash, value common.Hash) error {
 	db.SetState(storageutil.GolemDBAddress, setKey, arrayLen.Bytes32())
 
 	// update the mapping for the last element
-	lastElementMapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], lastElementValue[:])
+	lastElementMapKey := crypto.Keccak256Hash(MapKeyPrefix[:], setKey[:], lastElementValue[:])
 	db.SetState(storageutil.GolemDBAddress, lastElementMapKey, arrayIndex.Bytes32())
 
 	// clear last slot in the array
@@ -170,7 +171,7 @@ func Clear(db StateAccess, setKey common.Hash) {
 		value := db.GetState(storageutil.GolemDBAddress, elementAddress.Bytes32())
 
 		// Clear the mapping for this value
-		mapKey := crypto.Keccak256Hash([]byte("golemBase.keyset.map"), setKey[:], value[:])
+		mapKey := crypto.Keccak256Hash(MapKeyPrefix[:], setKey[:], value[:])
 		db.SetState(storageutil.GolemDBAddress, mapKey, zeroHash)
 
 		// Clear the element storage
