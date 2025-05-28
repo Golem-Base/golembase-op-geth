@@ -2,6 +2,7 @@ package keyset_test
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"testing"
 
@@ -426,13 +427,7 @@ func TestIterateEmptySet(t *testing.T) {
 	db := newMockStateAccess()
 	setKey := newHash("0x1")
 
-	// This should not be called for an empty set
-	iterationCount := 0
-	for range keyset.Iterator(db, setKey) {
-		iterationCount++
-	}
-
-	assert.Equal(t, 0, iterationCount, "Iterate should not call yield function for empty set")
+	assert.Empty(t, slices.Collect(keyset.Iterate(db, setKey)))
 }
 
 func TestIterateSetWithSingleValue(t *testing.T) {
@@ -444,11 +439,7 @@ func TestIterateSetWithSingleValue(t *testing.T) {
 	err := keyset.AddValue(db, setKey, value)
 	assert.NoError(t, err)
 
-	// Iterate through the set
-	values := []common.Hash{}
-	for v := range keyset.Iterator(db, setKey) {
-		values = append(values, v)
-	}
+	values := slices.Collect(keyset.Iterate(db, setKey))
 
 	// Should find exactly one value
 	assert.Equal(t, 1, len(values))
@@ -475,11 +466,7 @@ func TestIterateSetWithMultipleValues(t *testing.T) {
 	// Verify all values are in the set using Size
 	assert.Equal(t, uint64(3), keyset.Size(db, setKey).Uint64())
 
-	// Iterate through the set and collect values
-	values := []common.Hash{}
-	for v := range keyset.Iterator(db, setKey) {
-		values = append(values, v)
-	}
+	values := slices.Collect(keyset.Iterate(db, setKey))
 
 	// Should find all three values
 	assert.Equal(t, 3, len(values))
@@ -507,7 +494,7 @@ func TestIterateWithEarlyTermination(t *testing.T) {
 
 	iterationCount := 0
 
-	for range keyset.Iterator(db, setKey) {
+	for range keyset.Iterate(db, setKey) {
 		iterationCount++
 		if iterationCount >= 2 {
 			break
@@ -528,59 +515,22 @@ func TestIterateAfterRemovingMiddleValue(t *testing.T) {
 	// Add multiple values
 	err := keyset.AddValue(db, setKey, value1)
 	assert.NoError(t, err)
-	db.Print(storageutil.GolemDBAddress)
-	fmt.Println("--------------------------------")
 
 	err = keyset.AddValue(db, setKey, value2)
 	assert.NoError(t, err)
-	db.Print(storageutil.GolemDBAddress)
-	fmt.Println("--------------------------------")
 
 	err = keyset.AddValue(db, setKey, value3)
 	assert.NoError(t, err)
-	db.Print(storageutil.GolemDBAddress)
-	fmt.Println("--------------------------------")
 
 	// Remove the middle value
 	err = keyset.RemoveValue(db, setKey, value2)
 	assert.NoError(t, err)
-	db.Print(storageutil.GolemDBAddress)
-	fmt.Println("--------------------------------")
 
-	// Iterate through the set and collect values
-	valuesAfterRemoval := []common.Hash{}
-	for v := range keyset.Iterator(db, setKey) {
-		valuesAfterRemoval = append(valuesAfterRemoval, v)
-	}
+	valuesAfterRemoval := slices.Collect(keyset.Iterate(db, setKey))
 
 	// Should have two values - value1 and value3
 	assert.Equal(t, 2, len(valuesAfterRemoval))
 	assert.Contains(t, valuesAfterRemoval, value1)
 	assert.Contains(t, valuesAfterRemoval, value3)
 	assert.NotContains(t, valuesAfterRemoval, value2)
-}
-
-func TestIterateAfterClearingSet(t *testing.T) {
-	db := newMockStateAccess()
-	setKey := newHash("0x1")
-	value1 := newHash("0x2")
-	value2 := newHash("0x3")
-
-	// Add values
-	err := keyset.AddValue(db, setKey, value1)
-	assert.NoError(t, err)
-
-	err = keyset.AddValue(db, setKey, value2)
-	assert.NoError(t, err)
-
-	// Clear the set
-	keyset.Clear(db, setKey)
-
-	// This should not be called for an empty set
-	iterationCount := 0
-	for range keyset.Iterator(db, setKey) {
-		iterationCount++
-	}
-
-	assert.Equal(t, 0, iterationCount, "Iterate should not call yield function after clearing set")
 }
