@@ -107,6 +107,11 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for i, create := range tx.Create {
+
+		if create.BTL == 0 {
+			return nil, fmt.Errorf("create BTL is 0 for create %d", i)
+		}
+
 		// Convert i to a big integer and pad to 32 bytes
 		bigI := big.NewInt(int64(i))
 		paddedI := common.LeftPadBytes(bigI.Bytes(), 32)
@@ -169,6 +174,10 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for _, update := range tx.Update {
+
+		if update.BTL == 0 {
+			return nil, fmt.Errorf("update BTL is 0 for entity %s", update.EntityKey.Hex())
+		}
 
 		oldMetaData, err := entity.GetEntityMetaData(access, update.EntityKey)
 		if err != nil {

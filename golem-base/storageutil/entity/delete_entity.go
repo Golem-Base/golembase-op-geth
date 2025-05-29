@@ -12,6 +12,11 @@ import (
 )
 
 func Delete(access StateAccess, toDelete common.Hash) error {
+
+	if !allentities.Contains(access, toDelete) {
+		return fmt.Errorf("entity %s does not exist", toDelete)
+	}
+
 	md, err := GetEntityMetaData(access, toDelete)
 	if err != nil {
 		return fmt.Errorf("failed to get entity meta data: %w", err)
