@@ -480,6 +480,12 @@ var (
 		Value:    ethconfig.Defaults.TxPool.Lifetime,
 		Category: flags.TxPoolCategory,
 	}
+	TxPoolDisableNonGolemBaseTransactions = &cli.BoolFlag{
+		Name:     "txpool.lifetime",
+		Usage:    "Maximum amount of time non-executable transaction are queued",
+		Value:    ethconfig.Defaults.TxPool.DisableNonGolemBaseTransactions,
+		Category: flags.TxPoolCategory,
+	}
 	// Blob transaction pool settings
 	BlobPoolDataDirFlag = &cli.StringFlag{
 		Name:     "blobpool.datadir",
@@ -1689,6 +1695,9 @@ func setTxPool(ctx *cli.Context, cfg *legacypool.Config) {
 	}
 	if ctx.IsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = ctx.Duration(TxPoolLifetimeFlag.Name)
+	}
+	if ctx.IsSet(TxPoolDisableNonGolemBaseTransactions.Name) {
+		cfg.DisableNonGolemBaseTransactions = ctx.Bool(TxPoolDisableNonGolemBaseTransactions.Name)
 	}
 	if ctx.IsSet(MinerEffectiveGasLimitFlag.Name) {
 		// While technically this is a miner config parameter, we also want the txpool to enforce

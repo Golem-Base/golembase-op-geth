@@ -77,6 +77,9 @@ var (
 	// ErrFutureReplacePending is returned if a future transaction replaces a pending
 	// one. Future transactions should only be able to replace other future transactions.
 	ErrFutureReplacePending = errors.New("future transaction tries to replace pending")
+
+	// ErrNonGolembaseTransaction is returned if a transaction is not a Golembase transaction.
+	ErrNonGolembaseTransaction = errors.New("non-golembase transaction")
 )
 
 var (
@@ -159,6 +162,8 @@ type Config struct {
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
 
 	EffectiveGasCeil uint64 // OP-Stack: if non-zero, a gas ceiling to enforce independent of the header's gaslimit value
+
+	DisableNonGolemBaseTransactions bool // Disallow non-Golembase transactions such as transfers to non-Golembase accounts and contract creations
 }
 
 // DefaultConfig contains the default configurations for the transaction pool.
@@ -268,6 +273,8 @@ type LegacyPool struct {
 	ingressFilters []txpool.IngressFilter // Filters to apply to incoming transactions
 	filterCtx      context.Context        // Filters may use this context with external resources
 	filterCancel   context.CancelFunc     // Cancel function for the filter context
+
+	disableNonGolembaseTransactions bool
 }
 
 type txpoolResetRequest struct {
@@ -282,20 +289,21 @@ func New(config Config, chain BlockChain) *LegacyPool {
 
 	// Create the transaction pool with its initial settings
 	pool := &LegacyPool{
-		config:          config,
-		chain:           chain,
-		chainconfig:     chain.Config(),
-		signer:          types.LatestSigner(chain.Config()),
-		pending:         make(map[common.Address]*list),
-		queue:           make(map[common.Address]*list),
-		beats:           make(map[common.Address]time.Time),
-		all:             newLookup(),
-		reqResetCh:      make(chan *txpoolResetRequest),
-		reqPromoteCh:    make(chan *accountSet),
-		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
-		reorgShutdownCh: make(chan struct{}),
-		initDoneCh:      make(chan struct{}),
+		config:                          config,
+		chain:                           chain,
+		chainconfig:                     chain.Config(),
+		signer:                          types.LatestSigner(chain.Config()),
+		pending:                         make(map[common.Address]*list),
+		queue:                           make(map[common.Address]*list),
+		beats:                           make(map[common.Address]time.Time),
+		all:                             newLookup(),
+		reqResetCh:                      make(chan *txpoolResetRequest),
+		reqPromoteCh:                    make(chan *accountSet),
+		queueTxEventCh:                  make(chan *types.Transaction),
+		reorgDoneCh:                     make(chan chan struct{}),
+		reorgShutdownCh:                 make(chan struct{}),
+		initDoneCh:                      make(chan struct{}),
+		disableNonGolembaseTransactions: config.DisableNonGolemBaseTransactions,
 	}
 	pool.priced = newPricedList(pool.all)
 
@@ -628,6 +636,16 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address]
 // This check is meant as an early check which only needs to be performed once,
 // and does not require the pool mutex to be held.
 func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
+
+	if pool.disableNonGolembaseTransactions {
+		to := tx.To()
+		if to == nil {
+			return ErrNonGolembaseTransaction
+		}
+
+		return ErrNonGolembaseTransaction
+	}
+
 	opts := &txpool.ValidationOptions{
 		Config: pool.chainconfig,
 		Accept: 0 |

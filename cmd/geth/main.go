@@ -86,6 +86,7 @@ var (
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
+		utils.TxPoolDisableNonGolemBaseTransactions,
 		utils.BlobPoolDataDirFlag,
 		utils.BlobPoolDataCapFlag,
 		utils.BlobPoolPriceBumpFlag,
