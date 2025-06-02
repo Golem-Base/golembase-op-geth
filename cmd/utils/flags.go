@@ -481,7 +481,7 @@ var (
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolDisableNonGolemBaseTransactions = &cli.BoolFlag{
-		Name:     "txpool.lifetime",
+		Name:     "txpool.disable.non.golembase.transactions",
 		Usage:    "Maximum amount of time non-executable transaction are queued",
 		Value:    ethconfig.Defaults.TxPool.DisableNonGolemBaseTransactions,
 		Category: flags.TxPoolCategory,
