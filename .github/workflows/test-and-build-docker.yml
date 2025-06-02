@@ -8,9 +8,10 @@ on:
 
 jobs:
   test:
-    runs-on: 
+    runs-on:
       group: Default
       labels: cluster-runner
+
     steps:
       - uses: actions/checkout@v4
       - name: Install Nix
@@ -27,9 +28,7 @@ jobs:
           nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...
 
   docker:
-    runs-on:
-      group: Default
-      labels: cluster-runner
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
@@ -65,7 +64,7 @@ jobs:
           else
             # For PRs, just build the image but don't push it (single platform for speed)
             docker buildx build \
-              --platform linux/amd64 \
+              --platform linux/amd64,linux/arm64 \
               --tag quay.io/golemnetwork/gb-op-geth:pr-test \
               .
           fi
