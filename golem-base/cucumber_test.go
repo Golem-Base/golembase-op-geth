@@ -167,6 +167,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I submit a transaction to delete the entity by non-owner$`, iSubmitATransactionToDeleteTheEntityByNonowner)
 	ctx.Step(`^the transaction should fail$`, theTransactionShouldFail)
 	ctx.Step(`^I submit a transaction to update the entity by non-owner$`, iSubmitATransactionToUpdateTheEntityByNonowner)
+	ctx.Step(`^the expired entities should be deleted$`, theExpiredEntitiesShouldBeDeleted)
+	ctx.Step(`^there are two entities that will expire in the next block$`, thereAreTwoEntitiesThatWillExpireInTheNextBlock)
 
 }
 
@@ -1294,4 +1296,86 @@ func iSubmitATransactionToUpdateTheEntityByNonowner(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func thereAreTwoEntitiesThatWillExpireInTheNextBlock(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	receipt1, err := w.CreateEntity(
+		ctx,
+		2,
+		[]byte("test payload"),
+		[]entity.StringAnnotation{
+			{
+				Key:   "test_key",
+				Value: "test_value",
+			},
+		},
+		[]entity.NumericAnnotation{
+			{
+				Key:   "test_number",
+				Value: 42,
+			},
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create first entity: %w", err)
+	}
+
+	key1 := receipt1.Logs[0].Topics[1]
+	w.CreatedEntityKey = key1
+
+	receipt2, err := w.CreateEntity(
+		ctx,
+		1,
+		[]byte("test payload2"),
+		[]entity.StringAnnotation{
+			{
+				Key:   "test_key",
+				Value: "test_value2",
+			},
+		},
+		[]entity.NumericAnnotation{
+			{
+				Key:   "test_number",
+				Value: 42,
+			},
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create first entity: %w", err)
+	}
+
+	key2 := receipt2.Logs[0].Topics[1]
+
+	w.SecondCreatedEntityKey = key2
+
+	return nil
+}
+
+func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	entities := []common.Hash{}
+
+	rcpClient := w.GethInstance.RPCClient
+
+	err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"golembase_getEntitiesOfOwner",
+		w.FundedAccount.Address,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get entities of owner: %w", err)
+	}
+
+	if len(entities) != 0 {
+		return fmt.Errorf("expected 0 entities, but got %d", len(entities))
+	}
+
+	return nil
+
 }

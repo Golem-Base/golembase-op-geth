@@ -2,6 +2,7 @@ package housekeepingtx
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -45,14 +46,14 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 		return nil
 	}
 
-	for key := range entityexpiration.IteratorOfEntitiesToExpireAtBlock(db, blockNumber) {
+	toDelete := slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(db, blockNumber))
+
+	for _, key := range toDelete {
 		err := deleteEntity(key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to delete entity %s: %w", key.Hex(), err)
 		}
 	}
-
-	entityexpiration.ClearEntitiesToExpireAtBlock(db, blockNumber)
 
 	return logs, nil
 }

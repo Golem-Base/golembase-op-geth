@@ -11,13 +11,14 @@ import (
 
 // World is the test world - it holds all the state that is shared between steps
 type World struct {
-	GethInstance        *GethInstance
-	FundedAccount       *FundedAccount
-	SecondFundedAccount *FundedAccount
-	LastReceipt         *types.Receipt
-	SearchResult        []golemtype.SearchResult
-	CreatedEntityKey    common.Hash
-	LastError           error
+	GethInstance           *GethInstance
+	FundedAccount          *FundedAccount
+	SecondFundedAccount    *FundedAccount
+	LastReceipt            *types.Receipt
+	SearchResult           []golemtype.SearchResult
+	CreatedEntityKey       common.Hash
+	SecondCreatedEntityKey common.Hash
+	LastError              error
 }
 
 func NewWorld(ctx context.Context, gethPath string) (*World, error) {

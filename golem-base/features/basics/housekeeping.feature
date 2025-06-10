@@ -15,3 +15,12 @@ Feature: housekeeping
     Then the expired entity should be deleted
     And the number of entities should be 0
     And the list of all entities should be empty
+
+
+  Scenario: deleting multiple expired entities
+    Given I have enough funds to pay for the transaction
+    And there are two entities that will expire in the next block
+    When there is a new block
+    Then the expired entities should be deleted
+    And the number of entities should be 0
+    And the list of all entities should be empty
