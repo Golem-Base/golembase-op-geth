@@ -23,11 +23,17 @@ import (
 // a key:value pair, separated by semicolons if more than one.
 // Example:
 // --strings 'hello:world;foo:bar' to provide two annotations, hello:world and foo:bar.
-func ParseStringAnnotations(input string) ([]entity.StringAnnotation, error) {
+// To supply string annotations, provide separate --string
+// flags for each annotation. After each flag, pass the
+// pair as key:value (separated by a colon).
+// Example:
+// --string hello:world --string foo:bar
+// to provide two annotations, hello:world and foo:bar.
+
+func ParseStringAnnotations(input []string) ([]entity.StringAnnotation, error) {
 	var annotations []entity.StringAnnotation
 
-	pairs := strings.Split(input, ";")
-	for _, pair := range pairs {
+	for _, pair := range input {
 		kv := strings.SplitN(pair, ":", 2)
 		if len(kv) != 2 {
 			return nil, fmt.Errorf("invalid annotation pair: %q", pair)
@@ -41,19 +47,19 @@ func ParseStringAnnotations(input string) ([]entity.StringAnnotation, error) {
 	return annotations, nil
 }
 
-// To supply numeric annotations, put them in a single parameter as
-// a key:value pair, separated by semicolons if more than one.
-// Provide a number for the value portion of each.
+// To supply numeric annotations, provide separate --num
+// flags for each annotation. After each flag, pass the
+// pair as key:value (separated by a colon).
 // Example:
-// --nums 'favorite:100;count:10' to provide two annotations, favorite:100 and count:10.
-func ParseNumericAnnotations(input string) ([]entity.NumericAnnotation, error) {
+// --num favorite:100 --num count:10
+// to provide two annotations, favorite:100 and count:10.
+func ParseNumericAnnotations(input []string) ([]entity.NumericAnnotation, error) {
 	var annotations []entity.NumericAnnotation
 
-	pairs := strings.Split(input, ";")
-	for _, pair := range pairs {
+	for _, pair := range input {
 		kv := strings.SplitN(pair, ":", 2)
 		if len(kv) != 2 {
-			continue // Or return an error if strict format is required
+			continue
 		}
 		key := strings.TrimSpace(kv[0])
 		valStr := strings.TrimSpace(kv[1])
@@ -104,17 +110,15 @@ func Create() *cli.Command {
 				EnvVars:     []string{"ENTITY_BTL"},
 				Destination: &cfg.btl,
 			},
-			&cli.StringFlag{
-				Name:    "strings",
+			&cli.StringSliceFlag{
+				Name:    "string",
 				Aliases: []string{"s"},
-				Usage:   "Key/Values for string annotation. Specify as foo:bar;hello:world",
-				Value:   "foo:bar;test:abc",
+				Usage:   "Key/Value for string annotation. Specify as foo:bar. Pass multiple instances of --string as needed",
 			},
-			&cli.StringFlag{
-				Name:    "nums",
+			&cli.StringSliceFlag{
+				Name:    "num",
 				Aliases: []string{"n"},
-				Usage:   "Key/Values for numeric annotation. Specify as favorite:100;maximum:200",
-				Value:   "favorite:10;next:100",
+				Usage:   "Key/Value for numeric annotation. Specify as favorite:100. Pass multiple instances of --num as needed",
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -146,12 +150,12 @@ func Create() *cli.Command {
 				return fmt.Errorf("failed to get nonce: %w", err)
 			}
 
-			strs, err := ParseStringAnnotations(c.String("strings"))
+			strs, err := ParseStringAnnotations(c.StringSlice("string"))
 			if err != nil {
 				return fmt.Errorf("failed to parse string annotations: %w", err)
 			}
 
-			nums, err := ParseNumericAnnotations(c.String("nums"))
+			nums, err := ParseNumericAnnotations(c.StringSlice("num"))
 			if err != nil {
 				return fmt.Errorf("failed to parse numeric annotations: %w", err)
 			}
