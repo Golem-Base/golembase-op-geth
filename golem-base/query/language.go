@@ -1,7 +1,10 @@
 package query
 
 import (
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -27,6 +30,7 @@ type Expression struct {
 }
 
 func (e *Expression) Evaluate(ds DataSource) ([]common.Hash, error) {
+	fmt.Println("Evaluate")
 	return e.Or.Evaluate(ds)
 }
 
@@ -60,12 +64,14 @@ func union(a, b []common.Hash) []common.Hash {
 }
 
 func (e *OrExpression) Evaluate(ds DataSource) ([]common.Hash, error) {
+	fmt.Println("OR-Evaluate (left)")
 	res, err := e.Left.Evaluate(ds)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, rhs := range e.Right {
+		fmt.Println("OR-Evaluate (right)")
 		rh, err := rhs.Evaluate(ds)
 		if err != nil {
 			return nil, err
@@ -83,6 +89,7 @@ type OrRHS struct {
 }
 
 func (e *OrRHS) Evaluate(ds DataSource) ([]common.Hash, error) {
+	fmt.Println("OrRHS-Evaluate")
 	return e.Expr.Evaluate(ds)
 }
 
@@ -113,13 +120,14 @@ func intersect(a, b []common.Hash) []common.Hash {
 }
 
 func (e *AndExpression) Evaluate(ds DataSource) ([]common.Hash, error) {
-
+	fmt.Println("AND-Evaluate (left)")
 	res, err := e.Left.Evaluate(ds)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, rhs := range e.Right {
+		fmt.Println("AND-Evaluate (right)")
 		rh, err := rhs.Evaluate(ds)
 		if err != nil {
 			return nil, err
@@ -137,6 +145,7 @@ type AndRHS struct {
 }
 
 func (e *AndRHS) Evaluate(ds DataSource) ([]common.Hash, error) {
+	fmt.Println("AndRHS-Evaluate")
 	return e.Expr.Evaluate(ds)
 }
 
@@ -147,10 +156,13 @@ type EqualExpr struct {
 }
 
 func (e *EqualExpr) Evaluate(ds DataSource) ([]common.Hash, error) {
+	fmt.Println("EQUAL-Evaluate")
 	if e.Paren != nil {
+		fmt.Println("EQUAL-Evaluate (paren)")
 		return e.Paren.Evaluate(ds)
 	}
 
+	fmt.Println("EQUAL-Evaluate (Assign)")
 	return e.Assign.Evaluate(ds)
 }
 
@@ -161,12 +173,34 @@ type Equality struct {
 }
 
 func (e *Equality) Evaluate(ds DataSource) ([]common.Hash, error) {
+	fmt.Println("Equality-Evaluate")
+
+	fmt.Println(e)
 
 	if e.Value.String != nil {
+		fmt.Printf("QUERY: Working with STRING %s %s\n", e.Var, *e.Value.String)
+
+		if e.Var == "owner" && (strings.HasPrefix(*e.Value.String, "0x") || strings.HasPrefix(*e.Value.String, "0X")) {
+			var addr common.Address
+
+			decoded, err := hex.DecodeString((*e.Value.String)[2:])
+			if err != nil {
+				return nil, fmt.Errorf("invalid owner hex string: %w", err)
+			}
+			if len(decoded) != common.AddressLength {
+				return nil, errors.New("invalid owner address length")
+			}
+
+			copy(addr[:], decoded)
+
+			return ds.GetKeysForOwner(addr)
+		}
+
 		return ds.GetKeysForStringAnnotation(e.Var, *e.Value.String)
 	}
 
 	if e.Value.Number != nil {
+		fmt.Printf("QUERY: Working with NUMBER %s %d\n", e.Var, *e.Value.Number)
 		return ds.GetKeysForNumericAnnotation(e.Var, *e.Value.Number)
 	}
 

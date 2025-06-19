@@ -37,6 +37,7 @@ func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(key common.Hash) (*entity.EntityMetaData, error) {
+	fmt.Printf("golemBaseAPI:GetEntityMetaData: %s\n", key)
 	header := api.eth.blockchain.CurrentBlock()
 	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
@@ -61,6 +62,7 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]commo
 }
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) ([]common.Hash, error) {
+	fmt.Printf("golemBaseAPI:GetEntitiesForStringAnnotationValue: %s=%s\n", key, value)
 	header := api.eth.blockchain.CurrentBlock()
 	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
@@ -77,6 +79,7 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) 
 }
 
 func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value uint64) ([]common.Hash, error) {
+	fmt.Printf("golemBaseAPI:GetEntitiesForNumericAnnotationValue: %s=%d\n", key, value)
 	header := api.eth.blockchain.CurrentBlock()
 	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
@@ -84,11 +87,15 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value 
 	}
 
 	entityKeys := annotationindex.NumericAnnotationIndexKey(key, value)
+	fmt.Println("Retreived:")
+	fmt.Println(entityKeys)
 
 	out := slices.Collect(keyset.Iterate(stateDb, entityKeys))
 	if out == nil {
 		out = make([]common.Hash, 0)
 	}
+	fmt.Println("found:")
+	fmt.Println(out)
 	return out, nil
 }
 
@@ -132,6 +139,10 @@ func (ds *golemBaseDataSource) GetKeysForStringAnnotation(key, value string) ([]
 
 func (ds *golemBaseDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
 	return ds.api.GetEntitiesForNumericAnnotationValue(key, value)
+}
+
+func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {
+	return ds.api.GetEntitiesOfOwner(owner)
 }
 
 // GetEntityCount returns the total number of entities in the storage.
