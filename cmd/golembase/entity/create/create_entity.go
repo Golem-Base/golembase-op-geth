@@ -19,10 +19,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// To supply string annotations, put them in a single parameter as
-// a key:value pair, separated by semicolons if more than one.
-// Example:
-// --strings 'hello:world;foo:bar' to provide two annotations, hello:world and foo:bar.
 // To supply string annotations, provide separate --string
 // flags for each annotation. After each flag, pass the
 // pair as key:value (separated by a colon).
