@@ -30,6 +30,12 @@ func TestEqualExpr(t *testing.T) {
 				"test":  []common.Hash{common.HexToHash("0x1")},
 				"test2": []common.Hash{common.HexToHash("0x2")},
 			},
+			"déçevant": {
+				"non": []common.Hash{common.HexToHash("0x3")},
+			},
+			"بروح": {
+				"ايوة": []common.Hash{common.HexToHash("0x3")},
+			},
 		},
 		numericAnnotations: map[string]map[uint64][]common.Hash{},
 	}
@@ -41,6 +47,27 @@ func TestEqualExpr(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []common.Hash{common.HexToHash("0x1")}, res)
+
+	// Query for a key with special characters
+	expr, err = query.Parse("déçevant = \"non\"")
+	require.NoError(t, err)
+
+	res, err = expr.Evaluate(ds)
+	require.NoError(t, err)
+
+	require.Equal(t, []common.Hash{common.HexToHash("0x3")}, res)
+
+	expr, err = query.Parse("بروح = \"ايوة\"")
+	require.NoError(t, err)
+
+	res, err = expr.Evaluate(ds)
+	require.NoError(t, err)
+
+	require.Equal(t, []common.Hash{common.HexToHash("0x3")}, res)
+
+	// But symbols should fail
+	expr, err = query.Parse("foo@ = \"bar\"")
+	require.Error(t, err)
 }
 
 func TestNumericEqualExpr(t *testing.T) {
