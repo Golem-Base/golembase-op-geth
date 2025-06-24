@@ -6,6 +6,8 @@ import (
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
 // Define the lexer with distinct tokens for each operator and parentheses.
@@ -18,7 +20,7 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Eq", Pattern: `=`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
 	{Name: "Number", Pattern: `[0-9]+`},
-	{Name: "Ident", Pattern: `[a-zA-Z_][a-zA-Z0-9_]*`},
+	{Name: "Ident", Pattern: entity.AnnotationIdentRegex},
 })
 
 // Expression is the top-level rule.
