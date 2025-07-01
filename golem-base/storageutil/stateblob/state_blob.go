@@ -16,8 +16,6 @@ var GolemDBAddress = address.GolemBaseStorageProcessorAddress
 
 func SetBlob(db StateAccess, key common.Hash, value []byte) {
 
-	DeleteBlob(db, key)
-
 	keyInt := new(uint256.Int).SetBytes(key[:])
 
 	for v := range BytesTo32ByteSequence(value) {

@@ -63,6 +63,7 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 	}
 
 	DeletePayload(access, toDelete)
+	DeleteEntityMetadata(access, toDelete)
 
 	return nil
 }
