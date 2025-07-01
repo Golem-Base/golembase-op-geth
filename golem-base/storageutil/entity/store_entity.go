@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/numericalannotationindex"
 )
 
 // This regex should not allow $ as the first character, since we use that for
@@ -23,6 +24,7 @@ type StateAccess = storageutil.StateAccess
 
 func Store(
 	access StateAccess,
+	txHash common.Hash,
 	key common.Hash,
 	sender common.Address,
 	emd EntityMetaData,
@@ -79,13 +81,13 @@ func Store(
 	}
 
 	for _, numericAnnotation := range emd.NumericAnnotations {
-		err = keyset.AddValue(
-			access,
-			annotationindex.NumericAnnotationIndexKey(numericAnnotation.Key, numericAnnotation.Value),
-			key,
-		)
+		// We pass the tx hash as the seed for the RNG, this ensures that the underlying
+		// treap is deterministic
+		ix := numericalannotationindex.New(access, numericAnnotation.Key, txHash)
+		err := ix.Add(numericAnnotation.Value, key)
+
 		if err != nil {
-			return fmt.Errorf("failed to append to key list: %w", err)
+			return fmt.Errorf("failed to append entity to annotation index: %w", err)
 		}
 	}
 

@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/numericalannotationindex"
 )
 
 // golemBaseAPI offers helper utils
@@ -86,9 +87,9 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value 
 		return nil, err
 	}
 
-	entityKeys := annotationindex.NumericAnnotationIndexKey(key, value)
+	ix := numericalannotationindex.NewImmutable(stateDb, key)
 
-	out := slices.Collect(keyset.Iterate(stateDb, entityKeys))
+	out := slices.Collect(ix.IterateFromTo(&value, &value))
 	if out == nil {
 		out = make([]common.Hash, 0)
 	}
@@ -141,6 +142,10 @@ func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.H
 	return ds.api.GetEntitiesOfOwner(owner)
 }
 
+func (ds *golemBaseDataSource) GetKeysForNumericAnnotationRange(annotation string, from *uint64, to *uint64) ([]common.Hash, error) {
+	return ds.api.GetKeysForNumericAnnotationRange(annotation, from, to)
+}
+
 // GetEntityCount returns the total number of entities in the storage.
 func (api *golemBaseAPI) GetEntityCount() (uint64, error) {
 	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
@@ -186,6 +191,16 @@ func (api *golemBaseAPI) GetEntitiesOfOwner(owner common.Address) ([]common.Hash
 		entityKeys = make([]common.Hash, 0)
 	}
 	return entityKeys, nil
+}
+
+func (api *golemBaseAPI) GetKeysForNumericAnnotationRange(annotation string, from *uint64, to *uint64) ([]common.Hash, error) {
+	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state: %w", err)
+	}
+
+	annotationIndex := numericalannotationindex.NewImmutable(stateDb, annotation)
+	return slices.Collect(annotationIndex.IterateFromTo(from, to)), nil
 }
 
 func (api *golemBaseAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {

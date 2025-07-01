@@ -82,7 +82,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 	storeEntity := func(key common.Hash, ap *entity.EntityMetaData, payload []byte, emitLogs bool) error {
 
-		err := entity.Store(access, key, sender, *ap, payload)
+		err := entity.Store(access, txHash, key, sender, *ap, payload)
 		if err != nil {
 			return fmt.Errorf("failed to store entity: %w", err)
 		}

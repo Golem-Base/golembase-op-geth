@@ -33,6 +33,32 @@ Feature: Search
       """
     Then I should find 2 entities
 
+  Scenario: finding an entity with a range query
+    Given I have an entity "e1" with numeric annotations:
+      | foo | 42 |
+    And I have an entity "e2" with numeric annotations:
+      | foo | 50 |
+    And I have an entity "e3" with numeric annotations:
+      | foo | 2 |
+    When I search for entities with the query
+      """
+      (foo > 40 && foo < 50)
+      """
+    Then I should find 1 entity
+
+  Scenario: finding multiple entities with a range query
+    Given I have an entity "e1" with numeric annotations:
+      | foo | 42 |
+    And I have an entity "e2" with numeric annotations:
+      | foo | 50 |
+    And I have an entity "e3" with numeric annotations:
+      | foo | 2 |
+    When I search for entities with the query
+      """
+      foo > 40
+      """
+    Then I should find 2 entities
+
   Scenario: invalid query
     When I search for entities with the invalid query
       """

@@ -114,7 +114,7 @@ func TestMain(m *testing.M) {
 
 	// // Optional: Run `testing` package's logic besides godog.
 	// if st := m.Run(); st > status {
-	// 	status = st
+	//	status = st
 	// }
 
 	cleanupCompiled()

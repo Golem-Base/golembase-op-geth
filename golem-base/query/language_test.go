@@ -65,6 +65,94 @@ func TestParse(t *testing.T) {
 		)
 	})
 
+	t.Run("lessthan", func(t *testing.T) {
+		v, err := query.Parse(`name < 123`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: &query.OrExpression{
+					Left: &query.AndExpression{
+						Left: &query.EqualExpr{
+							LessThan: &query.LessThan{
+								Var:   "name",
+								Value: uint64(123),
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("lessthanequal", func(t *testing.T) {
+		v, err := query.Parse(`name <= 123`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: &query.OrExpression{
+					Left: &query.AndExpression{
+						Left: &query.EqualExpr{
+							LessOrEqualThan: &query.LessOrEqualThan{
+								Var:   "name",
+								Value: uint64(123),
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("greaterthan", func(t *testing.T) {
+		v, err := query.Parse(`name > 123`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: &query.OrExpression{
+					Left: &query.AndExpression{
+						Left: &query.EqualExpr{
+							GreaterThan: &query.GreaterThan{
+								Var:   "name",
+								Value: uint64(123),
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("greaterthanequal", func(t *testing.T) {
+		v, err := query.Parse(`name >= 123`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: &query.OrExpression{
+					Left: &query.AndExpression{
+						Left: &query.EqualExpr{
+							GreaterOrEqualThan: &query.GreaterOrEqualThan{
+								Var:   "name",
+								Value: uint64(123),
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
 	t.Run("and", func(t *testing.T) {
 		v, err := query.Parse(`name = 123 && name2 = "abc"`)
 		require.NoError(t, err)
@@ -83,7 +171,6 @@ func TestParse(t *testing.T) {
 						},
 						Right: []*query.AndRHS{
 							{
-								Op: "&&",
 								Expr: &query.EqualExpr{
 									Assign: &query.Equality{
 										Var: "name2",
@@ -120,7 +207,6 @@ func TestParse(t *testing.T) {
 					},
 					Right: []*query.OrRHS{
 						{
-							Op: "||",
 							Expr: &query.AndExpression{
 								Left: &query.EqualExpr{
 									Assign: &query.Equality{
@@ -162,7 +248,6 @@ func TestParse(t *testing.T) {
 									},
 									Right: []*query.OrRHS{
 										{
-											Op: "||",
 											Expr: &query.AndExpression{
 												Left: &query.EqualExpr{
 													Assign: &query.Equality{
@@ -180,7 +265,6 @@ func TestParse(t *testing.T) {
 						},
 						Right: []*query.AndRHS{
 							{
-								Op: "&&",
 								Expr: &query.EqualExpr{
 									Assign: &query.Equality{
 										Var: "name3",
@@ -194,7 +278,6 @@ func TestParse(t *testing.T) {
 					},
 					Right: []*query.OrRHS{
 						{
-							Op: "||",
 							Expr: &query.AndExpression{
 								Left: &query.EqualExpr{
 									Assign: &query.Equality{

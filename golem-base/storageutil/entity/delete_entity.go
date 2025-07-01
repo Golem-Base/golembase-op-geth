@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/numericalannotationindex"
 )
 
 func Delete(access StateAccess, toDelete common.Hash) error {
@@ -41,12 +42,9 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 	}
 
 	for _, numericAnnotation := range md.NumericAnnotations {
-		setKeys := annotationindex.NumericAnnotationIndexKey(numericAnnotation.Key, numericAnnotation.Value)
-		err := keyset.RemoveValue(
-			access,
-			setKeys,
-			toDelete,
-		)
+		ix := numericalannotationindex.New(access, numericAnnotation.Key, common.Hash{})
+		err := ix.Delete(numericAnnotation.Value, toDelete)
+
 		if err != nil {
 			return fmt.Errorf("failed to remove key %s from the numeric annotation list: %w", toDelete, err)
 		}
