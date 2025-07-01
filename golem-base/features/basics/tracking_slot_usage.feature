@@ -28,3 +28,9 @@ Feature: Tracking slot usage
 		And I delete the entity
 		And I get the number of used slots
 		Then the number of used slots should be 0
+
+	Scenario: Expiring an entity
+		Given there is an entity that will expire in the next block
+		When there is a new block
+		And I get the number of used slots
+		Then the number of used slots should be 0
