@@ -19,6 +19,7 @@ import (
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
@@ -170,6 +171,11 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the expired entities should be deleted$`, theExpiredEntitiesShouldBeDeleted)
 	ctx.Step(`^there are two entities that will expire in the next block$`, thereAreTwoEntitiesThatWillExpireInTheNextBlock)
 	ctx.Step(`^I search for entities of an owner$`, iSearchForEntitiesOfAnOwner)
+	ctx.Step(`^a new Golem Base instance$`, aNewGolemBaseInstance)
+	ctx.Step(`^I delete the entity$`, iDeleteTheEntity)
+	ctx.Step(`^I get the number of used slots$`, iGetTheNumberOfUsedSlots)
+	ctx.Step(`^the number of used slots should be (\d+)$`, theNumberOfUsedSlotsShouldBe)
+	ctx.Step(`^I update the entity$`, iUpdateTheEntity)
 
 }
 
@@ -1392,5 +1398,72 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	}
 
 	w.SearchResult = res
+func aNewGolemBaseInstance(ctx context.Context) error {
+	// The Golem Base instance is already set up in the test framework
+	return nil
+}
+
+func iDeleteTheEntity(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	_, err := w.DeleteEntity(
+		ctx,
+		w.CreatedEntityKey,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete entity: %w", err)
+	}
+
+	return nil
+}
+
+func iGetTheNumberOfUsedSlots(ctx context.Context) error {
+	// This step just triggers the action - actual checking happens in the verification step
+	return nil
+}
+
+func theNumberOfUsedSlotsShouldBe(ctx context.Context, expected int) error {
+	w := testutil.GetWorld(ctx)
+
+	var usedSlots hexutil.Big
+	err := w.GethInstance.RPCClient.CallContext(ctx, &usedSlots, "golembase_getNumberOfUsedSlots")
+	if err != nil {
+		return fmt.Errorf("failed to get used slots: %w", err)
+	}
+
+	if int(usedSlots.ToInt().Int64()) != expected {
+		return fmt.Errorf("expected %d used slots, but got %d", expected, usedSlots.ToInt().Int64())
+	}
+
+	return nil
+}
+
+func iUpdateTheEntity(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	_, err := w.UpdateEntity(
+		ctx,
+		w.CreatedEntityKey,
+		100,
+		[]byte("updated payload"),
+		[]entity.StringAnnotation{
+			{
+				Key:   "updated_key",
+				Value: "updated_value",
+			},
+		},
+		[]entity.NumericAnnotation{
+			{
+				Key:   "updated_number",
+				Value: 99,
+			},
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update entity: %w", err)
+	}
+
 	return nil
 }
