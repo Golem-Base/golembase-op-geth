@@ -279,7 +279,7 @@ func (g *GethInstance) createAccountAndTransferFunds(ctx context.Context, amount
 
 	// Wait for transaction to be mined
 	var receipt *types.Receipt
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 15; i++ {
 		receipt, err = g.ETHClient.TransactionReceipt(ctx, txHash)
 		if err == nil {
 			break
