@@ -174,10 +174,13 @@ func (e *Ownership) Evaluate(ds DataSource) ([]common.Hash, error) {
 	if common.IsHexAddress(*e.Owner) {
 		address := common.HexToAddress(*e.Owner)
 		return ds.GetKeysForOwner(address)
-	} else {
-		return nil, fmt.Errorf("invalid value for owner, expected 20-byte hex string, got: %s",
-			*e.Owner)
 	}
+
+	return nil, fmt.Errorf(
+		"invalid value for owner, expected 20-byte hex string, got: %s",
+		*e.Owner,
+	)
+
 }
 
 // Equality represents a simple equality (e.g. name = 123).
