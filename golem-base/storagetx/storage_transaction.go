@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/log"
@@ -252,10 +253,16 @@ func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, sender
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode storage transaction: %w", err)
 	}
-	logs, err := tx.Run(blockNumber, txHash, sender, access)
+
+	st := storageaccounting.NewSlotUsageCounter(access)
+
+	logs, err := tx.Run(blockNumber, txHash, sender, st)
 	if err != nil {
 		log.Error("Failed to run storage transaction", "error", err)
 		return nil, fmt.Errorf("failed to run storage transaction: %w", err)
 	}
+
+	st.UpdateUsedSlotsForGolemBase()
+
 	return logs, nil
 }

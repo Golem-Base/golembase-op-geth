@@ -9,12 +9,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
 
-func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) ([]*types.Log, error) {
+func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (_ []*types.Log, err error) {
 
 	// create the golem base storage processor address if it doesn't exist
 	// this is needed to be able to use the state access interface
@@ -26,9 +27,17 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 
 	logs := []*types.Log{}
 
+	st := storageaccounting.NewSlotUsageCounter(db)
+
+	defer func() {
+		if err == nil {
+			st.UpdateUsedSlotsForGolemBase()
+		}
+	}()
+
 	deleteEntity := func(toDelete common.Hash) error {
 
-		err := entity.Delete(db, toDelete)
+		err := entity.Delete(st, toDelete)
 		if err != nil {
 			return fmt.Errorf("failed to delete entity: %w", err)
 		}
@@ -46,7 +55,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 		return nil
 	}
 
-	toDelete := slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(db, blockNumber))
+	toDelete := slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(st, blockNumber))
 
 	for _, key := range toDelete {
 		err := deleteEntity(key)

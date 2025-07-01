@@ -2,11 +2,14 @@ package eth
 
 import (
 	"fmt"
+	"math/big"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
+	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
@@ -183,4 +186,17 @@ func (api *golemBaseAPI) GetEntitiesOfOwner(owner common.Address) ([]common.Hash
 		entityKeys = make([]common.Hash, 0)
 	}
 	return entityKeys, nil
+}
+
+func (api *golemBaseAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {
+	header := api.eth.blockchain.CurrentBlock()
+	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state: %w", err)
+	}
+
+	counter := storageaccounting.GetNumberOfUsedSlots(stateDb)
+	counterAsBigInt := big.NewInt(0)
+	counter.IntoBig(&counterAsBigInt)
+	return (*hexutil.Big)(counterAsBigInt), nil
 }

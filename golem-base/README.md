@@ -95,6 +95,7 @@ The API methods are accessible through the following JSON-RPC endpoints:
 - `golembase_getEntityCount`: Returns the total number of entities in storage
 - `golembase_getAllEntityKeys`: Returns all entity keys currently in storage
 - `golembase_getEntitiesOfOwner`: Returns all entity keys owned by a specific address
+- `golembase_getNumberOfUsedSlots`: Returns the total number of storage slots currently being used
 
 ## API Functionality
 
@@ -111,6 +112,7 @@ This JSON-RPC API provides several capabilities:
    - `getEntityCount`: Returns the total number of entities in storage
    - `getAllEntityKeys`: Returns all entity keys currently in storage
    - `getEntitiesOfOwner`: Returns all entity keys owned by a specific Ethereum address
+   - `getNumberOfUsedSlots`: Returns the total number of storage slots currently being used for monitoring storage utilization
 
 3. **Query Language Support**
    - `queryEntities`: Executes queries with a custom query language, returning structured results
