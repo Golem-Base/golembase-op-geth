@@ -1398,6 +1398,10 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	}
 
 	w.SearchResult = res
+
+	return nil
+}
+
 func aNewGolemBaseInstance(ctx context.Context) error {
 	// The Golem Base instance is already set up in the test framework
 	return nil
