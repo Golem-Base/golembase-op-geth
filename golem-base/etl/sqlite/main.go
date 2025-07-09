@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/wal"
+	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/urfave/cli/v2"
 )
@@ -58,7 +59,15 @@ func main() {
 			ctx, cancel := signal.NotifyContext(c.Context, os.Interrupt)
 			defer cancel()
 
-			db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL", cfg.dbFile))
+			sql.Register("sqlite3_with_extensions",
+				&sqlite3.SQLiteDriver{
+					Extensions: []string{
+						"dbhash",
+					},
+				},
+			)
+
+			db, err := sql.Open("sqlite3_with_extensions", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL", cfg.dbFile))
 			if err != nil {
 				return fmt.Errorf("failed to open database: %w", err)
 			}
@@ -105,6 +114,7 @@ func main() {
 
 				err = autocommit.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
 					Network:                  networkID.String(),
+					LastDbHash:               "",
 					LastProcessedBlockNumber: 0,
 					LastProcessedBlockHash:   genesisHeade.Hash().String(),
 				})
@@ -121,10 +131,13 @@ func main() {
 			blockNumber := processingStatus.LastProcessedBlockNumber
 			blockHash := processingStatus.LastProcessedBlockHash
 
+			log.Info("Starting to process blocks, after block", "block", blockNumber)
 			for blockWal, err := range wal.NewIterator(ctx, cfg.walDir, uint64(blockNumber)+1, common.HexToHash(blockHash), true) {
 				if err != nil {
 					return fmt.Errorf("failed to iterate over wal: %w", err)
 				}
+
+				log.Info("processing block", "block", blockWal.BlockInfo.Number)
 
 				err = func() (err error) {
 					log.Info("processing block", "block", blockWal.BlockInfo.Number)
@@ -249,8 +262,21 @@ func main() {
 						log.Info("operation", "operation", op)
 					}
 
-					err = txDB.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
+					err = tx.Commit()
+					if err != nil {
+						return fmt.Errorf("failed to commit transaction: %w", err)
+					}
+
+					var dbHash string
+					err = db.QueryRowContext(ctx, "SELECT hashdb()").Scan(&dbHash)
+					log.Info("db hash", "dbHash", dbHash)
+					if err != nil {
+						return fmt.Errorf("failed to calculate db hash: %w", err)
+					}
+
+					err = autocommit.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
 						Network:                  networkID.String(),
+						LastDbHash:               dbHash,
 						LastProcessedBlockNumber: int64(blockWal.BlockInfo.Number),
 						LastProcessedBlockHash:   blockWal.BlockInfo.Hash.Hex(),
 					})
@@ -258,8 +284,7 @@ func main() {
 						return fmt.Errorf("failed to insert processing status: %w", err)
 					}
 
-					return tx.Commit()
-
+					return nil
 				}()
 
 				if err != nil {

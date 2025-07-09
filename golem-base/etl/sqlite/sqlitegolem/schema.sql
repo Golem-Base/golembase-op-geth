@@ -1,7 +1,8 @@
 CREATE TABLE processing_status (
   network TEXT NOT NULL PRIMARY KEY,
   last_processed_block_number INTEGER NOT NULL,
-  last_processed_block_hash TEXT NOT NULL
+  last_processed_block_hash TEXT NOT NULL,
+  last_db_hash TEXT NOT NULL
 );
 
 CREATE TABLE entities (

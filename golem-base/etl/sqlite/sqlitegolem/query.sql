@@ -32,13 +32,13 @@ DELETE FROM numeric_annotations WHERE entity_key = ?;
 UPDATE entities SET expires_at = ? WHERE key = ?;
 
 -- name: GetProcessingStatus :one
-SELECT last_processed_block_number, last_processed_block_hash FROM processing_status WHERE network = ?;
+SELECT last_processed_block_number, last_processed_block_hash, last_db_hash FROM processing_status WHERE network = ?;
 
 -- name: UpdateProcessingStatus :exec
-UPDATE processing_status SET last_processed_block_number = ?, last_processed_block_hash = ? WHERE network = ?;
+UPDATE processing_status SET last_processed_block_number = ?, last_processed_block_hash = ?, last_db_hash = ? WHERE network = ?;
 
 -- name: InsertProcessingStatus :exec
-INSERT INTO processing_status (network, last_processed_block_number, last_processed_block_hash) VALUES (?, ?, ?);
+INSERT INTO processing_status (network, last_processed_block_number, last_processed_block_hash, last_db_hash) VALUES (?, ?, ?, ?);
 
 -- name: HasProcessingStatus :one
 SELECT COUNT(*) > 0 FROM processing_status WHERE network = ?;
