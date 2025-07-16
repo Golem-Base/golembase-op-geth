@@ -20,12 +20,12 @@
       ...
     }@inputs:
     let
-      eachSystem = f: nixpkgs.lib.genAttrs (import systems) (system: f system nixpkgs.legacyPackages.${system});
+      eachSystem =
+        f: nixpkgs.lib.genAttrs (import systems) (system: f system nixpkgs.legacyPackages.${system});
     in
     {
       packages = eachSystem (
-        _system:
-        pkgs:
+        _system: pkgs:
         let
           inherit (pkgs) lib;
         in
@@ -65,30 +65,36 @@
         }
       );
 
-      devShells = eachSystem (system: pkgs: {
-        default = pkgs.mkShell {
-          shellHook = ''
-            # Set here the env vars you want to be available in the shell
-          '';
-          hardeningDisable = [ "all" ];
+      devShells = eachSystem (
+        system: pkgs: {
+          default = pkgs.mkShell {
+            shellHook = ''
+              # Set here the env vars you want to be available in the shell
+            '';
+            hardeningDisable = [ "all" ];
 
-          packages = with pkgs; [
-            go
-            go-tools # staticccheck
-            gopls # lsp
-            gotools # goimports, ...
-            shellcheck
-            sqlc
-            sqlite
-            overmind
-            mongosh
-            openssl
-            goreleaser
-          ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux [
-            # For podman networking
-            slirp4netns
-          ] ++ [ rpcplorer.packages.${system}.default ] ;
-        };
-      });
+            packages =
+              with pkgs;
+              [
+                go
+                go-tools # staticccheck
+                gopls # lsp
+                gotools # goimports, ...
+                shellcheck
+                sqlc
+                sqlite
+                overmind
+                mongosh
+                openssl
+                goreleaser
+              ]
+              ++ lib.optional pkgs.stdenv.hostPlatform.isLinux [
+                # For podman networking
+                slirp4netns
+              ]
+              ++ [ rpcplorer.packages.${system}.default ];
+          };
+        }
+      );
     };
 }
