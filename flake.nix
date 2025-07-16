@@ -1,7 +1,7 @@
 {
   description = "Golem Base L3 Store Prototype";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
 
     systems.url = "github:nix-systems/default";
 
@@ -12,16 +12,13 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      systems,
-      rpcplorer,
-      ...
-    }@inputs:
+    inputs:
     let
       eachSystem =
-        f: nixpkgs.lib.genAttrs (import systems) (system: f system nixpkgs.legacyPackages.${system});
+        f:
+        inputs.nixpkgs.lib.genAttrs (import inputs.systems) (
+          system: f system inputs.nixpkgs.legacyPackages.${system}
+        );
     in
     {
       packages = eachSystem (
@@ -92,7 +89,7 @@
                 # For podman networking
                 slirp4netns
               ]
-              ++ [ rpcplorer.packages.${system}.default ];
+              ++ [ inputs.rpcplorer.packages.${system}.default ];
           };
         }
       );
