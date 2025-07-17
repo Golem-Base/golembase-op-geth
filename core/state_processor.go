@@ -27,6 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -144,11 +146,63 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
+
 	if hooks := evm.Config.Tracer; hooks != nil {
+
+		if tx.To() != nil && *tx.To() == address.GolemBaseStorageProcessorAddress {
+
+			logs, err := storagetx.ExecuteTransaction(
+				tx.Data(),
+				blockNumber.Uint64(),
+				blockHash,
+				msg.From,
+				statedb,
+			)
+
+			status := types.ReceiptStatusSuccessful
+			if err != nil {
+				status = types.ReceiptStatusFailed
+			}
+
+			fakeReceipt := &types.Receipt{
+				GasUsed:     0,
+				Logs:        logs,
+				TxHash:      tx.Hash(),
+				Status:      status,
+				Bloom:       types.Bloom{},
+				BlockHash:   blockHash,
+				BlockNumber: blockNumber,
+			}
+
+			if hooks.OnTxStart != nil {
+				hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
+			}
+
+			if hooks.OnEnter != nil {
+				hooks.OnEnter(0, byte(vm.CALL), msg.From, address.GolemBaseStorageProcessorAddress, tx.Data(), tx.Gas(), msg.Value)
+			}
+
+			if hooks.OnLog != nil {
+				for _, log := range fakeReceipt.Logs {
+					hooks.OnLog(log)
+				}
+			}
+
+			if hooks.OnExit != nil {
+				hooks.OnExit(0, []byte{}, 0, nil, false)
+			}
+
+			if hooks.OnTxEnd != nil {
+				hooks.OnTxEnd(fakeReceipt, nil)
+			}
+			return fakeReceipt, nil
+		}
+
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		if hooks.OnTxEnd != nil {
+			// fmt.Println("OnTxEnd", receipt, err)
 			defer func() { hooks.OnTxEnd(receipt, err) }()
 		}
 	}

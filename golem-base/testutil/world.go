@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -19,6 +20,7 @@ type World struct {
 	CreatedEntityKey       common.Hash
 	SecondCreatedEntityKey common.Hash
 	LastError              error
+	LastTrace              json.RawMessage
 }
 
 func NewWorld(ctx context.Context, gethPath string) (*World, error) {

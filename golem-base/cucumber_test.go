@@ -3,6 +3,7 @@ package golembase_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -176,6 +177,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I get the number of used slots$`, iGetTheNumberOfUsedSlots)
 	ctx.Step(`^the number of used slots should be (\d+)$`, theNumberOfUsedSlotsShouldBe)
 	ctx.Step(`^I update the entity$`, iUpdateTheEntity)
+	ctx.Step(`^I trace the transaction that created the entity$`, iTraceTheTransactionThatCreatedTheEntity)
+	ctx.Step(`^the trace should be empty$`, theTraceShouldBeEmpty)
 
 }
 
@@ -1467,6 +1470,53 @@ func iUpdateTheEntity(ctx context.Context) error {
 
 	if err != nil {
 		return fmt.Errorf("failed to update entity: %w", err)
+	}
+
+	return nil
+}
+
+func iTraceTheTransactionThatCreatedTheEntity(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	receipt := w.LastReceipt
+
+	txHash := receipt.TxHash
+
+	trace := json.RawMessage{}
+
+	tracerOptions := map[string]interface{}{
+		"tracer":       "callTracer",
+		"tracerConfig": map[string]interface{}{"withLog": true},
+	}
+
+	err := w.GethInstance.RPCClient.CallContext(ctx, &trace, "debug_traceTransaction", txHash.Hex(), tracerOptions)
+
+	if err != nil {
+		return fmt.Errorf("failed to trace transaction: %w", err)
+	}
+
+	w.LastTrace = trace
+
+	return nil
+}
+
+func theTraceShouldBeEmpty(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	type trace struct {
+		Calls json.RawMessage `json:"calls"`
+	}
+
+	t := trace{}
+
+	fmt.Println(string(w.LastTrace))
+	err := json.Unmarshal(w.LastTrace, &t)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal trace: %w", err)
+	}
+
+	if len(t.Calls) != 0 {
+		return fmt.Errorf("expected trace to be empty, but got %s", string(t.Calls))
 	}
 
 	return nil
