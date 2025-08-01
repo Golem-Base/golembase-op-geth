@@ -16,6 +16,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
+//go:generate protoc --proto_path=proto --go_out=. --go_opt=paths=source_relative proto/storagetx/storage_transaction.proto
 //go:generate go run ../../rlp/rlpgen -type StorageTransaction -out gen_storage_transaction_rlp.go
 
 // GolemBaseStorageEntityCreated is the event signature for entity creation logs.
@@ -30,46 +31,6 @@ var GolemBaseStorageEntityUpdated = crypto.Keccak256Hash([]byte("GolemBaseStorag
 // GolemBaseStorageEntityBTLExtended is the event signature for extending BTL of an entity.
 var GolemBaseStorageEntityBTLExtended = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityBTLExtended(uint256,uint256,uint256)"))
 
-// StorageTransaction represents a transaction that can be applied to the storage layer.
-// It contains a list of Create operations, a list of Update operations and a list of Delete operations.
-//
-// Semantics of the transaction operations are as follows:
-//   - Create: adds new entities to the storage layer. Each entity has a BTL (number of blocks), a payload and a list of annotations. The Key of the entity is derived from the payload content, the transaction hash where the entity was created and the index of the create operation in the transaction.
-//   - Update: updates existing entities. Each entity has a key, a BTL (number of blocks), a payload and a list of annotations. If the entity does not exist, the operation fails, failing the whole transaction.
-//   - Delete: removes entities from the storage layer. If the entity does not exist, the operation fails, failing back the whole transaction.
-//
-// The transaction is atomic, meaning that all operations are applied or none are.
-//
-// Annotations are key-value pairs where the key is a string and the value is either a string or a number.
-// The key-value pairs are used to build indexes and to query the storage layer.
-// Same key can have both string and numeric annotation, but not multiple values of the same type.
-type StorageTransaction struct {
-	Create []Create      `json:"create"`
-	Update []Update      `json:"update"`
-	Delete []common.Hash `json:"delete"`
-	Extend []ExtendBTL   `json:"extend"`
-}
-
-type Create struct {
-	BTL                uint64                     `json:"btl"`
-	Payload            []byte                     `json:"payload"`
-	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
-}
-
-type Update struct {
-	EntityKey          common.Hash                `json:"entityKey"`
-	BTL                uint64                     `json:"btl"`
-	Payload            []byte                     `json:"payload"`
-	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
-}
-
-type ExtendBTL struct {
-	EntityKey      common.Hash `json:"entityKey"`
-	NumberOfBlocks uint64      `json:"numberOfBlocks"`
-}
-
 func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
 
 	defer func() {
@@ -82,7 +43,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 	storeEntity := func(key common.Hash, ap *entity.EntityMetaData, payload []byte, emitLogs bool) error {
 
-		err := entity.Store(access, key, sender, *ap, payload)
+		err := entity.Store(access, key, sender, ap, payload)
 		if err != nil {
 			return fmt.Errorf("failed to store entity: %w", err)
 		}
@@ -120,7 +81,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 		key := crypto.Keccak256Hash(txHash.Bytes(), create.Payload, paddedI)
 
 		ap := &entity.EntityMetaData{
-			Owner:              sender,
+			Owner:              sender.Bytes(),
 			ExpiresAtBlock:     blockNumber + create.BTL,
 			StringAnnotations:  create.StringAnnotations,
 			NumericAnnotations: create.NumericAnnotations,
@@ -159,12 +120,13 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for _, toDelete := range tx.Delete {
+		toDelete := common.Hash(toDelete.GetEntityKey())
 		metaData, err := entity.GetEntityMetaData(access, toDelete)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get entity meta data for delete %s: %w", toDelete.Hex(), err)
 		}
 
-		if metaData.Owner != sender {
+		if common.BytesToAddress(metaData.Owner) != sender {
 			return nil, fmt.Errorf("failed to delete entity %s: %s is not the owner", toDelete.Hex(), sender.Hex())
 		}
 
@@ -175,21 +137,21 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for _, update := range tx.Update {
-
+		entityKey := common.BytesToHash(update.EntityKey)
 		if update.BTL == 0 {
-			return nil, fmt.Errorf("update BTL is 0 for entity %s", update.EntityKey.Hex())
+			return nil, fmt.Errorf("update BTL is 0 for entity %s", entityKey.Hex())
 		}
 
-		oldMetaData, err := entity.GetEntityMetaData(access, update.EntityKey)
+		oldMetaData, err := entity.GetEntityMetaData(access, entityKey)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get entity meta data for update %s: %w", update.EntityKey.Hex(), err)
+			return nil, fmt.Errorf("failed to get entity meta data for update %s: %w", entityKey.Hex(), err)
 		}
 
-		if oldMetaData.Owner != sender {
-			return nil, fmt.Errorf("failed to update entity %s: %s is not the owner", update.EntityKey.Hex(), sender.Hex())
+		if common.BytesToAddress(oldMetaData.Owner) != sender {
+			return nil, fmt.Errorf("failed to update entity %s: %s is not the owner", entityKey.Hex(), sender.Hex())
 		}
 
-		err = deleteEntity(update.EntityKey, false)
+		err = deleteEntity(entityKey, false)
 		if err != nil {
 			return nil, err
 		}
@@ -201,7 +163,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			Owner:              oldMetaData.Owner,
 		}
 
-		err = storeEntity(update.EntityKey, ap, update.Payload, false)
+		err = storeEntity(entityKey, ap, update.Payload, false)
 
 		if err != nil {
 			return nil, err
@@ -213,7 +175,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 		logs = append(logs, &types.Log{
 			Address:     address.GolemBaseStorageProcessorAddress,
-			Topics:      []common.Hash{GolemBaseStorageEntityUpdated, update.EntityKey},
+			Topics:      []common.Hash{GolemBaseStorageEntityUpdated, entityKey},
 			Data:        data,
 			BlockNumber: blockNumber,
 		})
@@ -221,9 +183,10 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for _, extend := range tx.Extend {
-		newExpiresAtBlock, err := entity.ExtendBTL(access, extend.EntityKey, extend.NumberOfBlocks)
+		entityKey := common.BytesToHash(extend.EntityKey)
+		newExpiresAtBlock, err := entity.ExtendBTL(access, entityKey, extend.NumberOfBlocks)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extend BTL of entity %s: %w", extend.EntityKey.Hex(), err)
+			return nil, fmt.Errorf("failed to extend BTL of entity %s: %w", entityKey.Hex(), err)
 		}
 
 		oldExpiresAtBlock := newExpiresAtBlock - extend.NumberOfBlocks
@@ -238,7 +201,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 		logs = append(logs, &types.Log{
 			Address:     address.GolemBaseStorageProcessorAddress,
-			Topics:      []common.Hash{GolemBaseStorageEntityBTLExtended, extend.EntityKey},
+			Topics:      []common.Hash{GolemBaseStorageEntityBTLExtended, entityKey},
 			Data:        data,
 			BlockNumber: blockNumber,
 		})

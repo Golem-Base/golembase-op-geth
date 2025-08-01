@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package entity;
+
+option go_package = "github.com/ethereum/go-ethereum/golem-base/storageutil/entity";
+
+// EntityMetaData represents information about an entity that is currently active in the storage layer.
+// This is what stored in the state.
+// It contains a BTL (number of blocks) and a list of annotations.
+// The Key of the entity is derived from the payload content and the transaction hash where the entity was created.
+message EntityMetaData {
+  uint64 expires_at_block = 1;
+  repeated StringAnnotation string_annotations = 2;
+  repeated NumericAnnotation numeric_annotations = 3;
+  bytes owner = 4;
+}
+
+message StringAnnotation {
+  string key = 1;
+  string value = 2;
+}
+
+message NumericAnnotation {
+  string key = 1;
+  uint64 value = 2;
+}

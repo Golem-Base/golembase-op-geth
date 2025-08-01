@@ -49,8 +49,8 @@ func (w *World) UpdateEntityBySecondAccount(
 	key common.Hash,
 	btl uint64,
 	payload []byte,
-	stringAnnotations []entity.StringAnnotation,
-	numericAnnotations []entity.NumericAnnotation,
+	stringAnnotations []*entity.StringAnnotation,
+	numericAnnotations []*entity.NumericAnnotation,
 ) (*types.Receipt, error) {
 
 	receipt, err := w.updateEntity(
@@ -76,8 +76,8 @@ func (w *World) updateEntity(
 	account *FundedAccount,
 	btl uint64,
 	payload []byte,
-	stringAnnotations []entity.StringAnnotation,
-	numericAnnotations []entity.NumericAnnotation,
+	stringAnnotations []*entity.StringAnnotation,
+	numericAnnotations []*entity.NumericAnnotation,
 ) (*types.Receipt, error) {
 
 	client := w.GethInstance.ETHClient
@@ -95,9 +95,9 @@ func (w *World) updateEntity(
 
 	// Create a StorageTransaction with a single Create operation
 	storageTx := &storagetx.StorageTransaction{
-		Update: []storagetx.Update{
+		Update: []*storagetx.Update{
 			{
-				EntityKey:          key,
+				EntityKey:          key.Bytes(),
 				BTL:                btl,
 				Payload:            payload,
 				StringAnnotations:  stringAnnotations,

@@ -34,9 +34,9 @@ func (w *World) ExtendBTL(
 
 	// Create a StorageTransaction with a single Create operation
 	storageTx := &storagetx.StorageTransaction{
-		Extend: []storagetx.ExtendBTL{
+		Extend: []*storagetx.ExtendBTL{
 			{
-				EntityKey:      key,
+				EntityKey:      key.Bytes(),
 				NumberOfBlocks: btl,
 			},
 		},

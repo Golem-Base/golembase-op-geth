@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package storagetx;
+
+import "storageutil/entity/active_payload.proto";
+
+option go_package = "github.com/ethereum/go-ethereum/golem-base/storagetx";
+
+// StorageTransaction represents a transaction that can be applied to the storage layer.
+// It contains a list of Create operations, a list of Update operations and a list of Delete operations.
+//
+// Semantics of the transaction operations are as follows:
+//   - Create: adds new entities to the storage layer. Each entity has a BTL (number of blocks), a payload and a list of annotations. The Key of the entity is derived from the payload content, the transaction hash where the entity was created and the index of the create operation in the transaction.
+//   - Update: updates existing entities. Each entity has a key, a BTL (number of blocks), a payload and a list of annotations. If the entity does not exist, the operation fails, failing the whole transaction.
+//   - Delete: removes entities from the storage layer. If the entity does not exist, the operation fails, failing back the whole transaction.
+//   - ExtendBTL: extends the life of some entity by the specified BTL (number of blocks).
+//
+// The transaction is atomic, meaning that all operations are applied or none are.
+//
+// Annotations are key-value pairs where the key is a string and the value is either a string or a number.
+// The key-value pairs are used to build indexes and to query the storage layer.
+// Same key can have both string and numeric annotation, but not multiple values of the same type.
+message StorageTransaction {
+  repeated Create create = 1;
+  repeated Update update = 2;
+  repeated Delete delete = 3;
+  repeated ExtendBTL extend = 4;
+}
+
+message Create {
+  uint64 BTL = 1;
+  bytes payload = 2;
+  repeated entity.StringAnnotation string_annotations = 3;
+  repeated entity.NumericAnnotation numeric_annotations = 4;
+}
+
+message Update {
+  bytes entity_key = 1;
+  uint64 BTL = 2;
+  bytes payload = 3;
+  repeated entity.StringAnnotation string_annotations = 4;
+  repeated entity.NumericAnnotation numeric_annotations = 5;
+}
+
+message ExtendBTL {
+  bytes entity_key = 1;
+  uint64 number_of_blocks = 2;
+}
+
+message Delete {
+  bytes entity_key = 1;
+}

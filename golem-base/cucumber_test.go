@@ -222,13 +222,13 @@ func submitATransactionToCreateAnEntity(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]entity.NumericAnnotation{
+		[]*entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -387,7 +387,7 @@ func iStoreAnEntityWithAStringAnnotation(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
@@ -411,8 +411,8 @@ func iStoreAnEntityWithANumericalAnnotation(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]entity.StringAnnotation{},
-		[]entity.NumericAnnotation{
+		[]*entity.StringAnnotation{},
+		[]*entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -431,10 +431,10 @@ func iStoreAnEntityWithANumericalAnnotation(ctx context.Context) error {
 func iHaveAnEntityWithStringAnnotations(ctx context.Context, payload string, annotationsTable *godog.Table) error {
 	w := testutil.GetWorld(ctx)
 
-	stringAnnotations := []entity.StringAnnotation{}
+	stringAnnotations := []*entity.StringAnnotation{}
 
 	for _, row := range annotationsTable.Rows {
-		stringAnnotations = append(stringAnnotations, entity.StringAnnotation{
+		stringAnnotations = append(stringAnnotations, &entity.StringAnnotation{
 			Key:   row.Cells[0].Value,
 			Value: row.Cells[1].Value,
 		})
@@ -445,7 +445,7 @@ func iHaveAnEntityWithStringAnnotations(ctx context.Context, payload string, ann
 		100,
 		[]byte("test payload"),
 		stringAnnotations,
-		[]entity.NumericAnnotation{},
+		[]*entity.NumericAnnotation{},
 	)
 
 	if err != nil {
@@ -491,14 +491,14 @@ func iShouldFindEntity(ctx context.Context, count int) error {
 func iHaveAnEntityWithNumericAnnotations(ctx context.Context, payload string, annotationsTable *godog.Table) error {
 	w := testutil.GetWorld(ctx)
 
-	numericAnnotations := []entity.NumericAnnotation{}
+	numericAnnotations := []*entity.NumericAnnotation{}
 
 	for _, row := range annotationsTable.Rows {
 		val, err := strconv.ParseUint(row.Cells[1].Value, 10, 64)
 		if err != nil {
 			return fmt.Errorf("failed to parse numeric value: %w", err)
 		}
-		numericAnnotations = append(numericAnnotations, entity.NumericAnnotation{
+		numericAnnotations = append(numericAnnotations, &entity.NumericAnnotation{
 			Key:   row.Cells[0].Value,
 			Value: val,
 		})
@@ -508,7 +508,7 @@ func iHaveAnEntityWithNumericAnnotations(ctx context.Context, payload string, an
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]entity.StringAnnotation{},
+		[]*entity.StringAnnotation{},
 		numericAnnotations,
 	)
 
@@ -554,13 +554,13 @@ func iHaveCreatedAnEntity(ctx context.Context) error {
 		ctx,
 		100,
 		[]byte("test payload"),
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]entity.NumericAnnotation{
+		[]*entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -793,13 +793,13 @@ func submitATransactionToCreateAnEntityOfK(ctx context.Context, kilobytes int) e
 		ctx,
 		200,
 		payload,
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]entity.NumericAnnotation{
+		[]*entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -915,13 +915,13 @@ func thereIsAnEntityThatWillExpireInTheNextBlock(ctx context.Context) error {
 		ctx,
 		1,
 		[]byte("test payload"),
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]entity.NumericAnnotation{
+		[]*entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -1185,14 +1185,15 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
 	var ap entity.EntityMetaData
+	owner := common.BytesToAddress(ap.Owner)
 
 	err := w.GethInstance.RPCClient.CallContext(ctx, &ap, "golembase_getEntityMetaData", w.CreatedEntityKey.Hex())
 	if err != nil {
 		return fmt.Errorf("failed to get entity metadata: %w", err)
 	}
 
-	if ap.Owner != w.FundedAccount.Address {
-		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ap.Owner.Hex())
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), owner.Hex())
 	}
 
 	return nil
@@ -1296,10 +1297,10 @@ func iSubmitATransactionToUpdateTheEntityByNonowner(ctx context.Context) error {
 		w.CreatedEntityKey,
 		100,
 		[]byte("new payload"),
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{Key: "test_key", Value: "test_value"},
 		},
-		[]entity.NumericAnnotation{},
+		[]*entity.NumericAnnotation{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to send tx to update entity: %w", err)
@@ -1315,13 +1316,13 @@ func thereAreTwoEntitiesThatWillExpireInTheNextBlock(ctx context.Context) error 
 		ctx,
 		2,
 		[]byte("test payload"),
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value",
 			},
 		},
-		[]entity.NumericAnnotation{
+		[]*entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,
@@ -1340,13 +1341,13 @@ func thereAreTwoEntitiesThatWillExpireInTheNextBlock(ctx context.Context) error 
 		ctx,
 		1,
 		[]byte("test payload2"),
-		[]entity.StringAnnotation{
+		[]*entity.StringAnnotation{
 			{
 				Key:   "test_key",
 				Value: "test_value2",
 			},
 		},
-		[]entity.NumericAnnotation{
+		[]*entity.NumericAnnotation{
 			{
 				Key:   "test_number",
 				Value: 42,

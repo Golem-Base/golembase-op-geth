@@ -10,7 +10,7 @@ import (
 )
 
 func TestActivePayloadRLP(t *testing.T) {
-	tests := []struct {
+	tests := []*struct {
 		name    string
 		payload entity.EntityMetaData
 	}{
@@ -18,19 +18,19 @@ func TestActivePayloadRLP(t *testing.T) {
 			name: "empty payload",
 			payload: entity.EntityMetaData{
 				ExpiresAtBlock:     0,
-				StringAnnotations:  []entity.StringAnnotation{},
-				NumericAnnotations: []entity.NumericAnnotation{},
+				StringAnnotations:  []*entity.StringAnnotation{},
+				NumericAnnotations: []*entity.NumericAnnotation{},
 			},
 		},
 		{
 			name: "payload with data",
 			payload: entity.EntityMetaData{
 				ExpiresAtBlock: 12345,
-				StringAnnotations: []entity.StringAnnotation{
+				StringAnnotations: []*entity.StringAnnotation{
 					{Key: "key1", Value: "value1"},
 					{Key: "key2", Value: "value2"},
 				},
-				NumericAnnotations: []entity.NumericAnnotation{
+				NumericAnnotations: []*entity.NumericAnnotation{
 					{Key: "num1", Value: 42},
 					{Key: "num2", Value: 123},
 				},

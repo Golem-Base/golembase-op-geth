@@ -30,7 +30,7 @@ func ExtendBTL(
 		return 0, fmt.Errorf("failed to add to entities to expire at block %d: %w", entity.ExpiresAtBlock, err)
 	}
 
-	err = StoreEntityMetaData(access, entityKey, *entity)
+	err = StoreEntityMetaData(access, entityKey, entity)
 	if err != nil {
 		return 0, fmt.Errorf("failed to store entity meta data: %w", err)
 	}

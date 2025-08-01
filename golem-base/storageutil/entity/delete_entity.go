@@ -57,7 +57,7 @@ func Delete(access StateAccess, toDelete common.Hash) error {
 		return fmt.Errorf("failed to remove entity from entities to expire: %w", err)
 	}
 
-	err = entitiesofowner.RemoveEntity(access, md.Owner, toDelete)
+	err = entitiesofowner.RemoveEntity(access, common.BytesToAddress(md.Owner), toDelete)
 	if err != nil {
 		return fmt.Errorf("failed to remove entity from owner entities: %w", err)
 	}

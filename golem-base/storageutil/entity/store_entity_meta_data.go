@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func StoreEntityMetaData(access StateAccess, key common.Hash, emd EntityMetaData) error {
+func StoreEntityMetaData(access StateAccess, key common.Hash, emd *EntityMetaData) error {
 	hash := crypto.Keccak256Hash(EntityMetaDataSalt, key[:])
 
 	buf := new(bytes.Buffer)

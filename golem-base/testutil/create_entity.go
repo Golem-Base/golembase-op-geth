@@ -17,8 +17,8 @@ func (w *World) CreateEntity(
 	ctx context.Context,
 	btl uint64,
 	payload []byte,
-	stringAnnotations []entity.StringAnnotation,
-	numericAnnotations []entity.NumericAnnotation,
+	stringAnnotations []*entity.StringAnnotation,
+	numericAnnotations []*entity.NumericAnnotation,
 ) (*types.Receipt, error) {
 
 	client := w.GethInstance.ETHClient
@@ -36,7 +36,7 @@ func (w *World) CreateEntity(
 
 	// Create a StorageTransaction with a single Create operation
 	storageTx := &storagetx.StorageTransaction{
-		Create: []storagetx.Create{
+		Create: []*storagetx.Create{
 			{
 				BTL:                btl,
 				Payload:            payload,

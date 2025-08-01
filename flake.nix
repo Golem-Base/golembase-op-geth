@@ -84,6 +84,10 @@
             mongosh
             openssl
             goreleaser
+            protobuf
+            buf # protobuf dev tools
+            protoc-gen-go
+            protoc-gen-go-grpc
           ] ++ lib.optional pkgs.stdenv.hostPlatform.isLinux [
             # For podman networking
             slirp4netns

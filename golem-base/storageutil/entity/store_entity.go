@@ -25,7 +25,7 @@ func Store(
 	access StateAccess,
 	key common.Hash,
 	sender common.Address,
-	emd EntityMetaData,
+	emd *EntityMetaData,
 	payload []byte,
 ) error {
 
