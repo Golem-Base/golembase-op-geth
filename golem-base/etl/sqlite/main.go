@@ -59,10 +59,70 @@ func main() {
 			ctx, cancel := signal.NotifyContext(c.Context, os.Interrupt)
 			defer cancel()
 
+			stringAnnotationsHashes := []common.Hash{}
+			numericAnnotationsHashes := []common.Hash{}
+			entityHashes := []common.Hash{}
+			dbHash := common.Hash{}
+			lastCommitHash := common.Hash{}
+
 			sql.Register("sqlite3_with_extensions",
 				&sqlite3.SQLiteDriver{
-					Extensions: []string{
-						"dbhash",
+					ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+						conn.RegisterPreUpdateHook(func(data sqlite3.SQLitePreUpdateData) {
+							log.Info("pre update hook from GO", "op", data.Op, "table", data.TableName, "rowid", data.NewRowID, "Count: ", data.Count())
+							// create array refering to columns
+							dest := make([]interface{}, data.Count())
+							if data.Op == sqlite3.SQLITE_INSERT {
+								err := data.New(dest...)
+								if err != nil {
+									fmt.Printf("Error calling data.New: %v\n", err)
+									return
+								}
+							}
+							if data.Op == sqlite3.SQLITE_DELETE {
+								err := data.Old(dest...)
+								if err != nil {
+									fmt.Printf("Error calling data.Old: %v\n", err)
+									return
+								}
+							}
+							rawHash := flattenRawToHash(dest)
+							log.Info("dest", "rawHash", fmt.Sprintf("%x", rawHash))
+							if data.TableName == "string_annotations" {
+								stringAnnotationsHashes = append(stringAnnotationsHashes, common.BytesToHash(rawHash))
+							}
+							if data.TableName == "numeric_annotations" {
+								numericAnnotationsHashes = append(numericAnnotationsHashes, common.BytesToHash(rawHash))
+							}
+							if data.TableName == "entities" {
+								entityHashes = append(entityHashes, common.BytesToHash(rawHash))
+							}
+						})
+						conn.RegisterCommitHook(func() int {
+							log.Info("commit hook from GO", "string_annotations_hashes", len(stringAnnotationsHashes), "numeric_annotations_hashes", len(numericAnnotationsHashes), "entity_hashes", len(entityHashes))
+
+							if len(entityHashes) == 0 {
+								return 0
+							}
+
+							// calculate hash of all hashes
+							// first calculate hash of all entries in string_annotations_hashes as XOR of all hashes
+							stringAnnotationsHash := xorHashes(stringAnnotationsHashes)
+							numericAnnotationsHash := xorHashes(numericAnnotationsHashes)
+							entityHash := xorHashes(entityHashes)
+							log.Info("string_annotations_hash", "string_annotations_hash", fmt.Sprintf("%x", stringAnnotationsHash))
+							log.Info("numeric_annotations_hash", "numeric_annotations_hash", fmt.Sprintf("%x", numericAnnotationsHash))
+							log.Info("entity_hash", "entity_hash", fmt.Sprintf("%x", entityHash))
+
+							lastCommitHash = xorHashes([]common.Hash{stringAnnotationsHash, numericAnnotationsHash, entityHash})
+
+							// then calculate hash of all entries in numeric_annotations_hashes as XOR of all hashes
+							stringAnnotationsHashes = []common.Hash{}
+							numericAnnotationsHashes = []common.Hash{}
+							entityHashes = []common.Hash{}
+							return 0
+						})
+						return nil
 					},
 				},
 			)
@@ -72,6 +132,13 @@ func main() {
 				return fmt.Errorf("failed to open database: %w", err)
 			}
 			defer db.Close()
+
+			dbHash, err = ComputeDBHash(db)
+			if err != nil {
+				log.Error("failed to compute db hash", "error", err)
+			} else {
+				log.Info("Computed dbHash", "dbHash", dbHash.Hex())
+			}
 
 			var tableName string
 			err = db.QueryRowContext(ctx, `
@@ -130,6 +197,7 @@ func main() {
 
 			blockNumber := processingStatus.LastProcessedBlockNumber
 			blockHash := processingStatus.LastProcessedBlockHash
+			dbHash = common.HexToHash(processingStatus.LastDbHash)
 
 			log.Info("Starting to process blocks, after block", "block", blockNumber)
 			for blockWal, err := range wal.NewIterator(ctx, cfg.walDir, uint64(blockNumber)+1, common.HexToHash(blockHash), true) {
@@ -266,17 +334,18 @@ func main() {
 					if err != nil {
 						return fmt.Errorf("failed to commit transaction: %w", err)
 					}
-
-					var dbHash string
-					err = db.QueryRowContext(ctx, "SELECT hashdb()").Scan(&dbHash)
-					log.Info("db hash", "dbHash", dbHash)
-					if err != nil {
-						return fmt.Errorf("failed to calculate db hash: %w", err)
+					log.Info("Current dbHash", "dbHash", fmt.Sprintf("%x", dbHash))
+					log.Info("lastCommitHash", "lastCommitHash", fmt.Sprintf("%x", lastCommitHash))
+					if len(dbHash) == 0 {
+						dbHash = lastCommitHash
+					} else {
+						dbHash = xorHashes([]common.Hash{dbHash, lastCommitHash})
 					}
+					log.Info("New dbHash", "dbHash", fmt.Sprintf("%x", dbHash))
 
 					err = autocommit.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
 						Network:                  networkID.String(),
-						LastDbHash:               dbHash,
+						LastDbHash:               dbHash.Hex(),
 						LastProcessedBlockNumber: int64(blockWal.BlockInfo.Number),
 						LastProcessedBlockHash:   blockWal.BlockInfo.Hash.Hex(),
 					})
