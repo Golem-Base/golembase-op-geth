@@ -1,3 +1,4 @@
+// Package numericalannotationindex contains the data structure to efficiently query numerical annotations
 package numericalannotationindex
 
 import (
@@ -123,7 +124,7 @@ func (n *Node) rotateLeft() (*Node, error) {
 	// The node on the right of the old root, will become the new root
 	newRoot := ix.getNodeAt(oldRoot.right)
 	if newRoot == nil {
-		return nil, fmt.Errorf("Rotating to the left isn't possible if the node to the right is nil!")
+		return nil, fmt.Errorf("rotating to the left isn't possible if the node to the right is nil")
 	}
 	// The old root goes to the left
 	newLeft := oldRoot
@@ -143,7 +144,7 @@ func (n *Node) rotateRight() (*Node, error) {
 	// The node on the left of the old root, will become the new root
 	newRoot := ix.getNodeAt(oldRoot.left)
 	if newRoot == nil {
-		return nil, fmt.Errorf("Rotating to the right isn't possible if the node to the left is nil!")
+		return nil, fmt.Errorf("rotating to the right isn't possible if the node to the left is nil")
 	}
 	// The old root goes to the right
 	newRight := oldRoot
@@ -156,7 +157,7 @@ func (n *Node) rotateRight() (*Node, error) {
 	return newRoot, nil
 }
 
-// Return the number of entities stored in the tree that has this node as its root.
+// TreeSize returns the number of entities stored in the tree that has this node as its root.
 func (n *Node) TreeSize() uint64 {
 	return n.treeSize
 }
@@ -395,7 +396,7 @@ func (ix *annotationIndex) Add(value uint64, entityKeys ...common.Hash) error {
 			if node.priority > newRight.priority {
 				newNode, err := node.rotateLeft()
 				if err != nil {
-					return nil, fmt.Errorf("Error while adding entity to tree: %w", err)
+					return nil, fmt.Errorf("error while adding entity to tree: %w", err)
 				}
 				return newNode, nil
 			}
@@ -413,7 +414,7 @@ func (ix *annotationIndex) Add(value uint64, entityKeys ...common.Hash) error {
 			if node.priority > newLeft.priority {
 				newNode, err := node.rotateRight()
 				if err != nil {
-					return nil, fmt.Errorf("Error while adding entity to tree: %w", err)
+					return nil, fmt.Errorf("error while adding entity to tree: %w", err)
 				}
 				return newNode, nil
 			}
@@ -574,43 +575,46 @@ func (ix *annotationIndex) IterateFromTo(fromPointer *uint64, toPointer *uint64)
 		to = *toPointer
 	}
 
-	finished := false
+	var doIterate func(node *Node, yield func(common.Hash) bool) bool
+	doIterate = func(node *Node, yield func(common.Hash) bool) bool {
 
-	var doIterate func(node *Node, yield func(common.Hash) bool)
-	doIterate = func(node *Node, yield func(common.Hash) bool) {
+		finished := false
+		yield_ := func(hash common.Hash) bool {
+			finished = !yield(hash)
+			return !finished
+		}
 
 		if node != nil && !finished {
 			switch cmp.Compare(node.annotationValue, from) {
 			case 0:
-				keyset.Iterate(ix.db, node.entitySetKey)(yield)
+				keyset.Iterate(ix.db, node.entitySetKey)(yield_)
 
 				if !finished {
-					doIterate(ix.getNodeAt(node.right), yield)
+					finished = !doIterate(ix.getNodeAt(node.right), yield)
 				}
 
 			case 1:
-				doIterate(ix.getNodeAt(node.left), yield)
+				finished = !doIterate(ix.getNodeAt(node.left), yield)
 
 				if node.annotationValue <= to {
 					if !finished {
-						keyset.Iterate(ix.db, node.entitySetKey)(yield)
+						keyset.Iterate(ix.db, node.entitySetKey)(yield_)
 					}
 					if !finished {
-						doIterate(ix.getNodeAt(node.right), yield)
+						finished = !doIterate(ix.getNodeAt(node.right), yield)
 					}
 				}
 
 			case -1:
-				doIterate(ix.getNodeAt(node.right), yield)
+				finished = !doIterate(ix.getNodeAt(node.right), yield)
 			}
 		}
+
+		return !finished
 	}
 
 	return iter.Seq[common.Hash](func(yield func(common.Hash) bool) {
-		doIterate(ix.GetRootNode(), func(hash common.Hash) bool {
-			finished = !yield(hash)
-			return !finished
-		})
+		doIterate(ix.GetRootNode(), yield)
 	})
 }
 

@@ -201,7 +201,7 @@ func TestAddAndRetrieveValue(t *testing.T) {
 
 	for value := uint64(100); value < 300; value++ {
 		count := rand.UintN(50)
-		for i := uint(0); i < count; i++ {
+		for range count {
 			index.AddAndCheck(t, value, randomHash())
 		}
 	}
@@ -274,7 +274,7 @@ func TestIteration(t *testing.T) {
 	// Fill the index with other stuff
 	for value := uint64(100); value < 300; value++ {
 		count := rand.UintN(50)
-		for i := uint(0); i < count; i++ {
+		for range count {
 			index.AddAndCheck(t, value, randomHash())
 		}
 	}
@@ -332,9 +332,9 @@ func TestIterationFromManyNodes(t *testing.T) {
 	index.AddAndCheck(t, 1000, common.HexToHash("0xe1"))
 
 	// Fill the index with other stuff
-	for value := uint64(0); value < 900; value++ {
+	for value := range uint64(900) {
 		count := rand.UintN(50)
-		for i := uint(0); i < count; i++ {
+		for range count {
 			index.AddAndCheck(t, value, randomHash())
 		}
 	}
