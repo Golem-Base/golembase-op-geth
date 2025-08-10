@@ -11,3 +11,7 @@ var AnnotationSeparator = []byte("|")
 func StringAnnotationIndexKey(key, value string) common.Hash {
 	return crypto.Keccak256Hash(StringAnnotationIndexSalt, []byte(key), AnnotationSeparator, []byte(value))
 }
+
+func StringAnnotationIndexRootHash(key string) common.Hash {
+	return crypto.Keccak256Hash(StringAnnotationIndexSalt, []byte(key))
+}
