@@ -89,53 +89,53 @@ func TestAddAnnotation(t *testing.T) {
 	db := newMockStateAccess()
 	ix := NewIndex(db, "TestAddAnnotation")
 
-	ix.addEntity("test",
+	require.NoError(t, ix.addEntity("test",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
 		common.HexToHash("0xe4"),
 		common.HexToHash("0xe5"),
 		common.HexToHash("0xe6"),
-	)
-	ix.addEntity("tester",
+	))
+	require.NoError(t, ix.addEntity("tester",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
 		common.HexToHash("0xe4"),
 		common.HexToHash("0xe5"),
 		common.HexToHash("0xe6"),
-	)
-	ix.addEntity("testers",
+	))
+	require.NoError(t, ix.addEntity("testers",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
 		common.HexToHash("0xe4"),
 		common.HexToHash("0xe5"),
 		common.HexToHash("0xe6"),
-	)
-	ix.addEntity("foo",
+	))
+	require.NoError(t, ix.addEntity("foo",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
 		common.HexToHash("0xe4"),
 		common.HexToHash("0xe5"),
 		common.HexToHash("0xe6"),
-	)
-	ix.addEntity("foobar",
+	))
+	require.NoError(t, ix.addEntity("foobar",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
-	)
-	ix.addEntity("fooqar",
+	))
+	require.NoError(t, ix.addEntity("fooqar",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
-	)
-	ix.addEntity("foozar",
+	))
+	require.NoError(t, ix.addEntity("foozar",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
-	)
+	))
 	require.Equal(t, 534, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 }
 
@@ -266,28 +266,30 @@ func TestAddRemoveAnnotation(t *testing.T) {
 	db := newMockStateAccess()
 	ix := NewIndex(db, "TestAddRemoveAnnotation")
 
-	ix.addEntity("t", common.HexToHash("0xe6"))
+	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe6")))
 	require.Equal(t, 6, db.GetStorageEntryCount(storageutil.GolemDBAddress))
-	ix.addEntity("t", common.HexToHash("0xe5"))
+	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe5")))
 	require.Equal(t, 8, db.GetStorageEntryCount(storageutil.GolemDBAddress))
-	ix.removeEntity("t", common.HexToHash("0xe5"))
-	ix.removeEntity("t", common.HexToHash("0xe6"))
+
+	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe6")))
+	require.Equal(t, 6, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe5")))
 	require.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
-	ix.addEntity("t", common.HexToHash("0xe6"))
+	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe6")))
 	require.Equal(t, 6, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
-	ix.addEntity("t", common.HexToHash("0xe5"))
+	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe5")))
 	require.Equal(t, 8, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
-	ix.addEntity("testme", common.HexToHash("0xe7"))
+	require.NoError(t, ix.addEntity("testme", common.HexToHash("0xe7")))
 	require.Equal(t, 76, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
-	ix.removeEntity("t", common.HexToHash("0xe6"))
+	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe6")))
 	require.Equal(t, 74, db.GetStorageEntryCount(storageutil.GolemDBAddress))
-	ix.removeEntity("t", common.HexToHash("0xe5"))
+	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe5")))
 	require.Equal(t, 71, db.GetStorageEntryCount(storageutil.GolemDBAddress))
-	ix.removeEntity("testme", common.HexToHash("0xe7"))
+	require.NoError(t, ix.removeEntity("testme", common.HexToHash("0xe7")))
 
 	require.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 }
