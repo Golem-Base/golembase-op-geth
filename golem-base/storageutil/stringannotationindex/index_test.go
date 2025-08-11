@@ -143,6 +143,19 @@ func TestContaining(t *testing.T) {
 	db := newMockStateAccess()
 	ix := NewIndex(db, "TestContaining")
 
+	require.NoError(t, ix.addEntity("xy",
+		common.HexToHash("0xe1"),
+		common.HexToHash("0xe2"),
+	))
+	require.ElementsMatch(
+		t,
+		slices.Collect(ix.findEntitiesContaining("x")),
+		[]common.Hash{
+			common.HexToHash("0xe1"),
+			common.HexToHash("0xe2"),
+		},
+	)
+
 	require.NoError(t, ix.addEntity("test",
 		common.HexToHash("0xe1"),
 		common.HexToHash("0xe2"),
@@ -160,8 +173,6 @@ func TestContaining(t *testing.T) {
 	require.NoError(t, ix.addEntity("bar",
 		common.HexToHash("0xe7"),
 	))
-
-	//fmt.Println("Entries in storage: ", db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.ElementsMatch(
 		t,
