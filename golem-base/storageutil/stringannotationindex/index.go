@@ -34,6 +34,14 @@ const (
 	SuffixEntry
 )
 
+func findCommonPrefix(s1 string, s2 string) string {
+	prefix := strings.Builder{}
+	for i := 0; i < min(len(s1), len(s2)) && s1[i] == s2[i]; i++ {
+		prefix.WriteByte(s1[i])
+	}
+	return prefix.String()
+}
+
 func (n *node) getEntityKeySetAddress() common.Hash {
 	return crypto.Keccak256Hash(entitiesSetPrefix, []byte(n.ix.annotationKey), n.path)
 }
@@ -82,6 +90,8 @@ func (n *node) addEntity(
 	entryType EntryType,
 	entityKeys ...common.Hash) error {
 
+	fmt.Printf("addEntity: %s, %s\n", seen.String(), remaining)
+
 	if len(remaining) == 0 {
 		// We found an existing node for the annotation value, so we just add the entities to it
 		keysetAddr, err := n.getEntityKeySetAddressByType(entryType)
@@ -97,22 +107,95 @@ func (n *node) addEntity(
 		return nil
 	}
 
-	seen.WriteByte(remaining[0])
-	rest := remaining[1:]
-	childBytes := []byte{remaining[0]}
-
-	child := n.getChild(childBytes[0])
+	child := n.getChild(remaining[0])
 	if child == nil {
-		newChild, err := n.addChild(childBytes)
+		newChild, err := n.addChild([]byte(remaining))
 		if err != nil {
 			return err
 		}
 		child = newChild
 	}
 
-	child.addEntity(seen, rest, entryType, entityKeys...)
+	fmt.Println("Selected child: ", string(child.path))
 
+	childPath := string(child.path)
+	rest, found := strings.CutPrefix(remaining, childPath)
+	fmt.Println("rest: ", rest)
+	if found {
+		seen.WriteString(childPath)
+		return child.addEntity(seen, rest, entryType, entityKeys...)
+	} else {
+		prefix := findCommonPrefix(remaining, string(child.path))
+		fmt.Printf("findCommonPrefix: %s, %s, %s\n", remaining, string(child.path), prefix)
+		prefixBytes := []byte(prefix)
+
+		oldChildPath := child.path
+
+		// Set the new prefix for the child
+		child.path = prefixBytes
+		// Rewrite the prefix of the child at character prefix[0]
+		n.ix.db.SetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(prefix[0]), common.BytesToHash((prefixBytes)))
+
+		// Set the new prefix for the existing child that we pushed down
+		newChildPath, found := strings.CutPrefix(string(oldChildPath), prefix)
+		if !found {
+			panic("this should never happen")
+		}
+		n.ix.db.SetState(storageutil.GolemDBAddress, child.getFullPathAddressOfChild(newChildPath[0]), common.BytesToHash([]byte(newChildPath)))
+		if err := keyset.AddValue(n.ix.db, child.getChildrenKeySetAddress(), common.BytesToHash([]byte{newChildPath[0]})); err != nil {
+			return fmt.Errorf("error splitting node: %w", err)
+		}
+
+		rest, found := strings.CutPrefix(remaining, prefix)
+		fmt.Printf("CutPrefix(%s, %s) -> %s\n", remaining, prefix, rest)
+		if !found {
+			panic("this should never happen")
+		}
+		if len(rest) > 0 {
+			n.ix.db.SetState(storageutil.GolemDBAddress, child.getFullPathAddressOfChild(rest[0]), common.BytesToHash([]byte(rest)))
+			if err := keyset.AddValue(n.ix.db, child.getChildrenKeySetAddress(), common.BytesToHash([]byte{rest[0]})); err != nil {
+				return fmt.Errorf("error splitting node: %w", err)
+			}
+		}
+
+		return child.addEntity(seen, rest, entryType, entityKeys...)
+	}
+}
+
+func (n *node) getChild(b byte) *node {
+	fmt.Println("getChild: ", string(b))
+	if keyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{b})) {
+		pathHash := n.ix.db.GetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(b))
+		// Trim the extra zero bytes that were introduced when we converted to a 32 byte hash
+		path := bytes.TrimLeft(pathHash.Bytes(), "\x00")
+
+		return &node{
+			ix:   n.ix,
+			path: path,
+		}
+	}
 	return nil
+}
+
+func (n *node) addChild(bs []byte) (*node, error) {
+	child := &node{
+		ix:   n.ix,
+		path: bs,
+	}
+
+	key := common.BytesToHash([]byte{bs[0]})
+	if keyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), key) {
+		panic("key already present in the keyset, this is a bug")
+	}
+
+	err := keyset.AddValue(n.ix.db, n.getChildrenKeySetAddress(), key)
+	if err != nil {
+		return nil, fmt.Errorf("error adding child to node: %w", err)
+	}
+
+	n.ix.db.SetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(bs[0]), common.BytesToHash(child.path))
+
+	return child, nil
 }
 
 func (n *node) RemoveEntity(value string, entryType EntryType, entityKeys ...common.Hash) (bool, error) {
@@ -126,6 +209,9 @@ func (n *node) removeEntity(
 	remaining string,
 	entryType EntryType,
 	entityKeys ...common.Hash) (bool, error) {
+
+	fmt.Printf("removeEntity(%s, %s)\n", seen.String(), remaining)
+
 	if len(remaining) == 0 {
 		keysetAddr, err := n.getEntityKeySetAddressByType(entryType)
 		if err != nil {
@@ -139,22 +225,28 @@ func (n *node) removeEntity(
 		}
 	} else {
 
-		seen.WriteByte(remaining[0])
-		rest := remaining[1:]
 		childByte := remaining[0]
 
 		child := n.getChild(childByte)
 		if child != nil {
-			erased, err := child.removeEntity(seen, rest, entryType, entityKeys...)
-			if err != nil {
-				return false, fmt.Errorf("error removing entity from index: %w", err)
-			}
-			if erased {
-				err := keyset.RemoveValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{childByte}))
+
+			childPath := string(child.path)
+			rest, found := strings.CutPrefix(remaining, childPath)
+			if found {
+
+				seen.WriteString(childPath)
+
+				erased, err := child.removeEntity(seen, rest, entryType, entityKeys...)
 				if err != nil {
 					return false, fmt.Errorf("error removing entity from index: %w", err)
 				}
-				n.ix.db.SetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(childByte), common.Hash{})
+				if erased {
+					err := keyset.RemoveValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte(childPath)))
+					if err != nil {
+						return false, fmt.Errorf("error removing entity from index: %w", err)
+					}
+					n.ix.db.SetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(childByte), common.Hash{})
+				}
 			}
 		}
 	}
@@ -162,43 +254,14 @@ func (n *node) removeEntity(
 	return n.isEmpty(), nil
 }
 
-func (n *node) getChild(b byte) *node {
-	if keyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{b})) {
-		pathHash := n.ix.db.GetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(b))
-		path := bytes.TrimLeft(pathHash.Bytes(), "\x00")
-
-		return &node{
-			ix:   n.ix,
-			path: path,
-		}
-	}
-	return nil
-}
-
-func (n *node) addChild(bs []byte) (*node, error) {
-	path := slices.Concat(n.path, bs)
-
-	child := &node{
-		ix:   n.ix,
-		path: path,
-	}
-
-	err := keyset.AddValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{bs[0]}))
-	if err != nil {
-		return nil, fmt.Errorf("error adding child to node: %w", err)
-	}
-
-	// The returned hash is the previous value at the address that we wrote to
-	n.ix.db.SetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(bs[0]), common.BytesToHash(path))
-
-	return child, nil
-}
-
 func (n *node) getChildren() iter.Seq[*node] {
 	return iter.Seq[*node](func(yield func(*node) bool) {
 		keyset.Iterate(n.ix.db, n.getChildrenKeySetAddress())(
 			func(hash common.Hash) bool {
-				return yield(n.getChild(bytes.TrimLeft(hash.Bytes(), "\x00")[0]))
+				// Trim the extra zero bytes that were introduced when we converted this to a 32 byte hash
+				path := bytes.TrimLeft(hash.Bytes(), "\x00")
+				// Find the child based on the first byte of the path
+				return yield(n.getChild(path[0]))
 			})
 	})
 }
