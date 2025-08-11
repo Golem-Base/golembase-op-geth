@@ -59,21 +59,28 @@ func (n *node) AddEntity(value string, entryType EntryType, entityKeys ...common
 	return n.addEntity(&strings.Builder{}, value, entryType, entityKeys...)
 }
 
+func (n *node) getEntityKeySetAddressByType(entryType EntryType) (common.Hash, error) {
+	switch entryType {
+	case RealEntry:
+		return n.getEntityKeySetAddress(), nil
+	case SuffixEntry:
+		return n.getSuffixEntityKeySetAddress(), nil
+	default:
+		return common.Hash{}, fmt.Errorf("tried to add an entity with an undefined entry type")
+	}
+}
+
 func (n *node) addEntity(
 	seen *strings.Builder,
 	remaining string,
 	entryType EntryType,
 	entityKeys ...common.Hash) error {
+
 	if len(remaining) == 0 {
 		// We found an existing node for the annotation value, so we just add the entities to it
-		var keysetAddr common.Hash
-		switch entryType {
-		case RealEntry:
-			keysetAddr = n.getEntityKeySetAddress()
-		case SuffixEntry:
-			keysetAddr = n.getSuffixEntityKeySetAddress()
-		default:
-			return fmt.Errorf("tried to add an entity with an undefined entry type")
+		keysetAddr, err := n.getEntityKeySetAddressByType(entryType)
+		if err != nil {
+			return fmt.Errorf("error adding entity to index: %w", err)
 		}
 		for _, entityKey := range entityKeys {
 			err := keyset.AddValue(n.ix.db, keysetAddr, entityKey)
@@ -88,7 +95,7 @@ func (n *node) addEntity(
 	rest := remaining[1:]
 	childBytes := []byte{remaining[0]}
 
-	child := n.getChild(childBytes)
+	child := n.getChild(childBytes[0])
 	if child == nil {
 		newChild, err := n.addChild(childBytes)
 		if err != nil {
@@ -114,14 +121,9 @@ func (n *node) removeEntity(
 	entryType EntryType,
 	entityKeys ...common.Hash) (bool, error) {
 	if len(remaining) == 0 {
-		var keysetAddr common.Hash
-		switch entryType {
-		case RealEntry:
-			keysetAddr = n.getEntityKeySetAddress()
-		case SuffixEntry:
-			keysetAddr = n.getSuffixEntityKeySetAddress()
-		default:
-			return false, fmt.Errorf("tried to add an entity with an undefined entry type")
+		keysetAddr, err := n.getEntityKeySetAddressByType(entryType)
+		if err != nil {
+			return false, fmt.Errorf("error removing entity from index: %w", err)
 		}
 		for _, entityKey := range entityKeys {
 			err := keyset.RemoveValue(n.ix.db, keysetAddr, entityKey)
@@ -133,16 +135,19 @@ func (n *node) removeEntity(
 
 		seen.WriteByte(remaining[0])
 		rest := remaining[1:]
-		childBytes := []byte{remaining[0]}
+		childByte := remaining[0]
 
-		child := n.getChild(childBytes)
+		child := n.getChild(childByte)
 		if child != nil {
 			erased, err := child.removeEntity(seen, rest, entryType, entityKeys...)
 			if err != nil {
 				return false, fmt.Errorf("error removing entity from index: %w", err)
 			}
 			if erased {
-				keyset.RemoveValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash(childBytes))
+				err := keyset.RemoveValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash([]byte{childByte}))
+				if err != nil {
+					return false, fmt.Errorf("error removing entity from index: %w", err)
+				}
 			}
 		}
 	}
@@ -150,9 +155,10 @@ func (n *node) removeEntity(
 	return n.isEmpty(), nil
 }
 
-func (n *node) getChild(bs []byte) *node {
-	if keyset.ContainsValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash(bs)) {
-		path := slices.Concat(n.path, bs)
+func (n *node) getChild(b byte) *node {
+	if keyset.ContainsValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash([]byte{b})) {
+		// TODO: read out the actual full path
+		path := slices.Concat(n.path, []byte{b})
 
 		return &node{
 			ix:   n.ix,
@@ -170,10 +176,12 @@ func (n *node) addChild(bs []byte) (*node, error) {
 		path: path,
 	}
 
-	err := keyset.AddValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash(bs))
+	err := keyset.AddValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash([]byte{bs[0]}))
 	if err != nil {
 		return nil, fmt.Errorf("error adding child to node: %w", err)
 	}
+
+	// TODO: write out the full path
 
 	return child, nil
 }
@@ -182,7 +190,7 @@ func (n *node) getChildren() iter.Seq[*node] {
 	return iter.Seq[*node](func(yield func(*node) bool) {
 		keyset.Iterate(n.ix.db, n.getCharactersKeySetAddress())(
 			func(hash common.Hash) bool {
-				return yield(n.getChild(bytes.TrimLeft(hash.Bytes(), "\x00")))
+				return yield(n.getChild(bytes.TrimLeft(hash.Bytes(), "\x00")[0]))
 			})
 	})
 }
@@ -228,7 +236,7 @@ func (ix *Index) removeEntity(value string, entityKey common.Hash) error {
 	for len(rest) != 0 {
 		_, err := ix.getRootNode().RemoveEntity(rest, entryType, entityKey)
 		if err != nil {
-			return fmt.Errorf("error removing entity to index: %w", err)
+			return fmt.Errorf("error removing entity from index: %w", err)
 		}
 
 		_, length := utf8.DecodeRuneInString(rest)
@@ -244,7 +252,7 @@ func (ix *Index) findEntitiesStartingWith(pattern string) iter.Seq[common.Hash] 
 
 	n := ix.getRootNode()
 	for len(rest) != 0 {
-		n = n.getChild([]byte{rest[0]})
+		n = n.getChild(rest[0])
 
 		if n == nil {
 			// No matches
@@ -295,7 +303,7 @@ func (ix *Index) findEntitiesEndingWith(pattern string) iter.Seq[common.Hash] {
 
 	n := ix.getRootNode()
 	for len(rest) != 0 {
-		n = n.getChild([]byte{rest[0]})
+		n = n.getChild(rest[0])
 
 		if n == nil {
 			// No matches
@@ -331,7 +339,7 @@ func (ix *Index) findEntitiesContaining(pattern string) iter.Seq[common.Hash] {
 
 	n := ix.getRootNode()
 	for len(rest) != 0 {
-		n = n.getChild([]byte{rest[0]})
+		n = n.getChild(rest[0])
 
 		if n == nil {
 			// No matches
