@@ -18,7 +18,8 @@ import (
 
 var entitiesSetPrefix = []byte("golemBase.stringannotationindex.entities")
 var suffixEntitiesSetPrefix = []byte("golemBase.stringannotationindex.entities.suffix")
-var charactersSetPrefix = []byte("golemBase.stringannotationindex.characters")
+var childrenSetPrefix = []byte("golemBase.stringannotationindex.characters")
+var fullPathPrefix = []byte("golemBase.stringannotationindex.fullpath")
 
 type node struct {
 	ix   *Index
@@ -41,12 +42,17 @@ func (n *node) getSuffixEntityKeySetAddress() common.Hash {
 	return crypto.Keccak256Hash(suffixEntitiesSetPrefix, []byte(n.ix.annotationKey), n.path)
 }
 
-func (n *node) getCharactersKeySetAddress() common.Hash {
-	return crypto.Keccak256Hash(charactersSetPrefix, []byte(n.ix.annotationKey), n.path)
+func (n *node) getChildrenKeySetAddress() common.Hash {
+	return crypto.Keccak256Hash(childrenSetPrefix, []byte(n.ix.annotationKey), n.path)
+}
+
+func (n *node) getFullPathAddressOfChild(childByte byte) common.Hash {
+	path := slices.Concat(n.path, []byte{childByte})
+	return crypto.Keccak256Hash(fullPathPrefix, []byte(n.ix.annotationKey), path)
 }
 
 func (n *node) isEmpty() bool {
-	numOfChildren := keyset.Size(n.ix.db, n.getCharactersKeySetAddress())
+	numOfChildren := keyset.Size(n.ix.db, n.getChildrenKeySetAddress())
 	numOfEntities := keyset.Size(n.ix.db, n.getEntityKeySetAddress())
 	numOfSuffixEntities := keyset.Size(n.ix.db, n.getSuffixEntityKeySetAddress())
 
@@ -144,10 +150,11 @@ func (n *node) removeEntity(
 				return false, fmt.Errorf("error removing entity from index: %w", err)
 			}
 			if erased {
-				err := keyset.RemoveValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash([]byte{childByte}))
+				err := keyset.RemoveValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{childByte}))
 				if err != nil {
 					return false, fmt.Errorf("error removing entity from index: %w", err)
 				}
+				n.ix.db.SetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(childByte), common.Hash{})
 			}
 		}
 	}
@@ -156,9 +163,9 @@ func (n *node) removeEntity(
 }
 
 func (n *node) getChild(b byte) *node {
-	if keyset.ContainsValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash([]byte{b})) {
-		// TODO: read out the actual full path
-		path := slices.Concat(n.path, []byte{b})
+	if keyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{b})) {
+		pathHash := n.ix.db.GetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(b))
+		path := bytes.TrimLeft(pathHash.Bytes(), "\x00")
 
 		return &node{
 			ix:   n.ix,
@@ -176,19 +183,20 @@ func (n *node) addChild(bs []byte) (*node, error) {
 		path: path,
 	}
 
-	err := keyset.AddValue(n.ix.db, n.getCharactersKeySetAddress(), common.BytesToHash([]byte{bs[0]}))
+	err := keyset.AddValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{bs[0]}))
 	if err != nil {
 		return nil, fmt.Errorf("error adding child to node: %w", err)
 	}
 
-	// TODO: write out the full path
+	// The returned hash is the previous value at the address that we wrote to
+	n.ix.db.SetState(storageutil.GolemDBAddress, n.getFullPathAddressOfChild(bs[0]), common.BytesToHash(path))
 
 	return child, nil
 }
 
 func (n *node) getChildren() iter.Seq[*node] {
 	return iter.Seq[*node](func(yield func(*node) bool) {
-		keyset.Iterate(n.ix.db, n.getCharactersKeySetAddress())(
+		keyset.Iterate(n.ix.db, n.getChildrenKeySetAddress())(
 			func(hash common.Hash) bool {
 				return yield(n.getChild(bytes.TrimLeft(hash.Bytes(), "\x00")[0]))
 			})

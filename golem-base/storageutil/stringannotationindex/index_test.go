@@ -136,7 +136,7 @@ func TestAddAnnotation(t *testing.T) {
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
 	))
-	require.Equal(t, 534, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 601, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 }
 
 func TestContaining(t *testing.T) {
@@ -267,28 +267,28 @@ func TestAddRemoveAnnotation(t *testing.T) {
 	ix := NewIndex(db, "TestAddRemoveAnnotation")
 
 	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe6")))
-	require.Equal(t, 6, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 7, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe5")))
-	require.Equal(t, 8, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 9, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe6")))
-	require.Equal(t, 6, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 7, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe5")))
 	require.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe6")))
-	require.Equal(t, 6, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 7, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe5")))
-	require.Equal(t, 8, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 9, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.NoError(t, ix.addEntity("testme", common.HexToHash("0xe7")))
-	require.Equal(t, 76, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 95, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe6")))
-	require.Equal(t, 74, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 93, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe5")))
-	require.Equal(t, 71, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 90, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.removeEntity("testme", common.HexToHash("0xe7")))
 
 	require.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
