@@ -25,7 +25,7 @@ func Create() *cli.Command {
 			// This creates the directories if they don't already exist
 			walletPath, err := xdg.ConfigFile(useraccount.WalletPath)
 			if err != nil {
-				return fmt.Errorf("failed to get or create config file path: %w", err)
+				return fmt.Errorf("failed to create config file path: %w", err)
 			}
 
 			fmt.Println("walletPath", walletPath)
