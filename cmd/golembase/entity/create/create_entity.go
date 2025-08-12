@@ -2,12 +2,12 @@ package create
 
 import (
 	"fmt"
-	"math/big"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/cmd/golembase/account/pkg/useraccount"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -175,15 +175,40 @@ func Create() *cli.Command {
 				return fmt.Errorf("failed to encode storage tx: %w", err)
 			}
 
+			// Dynamically determine gas, gas tip cap, and gas fee cap
+			msg := ethereum.CallMsg{
+				From:     userAccount.Address,
+				To:       &address.GolemBaseStorageProcessorAddress,
+				Gas:      0, // let EstimateGas determine
+				GasPrice: nil,
+				Value:    nil,
+				Data:     txData,
+			}
+
+			gasLimit, err := client.EstimateGas(ctx, msg)
+			if err != nil {
+				return fmt.Errorf("failed to estimate gas: %w", err)
+			}
+
+			gasTipCap, err := client.SuggestGasTipCap(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to suggest gas tip cap: %w", err)
+			}
+
+			gasFeeCap, err := client.SuggestGasPrice(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to suggest gas fee cap: %w", err)
+			}
+
 			// Create the GolemBaseUpdateStorageTx
 			tx := &types.DynamicFeeTx{
 				ChainID:   chainID,
 				Nonce:     nonce,
-				Gas:       1_000_000,
+				Gas:       gasLimit,
 				Data:      txData,
 				To:        &address.GolemBaseStorageProcessorAddress,
-				GasTipCap: big.NewInt(1e9), // 1 Gwei
-				GasFeeCap: big.NewInt(5e9), // 5 Gwei
+				GasTipCap: gasTipCap,
+				GasFeeCap: gasFeeCap,
 			}
 
 			// Use the London signer since we're using a dynamic fee transaction
