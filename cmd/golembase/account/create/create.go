@@ -53,7 +53,7 @@ func Create() *cli.Command {
 			}
 
 			fmt.Println("New wallet created", walletPath)
-			fmt.Println("Address: ", account.Address.Hex())
+			fmt.Println("Address:", account.Address.Hex())
 
 			return nil
 		},
