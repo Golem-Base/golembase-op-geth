@@ -36,7 +36,7 @@ func Create() *cli.Command {
 
 			password, err := readPassword()
 			if err != nil {
-				return fmt.Errorf("failed to read password: %w", err)
+				return fmt.Errorf("failed to get password: %w", err)
 			}
 
 			ks := keystore.NewKeyStore(filepath.Dir(walletPath), keystore.StandardScryptN, keystore.StandardScryptP)
@@ -64,13 +64,28 @@ func Create() *cli.Command {
 func readPassword() (string, error) {
 	// Check if input is coming from a terminal
 	if term.IsTerminal(int(syscall.Stdin)) {
+
 		fmt.Print("Enter wallet password: ")
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Println()
 		if err != nil {
 			return "", err
 		}
-		return strings.TrimSpace(string(bytePassword)), nil
+		password := strings.TrimSpace(string(bytePassword))
+
+		fmt.Print("Confirm password: ")
+		byteConfirm, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return "", err
+		}
+		confirm := strings.TrimSpace(string(byteConfirm))
+
+		if password != confirm {
+			return "", fmt.Errorf("passwords did not match")
+		}
+
+		return password, nil
 	}
 
 	// Otherwise, read from stdin (e.g., piped input)
