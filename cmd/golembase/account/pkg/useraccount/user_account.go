@@ -16,7 +16,7 @@ type UserAccount struct {
 }
 
 func Load() (*UserAccount, error) {
-	privageKeyPath, err := xdg.ConfigFile(PrivateKeyPath)
+	privageKeyPath, err := xdg.ConfigFile(WalletPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config file path: %w", err)
 	}
