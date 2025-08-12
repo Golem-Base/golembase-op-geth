@@ -35,7 +35,7 @@ func ImportAccount() *cli.Command {
 			}
 
 			// Get path to store the private key
-			privateKeyPath, err := xdg.ConfigFile(useraccount.PrivateKeyPath)
+			privateKeyPath, err := xdg.ConfigFile(useraccount.WalletPath)
 			if err != nil {
 				return fmt.Errorf("failed to get config file path: %w", err)
 			}
