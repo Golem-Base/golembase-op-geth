@@ -34,9 +34,9 @@ func Create() *cli.Command {
 				return fmt.Errorf("A wallet already exists at %s", walletPath)
 			}
 
-			password, err := readPassword()
+			password, err := createPassword()
 			if err != nil {
-				return fmt.Errorf("failed to get password: %w", err)
+				return fmt.Errorf("failed to create password: %w", err)
 			}
 
 			ks := keystore.NewKeyStore(filepath.Dir(walletPath), keystore.StandardScryptN, keystore.StandardScryptP)
@@ -60,8 +60,9 @@ func Create() *cli.Command {
 	}
 }
 
-// readPassword reads a password from stdin if piped, or interactively if in a terminal
-func readPassword() (string, error) {
+// createPassword reads a password from stdin if piped, or interactively if in a terminal
+// confirming that the passwords match
+func createPassword() (string, error) {
 	// Check if input is coming from a terminal
 	if term.IsTerminal(int(syscall.Stdin)) {
 
