@@ -6,10 +6,14 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"iter"
 	"log/slog"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/sqlitegolem"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/wal"
+	"github.com/ethereum/go-ethereum/log"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -60,6 +64,141 @@ func (e *SQLStore) GetQueries() *sqlitegolem.Queries {
 	return sqlitegolem.New(e.db)
 }
 
+func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (sqlitegolem.GetProcessingStatusRow, error) {
+	return e.GetQueries().GetProcessingStatus(ctx, networkID)
+}
+
+func (e *SQLStore) SnapSyncToBlock(
+	ctx context.Context,
+	networkID string,
+	blockNumber uint64,
+	blockHash common.Hash,
+	entities iter.Seq2[struct {
+		Key      common.Hash
+		Metadata entity.EntityMetaData
+	}, []byte],
+) error {
+	tx, err := e.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+
+	txDB := sqlitegolem.New(tx)
+
+	// Ensure single network constraint for snap sync
+	hasNetwork, err := txDB.HasProcessingStatus(ctx, networkID)
+	if err != nil {
+		return fmt.Errorf("failed to check if network exists: %w", err)
+	}
+
+	if !hasNetwork {
+		// This is a new network, check if there are already other networks
+		networkCount, err := txDB.CountNetworks(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to count existing networks: %w", err)
+		}
+
+		if networkCount > 0 {
+			return fmt.Errorf("cannot snap sync to network %s: database already contains %d network(s), only one network is allowed", networkID, networkCount)
+		}
+
+		// First network, need to insert initial processing status
+		err = txDB.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
+			Network:                  networkID,
+			LastProcessedBlockNumber: int64(blockNumber),
+			LastProcessedBlockHash:   blockHash.Hex(),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to insert initial processing status: %w", err)
+		}
+	} else {
+		// Network exists, validate we can snap sync to this block
+		processingStatus, err := txDB.GetProcessingStatus(ctx, networkID)
+		if err != nil {
+			return fmt.Errorf("failed to get processing status: %w", err)
+		}
+
+		// Log warning if snap syncing to an earlier block than current
+		if int64(blockNumber) < processingStatus.LastProcessedBlockNumber {
+			log.Warn("snap syncing to earlier block",
+				"current", processingStatus.LastProcessedBlockNumber,
+				"target", blockNumber)
+		}
+	}
+
+	// Clear all existing entities, annotations for a clean snap sync
+	err = txDB.DeleteAllEntities(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to clear entities: %w", err)
+	}
+
+	err = txDB.DeleteAllStringAnnotations(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to clear string annotations: %w", err)
+	}
+
+	err = txDB.DeleteAllNumericAnnotations(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to clear numeric annotations: %w", err)
+	}
+
+	// Insert all entities from the snapshot
+	for entity, payload := range entities {
+		// Insert the entity
+		err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
+			Key:          entity.Key.Hex(),
+			ExpiresAt:    int64(entity.Metadata.ExpiresAtBlock),
+			Payload:      payload,
+			OwnerAddress: entity.Metadata.Owner.Hex(),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to insert entity %s: %w", entity.Key.Hex(), err)
+		}
+
+		// Insert string annotations
+		for _, annotation := range entity.Metadata.StringAnnotations {
+			err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+				EntityKey:     entity.Key.Hex(),
+				AnnotationKey: annotation.Key,
+				Value:         annotation.Value,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to insert string annotation for entity %s: %w", entity.Key.Hex(), err)
+			}
+		}
+
+		// Insert numeric annotations
+		for _, annotation := range entity.Metadata.NumericAnnotations {
+			err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
+				EntityKey:     entity.Key.Hex(),
+				AnnotationKey: annotation.Key,
+				Value:         int64(annotation.Value),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to insert numeric annotation for entity %s: %w", entity.Key.Hex(), err)
+			}
+		}
+	}
+
+	// Update processing status to the snap sync block
+	err = txDB.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
+		Network:                  networkID,
+		LastProcessedBlockNumber: int64(blockNumber),
+		LastProcessedBlockHash:   blockHash.Hex(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update processing status: %w", err)
+	}
+
+	return tx.Commit()
+}
+
 // InsertBlock processes a single block from the WAL and inserts it into the database
 func (e *SQLStore) InsertBlock(ctx context.Context, blockWal wal.BlockWal, networkID string, log *slog.Logger) error {
 	log.Info("processing block", "block", blockWal.BlockInfo.Number)
@@ -76,6 +215,24 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal wal.BlockWal, netwo
 	}()
 
 	txDB := sqlitegolem.New(tx)
+
+	// Ensure single network constraint: check if this would create a new network
+	hasNetwork, err := txDB.HasProcessingStatus(ctx, networkID)
+	if err != nil {
+		return fmt.Errorf("failed to check if network exists: %w", err)
+	}
+
+	if !hasNetwork {
+		// This is a new network, check if there are already other networks
+		networkCount, err := txDB.CountNetworks(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to count existing networks: %w", err)
+		}
+
+		if networkCount > 0 {
+			return fmt.Errorf("cannot add network %s: database already contains %d network(s), only one network is allowed", networkID, networkCount)
+		}
+	}
 
 	// Check if parent block hash matches the expected value from processing status
 	if blockWal.BlockInfo.Number > 0 { // Skip check for genesis block

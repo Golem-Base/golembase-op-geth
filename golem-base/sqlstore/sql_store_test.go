@@ -44,7 +44,7 @@ func TestNewStore(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store, err := NewStore(tt.dbFile)
-			
+
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, store)
@@ -54,7 +54,7 @@ func TestNewStore(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, store)
 			require.NotNil(t, store.db)
-			
+
 			// Test that schema was applied by checking if entities table exists
 			ctx := context.Background()
 			var tableName string
@@ -64,7 +64,7 @@ func TestNewStore(t *testing.T) {
 			`).Scan(&tableName)
 			require.NoError(t, err)
 			assert.Equal(t, "entities", tableName)
-			
+
 			// Cleanup
 			err = store.Close()
 			assert.NoError(t, err)
@@ -75,19 +75,19 @@ func TestNewStore(t *testing.T) {
 // TestNewStoreExistingSchema tests NewStore with existing schema
 func TestNewStoreExistingSchema(t *testing.T) {
 	dbFile := filepath.Join(t.TempDir(), "existing.db")
-	
+
 	// Create first store to establish schema
 	store1, err := NewStore(dbFile)
 	require.NoError(t, err)
 	require.NotNil(t, store1)
 	err = store1.Close()
 	require.NoError(t, err)
-	
+
 	// Create second store - should not re-apply schema
 	store2, err := NewStore(dbFile)
 	require.NoError(t, err)
 	require.NotNil(t, store2)
-	
+
 	// Verify entities table still exists
 	ctx := context.Background()
 	var tableName string
@@ -97,7 +97,7 @@ func TestNewStoreExistingSchema(t *testing.T) {
 	`).Scan(&tableName)
 	require.NoError(t, err)
 	assert.Equal(t, "entities", tableName)
-	
+
 	err = store2.Close()
 	assert.NoError(t, err)
 }
@@ -107,10 +107,10 @@ func TestSQLStoreClose(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	require.NotNil(t, store)
-	
+
 	err = store.Close()
 	assert.NoError(t, err)
-	
+
 	// Verify database is closed by attempting to use it
 	err = store.db.Ping()
 	assert.Error(t, err)
@@ -121,7 +121,7 @@ func TestGetQueries(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	queries := store.GetQueries()
 	assert.NotNil(t, queries)
 	assert.IsType(t, &sqlitegolem.Queries{}, queries)
@@ -132,11 +132,11 @@ func TestInsertBlockCreate(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status for parent block validation
 	parentHash := "0x2222222222222222222222222222222222222222222222222222222222222222"
 	err = queries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
@@ -145,11 +145,11 @@ func TestInsertBlockCreate(t *testing.T) {
 		LastProcessedBlockHash:   parentHash,
 	})
 	require.NoError(t, err)
-	
+
 	// Create test data
 	entityKey := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	ownerAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b8D397389CA6B9db17")
-	
+
 	createOp := &wal.Create{
 		EntityKey:      entityKey,
 		ExpiresAtBlock: 1000,
@@ -162,7 +162,7 @@ func TestInsertBlockCreate(t *testing.T) {
 			{Key: "level", Value: 42},
 		},
 	}
-	
+
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
 			Number:     100,
@@ -173,11 +173,11 @@ func TestInsertBlockCreate(t *testing.T) {
 			{Create: createOp},
 		}),
 	}
-	
+
 	// Insert block
 	err = store.InsertBlock(ctx, blockWal, "testnet", logger)
 	require.NoError(t, err)
-	
+
 	// Verify entity was inserted
 	entity, err := queries.GetEntity(ctx, entityKey.Hex())
 	require.NoError(t, err)
@@ -185,14 +185,14 @@ func TestInsertBlockCreate(t *testing.T) {
 	assert.Equal(t, int64(1000), entity.ExpiresAt)
 	assert.Equal(t, []byte("test payload"), entity.Payload)
 	assert.Equal(t, ownerAddr.Hex(), entity.OwnerAddress)
-	
+
 	// Verify string annotation
 	stringAnns, err := queries.GetStringAnnotations(ctx, entityKey.Hex())
 	require.NoError(t, err)
 	require.Len(t, stringAnns, 1)
 	assert.Equal(t, "name", stringAnns[0].AnnotationKey)
 	assert.Equal(t, "test entity", stringAnns[0].Value)
-	
+
 	// Verify numeric annotation
 	numericAnns, err := queries.GetNumericAnnotations(ctx, entityKey.Hex())
 	require.NoError(t, err)
@@ -206,11 +206,11 @@ func TestInsertBlockUpdate(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status for parent block validation
 	parentHash := "0x4444444444444444444444444444444444444444444444444444444444444444"
 	err = queries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
@@ -219,10 +219,10 @@ func TestInsertBlockUpdate(t *testing.T) {
 		LastProcessedBlockHash:   parentHash,
 	})
 	require.NoError(t, err)
-	
+
 	entityKey := common.HexToHash("0xaaabbbcccdddeeefffaaabbbcccdddeeefffaaabbbcccdddeeefffaaabbbcccdd")
 	ownerAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b8D397389CA6B9db17")
-	
+
 	// Insert initial entity
 	err = queries.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
 		Key:          entityKey.Hex(),
@@ -231,7 +231,7 @@ func TestInsertBlockUpdate(t *testing.T) {
 		OwnerAddress: ownerAddr.Hex(),
 	})
 	require.NoError(t, err)
-	
+
 	// Create update operation
 	updateOp := &wal.Update{
 		EntityKey:      entityKey,
@@ -244,7 +244,7 @@ func TestInsertBlockUpdate(t *testing.T) {
 			{Key: "version", Value: 2},
 		},
 	}
-	
+
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
 			Number:     200,
@@ -255,11 +255,11 @@ func TestInsertBlockUpdate(t *testing.T) {
 			{Update: updateOp},
 		}),
 	}
-	
+
 	// Insert block with update
 	err = store.InsertBlock(ctx, blockWal, "update-test", logger)
 	require.NoError(t, err)
-	
+
 	// Verify entity was updated
 	entity, err := queries.GetEntity(ctx, entityKey.Hex())
 	require.NoError(t, err)
@@ -273,18 +273,18 @@ func TestInsertBlockDelete(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status for parent block validation
 	parentHash := "0x6666666666666666666666666666666666666666666666666666666666666666"
 	setupTestProcessingStatus(t, queries, ctx, "delete-test", 299, parentHash)
-	
+
 	entityKey := common.HexToHash("0xdddeeefff000111222333444555666777888999aaabbbcccdddeeefff000111")
 	ownerAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b8D397389CA6B9db17")
-	
+
 	// Insert initial entity
 	err = queries.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
 		Key:          entityKey.Hex(),
@@ -293,7 +293,7 @@ func TestInsertBlockDelete(t *testing.T) {
 		OwnerAddress: ownerAddr.Hex(),
 	})
 	require.NoError(t, err)
-	
+
 	// Add annotations
 	err = queries.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
 		EntityKey:     entityKey.Hex(),
@@ -301,14 +301,14 @@ func TestInsertBlockDelete(t *testing.T) {
 		Value:         "temporary",
 	})
 	require.NoError(t, err)
-	
+
 	err = queries.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 		EntityKey:     entityKey.Hex(),
 		AnnotationKey: "count",
 		Value:         5,
 	})
 	require.NoError(t, err)
-	
+
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
 			Number:     300,
@@ -319,21 +319,21 @@ func TestInsertBlockDelete(t *testing.T) {
 			{Delete: &entityKey},
 		}),
 	}
-	
+
 	// Insert block with delete
 	err = store.InsertBlock(ctx, blockWal, "delete-test", logger)
 	require.NoError(t, err)
-	
+
 	// Verify entity was deleted
 	_, err = queries.GetEntity(ctx, entityKey.Hex())
 	assert.Error(t, err)
 	assert.Equal(t, sql.ErrNoRows, err)
-	
+
 	// Verify annotations were deleted
 	stringAnns, err := queries.GetStringAnnotations(ctx, entityKey.Hex())
 	require.NoError(t, err)
 	assert.Empty(t, stringAnns)
-	
+
 	numericAnns, err := queries.GetNumericAnnotations(ctx, entityKey.Hex())
 	require.NoError(t, err)
 	assert.Empty(t, numericAnns)
@@ -344,18 +344,18 @@ func TestInsertBlockExtend(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status for parent block validation
 	parentHash := "0x8888888888888888888888888888888888888888888888888888888888888888"
 	setupTestProcessingStatus(t, queries, ctx, "extend-test", 399, parentHash)
-	
+
 	entityKey := common.HexToHash("0xfffeeeddccbbaaffeeeddccbbaaffeeeddccbbaaffeeeddccbbaaffeeeddccbb")
 	ownerAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b8D397389CA6B9db17")
-	
+
 	// Insert initial entity
 	err = queries.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
 		Key:          entityKey.Hex(),
@@ -364,14 +364,14 @@ func TestInsertBlockExtend(t *testing.T) {
 		OwnerAddress: ownerAddr.Hex(),
 	})
 	require.NoError(t, err)
-	
+
 	// Create extend operation
 	extendOp := &wal.ExtendBTL{
 		EntityKey:    entityKey,
 		OldExpiresAt: 500,
 		NewExpiresAt: 1000,
 	}
-	
+
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
 			Number:     400,
@@ -382,11 +382,11 @@ func TestInsertBlockExtend(t *testing.T) {
 			{Extend: extendOp},
 		}),
 	}
-	
+
 	// Insert block with extend
 	err = store.InsertBlock(ctx, blockWal, "extend-test", logger)
 	require.NoError(t, err)
-	
+
 	// Verify entity expiration was extended
 	entity, err := queries.GetEntity(ctx, entityKey.Hex())
 	require.NoError(t, err)
@@ -399,19 +399,19 @@ func TestInsertBlockMultipleOperations(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status for parent block validation
 	parentHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	setupTestProcessingStatus(t, queries, ctx, "multi-test", 499, parentHash)
-	
+
 	entityKey1 := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	entityKey2 := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
 	ownerAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b8D397389CA6B9db17")
-	
+
 	operations := []wal.Operation{
 		{
 			Create: &wal.Create{
@@ -433,7 +433,7 @@ func TestInsertBlockMultipleOperations(t *testing.T) {
 			Delete: &entityKey1,
 		},
 	}
-	
+
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
 			Number:     500,
@@ -442,16 +442,16 @@ func TestInsertBlockMultipleOperations(t *testing.T) {
 		},
 		OperationsIterator: createMockIterator(operations),
 	}
-	
+
 	// Insert block with multiple operations
 	err = store.InsertBlock(ctx, blockWal, "multi-test", logger)
 	require.NoError(t, err)
-	
+
 	// Verify entity1 was deleted
 	_, err = queries.GetEntity(ctx, entityKey1.Hex())
 	assert.Error(t, err)
 	assert.Equal(t, sql.ErrNoRows, err)
-	
+
 	// Verify entity2 still exists
 	entity2, err := queries.GetEntity(ctx, entityKey2.Hex())
 	require.NoError(t, err)
@@ -464,13 +464,13 @@ func TestInsertBlockTransactionRollback(t *testing.T) {
 	store, err := NewStore(":memory:")
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	
+
 	// Create a block with wrong parent hash to trigger validation failure
 	entityKey := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-	
+
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
 			Number:     600,
@@ -487,12 +487,12 @@ func TestInsertBlockTransactionRollback(t *testing.T) {
 			},
 		}),
 	}
-	
+
 	// Insert block should fail due to missing processing status
 	err = store.InsertBlock(ctx, blockWal, "rollback-test", logger)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get processing status")
-	
+
 	// Verify no partial state was committed
 	queries := store.GetQueries()
 	_, err = queries.GetEntity(ctx, entityKey.Hex())
@@ -505,15 +505,15 @@ func TestInsertBlockProcessingStatus(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "processing-status.db"))
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})) // Reduce log noise
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status with correct parent block relationship
 	parentHash := "0x6666666666666666666666666666666666666666666666666666666666666666"
 	setupTestProcessingStatus(t, queries, ctx, "processing-test", 699, parentHash)
-	
+
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
 			Number:     700,
@@ -522,11 +522,11 @@ func TestInsertBlockProcessingStatus(t *testing.T) {
 		},
 		OperationsIterator: createMockIterator([]wal.Operation{}),
 	}
-	
+
 	// Insert block
 	err = store.InsertBlock(ctx, blockWal, "processing-test", logger)
 	require.NoError(t, err)
-	
+
 	// Verify processing status was updated
 	status, err := queries.GetProcessingStatus(ctx, "processing-test")
 	require.NoError(t, err)
@@ -539,10 +539,10 @@ func TestProcessingStatusDirectUpdate(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "direct-update.db"))
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	queries := store.GetQueries()
-	
+
 	// Insert initial processing status record
 	err = queries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
 		Network:                  "direct-test",
@@ -550,13 +550,13 @@ func TestProcessingStatusDirectUpdate(t *testing.T) {
 		LastProcessedBlockHash:   "0x0000000000000000000000000000000000000000000000000000000000000000",
 	})
 	require.NoError(t, err)
-	
+
 	// Verify initial state
 	status, err := queries.GetProcessingStatus(ctx, "direct-test")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), status.LastProcessedBlockNumber)
 	assert.Equal(t, "0x0000000000000000000000000000000000000000000000000000000000000000", status.LastProcessedBlockHash)
-	
+
 	// Update processing status
 	err = queries.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
 		Network:                  "direct-test",
@@ -564,7 +564,7 @@ func TestProcessingStatusDirectUpdate(t *testing.T) {
 		LastProcessedBlockHash:   "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 	})
 	require.NoError(t, err)
-	
+
 	// Verify update worked
 	status, err = queries.GetProcessingStatus(ctx, "direct-test")
 	require.NoError(t, err)
@@ -577,9 +577,9 @@ func TestTransactionProcessingStatusUpdate(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "tx-update.db"))
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
-	
+
 	// Insert initial processing status using autocommit
 	autocommitQueries := store.GetQueries()
 	err = autocommitQueries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
@@ -588,14 +588,14 @@ func TestTransactionProcessingStatusUpdate(t *testing.T) {
 		LastProcessedBlockHash:   "0x0000000000000000000000000000000000000000000000000000000000000000",
 	})
 	require.NoError(t, err)
-	
+
 	// Start transaction
 	tx, err := store.db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	
+
 	// Use transaction queries
 	txQueries := sqlitegolem.New(tx)
-	
+
 	// Update within transaction
 	err = txQueries.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
 		Network:                  "tx-test",
@@ -603,11 +603,11 @@ func TestTransactionProcessingStatusUpdate(t *testing.T) {
 		LastProcessedBlockHash:   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 	})
 	require.NoError(t, err)
-	
+
 	// Commit transaction
 	err = tx.Commit()
 	require.NoError(t, err)
-	
+
 	// Verify update worked using autocommit
 	status, err := autocommitQueries.GetProcessingStatus(ctx, "tx-test")
 	require.NoError(t, err)
@@ -620,15 +620,15 @@ func TestInsertBlockParentHashValidation(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "parent-validation.db"))
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status
 	correctParentHash := "0x1010101010101010101010101010101010101010101010101010101010101010"
 	setupTestProcessingStatus(t, queries, ctx, "validation-test", 49, correctParentHash)
-	
+
 	// Test with correct parent hash - should succeed
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
@@ -638,10 +638,10 @@ func TestInsertBlockParentHashValidation(t *testing.T) {
 		},
 		OperationsIterator: createMockIterator([]wal.Operation{}),
 	}
-	
+
 	err = store.InsertBlock(ctx, blockWal, "validation-test", logger)
 	assert.NoError(t, err)
-	
+
 	// Test with wrong parent hash - should fail
 	blockWalWrongParent := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
@@ -651,7 +651,7 @@ func TestInsertBlockParentHashValidation(t *testing.T) {
 		},
 		OperationsIterator: createMockIterator([]wal.Operation{}),
 	}
-	
+
 	err = store.InsertBlock(ctx, blockWalWrongParent, "validation-test", logger)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "parent block hash mismatch")
@@ -662,15 +662,15 @@ func TestInsertBlockSequenceValidation(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "sequence-validation.db"))
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status
 	parentHash := "0x4040404040404040404040404040404040404040404040404040404040404040"
 	setupTestProcessingStatus(t, queries, ctx, "sequence-test", 99, parentHash)
-	
+
 	// Test with wrong block number - should fail
 	blockWal := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
@@ -680,7 +680,7 @@ func TestInsertBlockSequenceValidation(t *testing.T) {
 		},
 		OperationsIterator: createMockIterator([]wal.Operation{}),
 	}
-	
+
 	err = store.InsertBlock(ctx, blockWal, "sequence-test", logger)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "block number sequence error")
@@ -691,11 +691,11 @@ func TestInsertBlockGenesisBlock(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "genesis.db"))
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	queries := store.GetQueries()
-	
+
 	// Insert initial processing status for genesis
 	err = queries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
 		Network:                  "genesis-test",
@@ -703,7 +703,7 @@ func TestInsertBlockGenesisBlock(t *testing.T) {
 		LastProcessedBlockHash:   "0x0000000000000000000000000000000000000000000000000000000000000000",
 	})
 	require.NoError(t, err)
-	
+
 	// Genesis block should succeed without parent validation
 	genesisBlock := wal.BlockWal{
 		BlockInfo: wal.BlockInfo{
@@ -713,8 +713,121 @@ func TestInsertBlockGenesisBlock(t *testing.T) {
 		},
 		OperationsIterator: createMockIterator([]wal.Operation{}),
 	}
-	
+
 	err = store.InsertBlock(ctx, genesisBlock, "genesis-test", logger)
+	assert.NoError(t, err)
+}
+
+// TestInsertBlockSingleNetworkConstraint tests that only one network can exist in the database
+func TestInsertBlockSingleNetworkConstraint(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "single-network.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	queries := store.GetQueries()
+
+	// Set up first network
+	setupTestProcessingStatus(t, queries, ctx, "network1", 99, "0x1010101010101010101010101010101010101010101010101010101010101010")
+
+	// Insert block for first network - should succeed
+	blockWal1 := wal.BlockWal{
+		BlockInfo: wal.BlockInfo{
+			Number:     100,
+			Hash:       common.HexToHash("0x2020202020202020202020202020202020202020202020202020202020202020"),
+			ParentHash: common.HexToHash("0x1010101010101010101010101010101010101010101010101010101010101010"),
+		},
+		OperationsIterator: createMockIterator([]wal.Operation{}),
+	}
+
+	err = store.InsertBlock(ctx, blockWal1, "network1", logger)
+	assert.NoError(t, err)
+
+	// Try to insert block for second network - should fail
+	blockWal2 := wal.BlockWal{
+		BlockInfo: wal.BlockInfo{
+			Number:     0, // Genesis block for second network
+			Hash:       common.HexToHash("0x3030303030303030303030303030303030303030303030303030303030303030"),
+			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		},
+		OperationsIterator: createMockIterator([]wal.Operation{}),
+	}
+
+	err = store.InsertBlock(ctx, blockWal2, "network2", logger)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot add network network2: database already contains 1 network(s), only one network is allowed")
+}
+
+// TestInsertBlockSingleNetworkAllowSameNetwork tests that the same network can continue to be used
+func TestInsertBlockSingleNetworkAllowSameNetwork(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "same-network.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	queries := store.GetQueries()
+
+	// Set up network
+	setupTestProcessingStatus(t, queries, ctx, "mainnet", 99, "0x4040404040404040404040404040404040404040404040404040404040404040")
+
+	// Insert first block - should succeed
+	blockWal1 := wal.BlockWal{
+		BlockInfo: wal.BlockInfo{
+			Number:     100,
+			Hash:       common.HexToHash("0x5050505050505050505050505050505050505050505050505050505050505050"),
+			ParentHash: common.HexToHash("0x4040404040404040404040404040404040404040404040404040404040404040"),
+		},
+		OperationsIterator: createMockIterator([]wal.Operation{}),
+	}
+
+	err = store.InsertBlock(ctx, blockWal1, "mainnet", logger)
+	assert.NoError(t, err)
+
+	// Insert second block for same network - should succeed
+	blockWal2 := wal.BlockWal{
+		BlockInfo: wal.BlockInfo{
+			Number:     101,
+			Hash:       common.HexToHash("0x6060606060606060606060606060606060606060606060606060606060606060"),
+			ParentHash: common.HexToHash("0x5050505050505050505050505050505050505050505050505050505050505050"),
+		},
+		OperationsIterator: createMockIterator([]wal.Operation{}),
+	}
+
+	err = store.InsertBlock(ctx, blockWal2, "mainnet", logger)
+	assert.NoError(t, err)
+}
+
+// TestInsertBlockFirstNetworkAllowed tests that the first network is allowed in an empty database
+func TestInsertBlockFirstNetworkAllowed(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "first-network.db"))
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	queries := store.GetQueries()
+
+	// Insert initial processing status for the first network
+	err = queries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
+		Network:                  "testnet",
+		LastProcessedBlockNumber: -1,
+		LastProcessedBlockHash:   "0x0000000000000000000000000000000000000000000000000000000000000000",
+	})
+	require.NoError(t, err)
+
+	// Insert genesis block for first network - should succeed
+	genesisBlock := wal.BlockWal{
+		BlockInfo: wal.BlockInfo{
+			Number:     0,
+			Hash:       common.HexToHash("0x7070707070707070707070707070707070707070707070707070707070707070"),
+			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		},
+		OperationsIterator: createMockIterator([]wal.Operation{}),
+	}
+
+	err = store.InsertBlock(ctx, genesisBlock, "testnet", logger)
 	assert.NoError(t, err)
 }
 
@@ -744,11 +857,11 @@ func BenchmarkInsertBlock(b *testing.B) {
 	store, err := NewStore(filepath.Join(b.TempDir(), "benchmark.db"))
 	require.NoError(b, err)
 	defer store.Close()
-	
+
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	queries := store.GetQueries()
-	
+
 	// Set up initial processing status for benchmarking
 	err = queries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
 		Network:                  "benchmark",
@@ -756,10 +869,10 @@ func BenchmarkInsertBlock(b *testing.B) {
 		LastProcessedBlockHash:   "0x0000000000000000000000000000000000000000000000000000000000000000",
 	})
 	require.NoError(b, err)
-	
+
 	entityKey := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 	ownerAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b8D397389CA6B9db17")
-	
+
 	createOp := &wal.Create{
 		EntityKey:      entityKey,
 		ExpiresAtBlock: 1000,
@@ -772,9 +885,9 @@ func BenchmarkInsertBlock(b *testing.B) {
 			{Key: "level", Value: 42},
 		},
 	}
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		// For benchmark, we need to create proper parent-child relationships
 		var parentHash common.Hash
@@ -783,7 +896,7 @@ func BenchmarkInsertBlock(b *testing.B) {
 		} else {
 			parentHash = common.BytesToHash([]byte{byte(i - 1)})
 		}
-		
+
 		blockWal := wal.BlockWal{
 			BlockInfo: wal.BlockInfo{
 				Number:     uint64(i),
@@ -794,7 +907,7 @@ func BenchmarkInsertBlock(b *testing.B) {
 				{Create: createOp},
 			}),
 		}
-		
+
 		err := store.InsertBlock(ctx, blockWal, "benchmark", logger)
 		require.NoError(b, err)
 	}

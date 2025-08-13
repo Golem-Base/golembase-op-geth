@@ -43,6 +43,9 @@ INSERT INTO processing_status (network, last_processed_block_number, last_proces
 -- name: HasProcessingStatus :one
 SELECT COUNT(*) > 0 FROM processing_status WHERE network = ?;
 
+-- name: CountNetworks :one
+SELECT COUNT(DISTINCT network) FROM processing_status;
+
 -- name: DeleteProcessingStatus :exec
 DELETE FROM processing_status WHERE network = ?;
 
