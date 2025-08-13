@@ -2489,7 +2489,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 
 	walDir := stack.Config().GolemBaseWriteAheadLogDir
 	if walDir != "" {
-		chain, err := core.NewBlockChainWithOnNewBlock(chainDb, cache, gspec, nil, engine, vmcfg, nil, func(block *types.Block, receipts []*types.Receipt) error {
+		chain, err := core.NewBlockChainWithOnNewBlock(chainDb, cache, gspec, nil, engine, vmcfg, nil, func(db ethdb.Database, block *types.Block, receipts []*types.Receipt) error {
 			return wal.WriteLogForBlock(walDir, block, config.ChainID, receipts)
 		})
 		if err != nil {

@@ -271,7 +271,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	walDir := stack.Config().GolemBaseWriteAheadLogDir
 
 	if walDir != "" {
-		eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, func(block *types.Block, receipts []*types.Receipt) error {
+		eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, func(db ethdb.Database, block *types.Block, receipts []*types.Receipt) error {
 			return wal.WriteLogForBlock(walDir, block, chainConfig.ChainID, receipts)
 		})
 	} else {

@@ -282,7 +282,7 @@ type BlockChain struct {
 	logger     *tracing.Hooks
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
-	onNewBlock         func(block *types.Block, receipts []*types.Receipt) error
+	onNewBlock         func(db ethdb.Database, block *types.Block, receipts []*types.Receipt) error
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -295,7 +295,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChainWithOnNewBlock(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64, onNewBlock func(block *types.Block, receipts []*types.Receipt) error) (*BlockChain, error) {
+func NewBlockChainWithOnNewBlock(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64, onNewBlock func(db ethdb.Database, block *types.Block, receipts []*types.Receipt) error) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -1167,7 +1167,7 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 
 	if bc.onNewBlock != nil {
 		receipts := bc.GetReceiptsByHash(block.Hash())
-		err := bc.onNewBlock(block, receipts)
+		err := bc.onNewBlock(bc.db, block, receipts)
 		if err != nil {
 			log.Crit("Failed to call onNewBlock", "err", err)
 		}
