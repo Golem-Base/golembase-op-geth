@@ -912,3 +912,327 @@ func BenchmarkInsertBlock(b *testing.B) {
 		require.NoError(b, err)
 	}
 }
+
+// TestSnapSyncToBlock tests the SnapSyncToBlock function
+func TestSnapSyncToBlock(t *testing.T) {
+	t.Run("snap sync to new network", func(t *testing.T) {
+		dbFile := filepath.Join(t.TempDir(), "test.db")
+		store, err := NewStore(dbFile)
+		require.NoError(t, err)
+		defer store.Close()
+
+		ctx := context.Background()
+		networkID := "testnet"
+		blockNumber := uint64(100)
+		blockHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+		// Create test entities
+		entities := func(yield func(struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+		}, []byte) bool) {
+			// Entity 1
+			entity1 := struct {
+				Key      common.Hash
+				Metadata entity.EntityMetaData
+			}{
+				Key: common.HexToHash("0xabc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc"),
+				Metadata: entity.EntityMetaData{
+					ExpiresAtBlock: 200,
+					Owner:          common.HexToAddress("0x1234567890123456789012345678901234567890"),
+					StringAnnotations: []entity.StringAnnotation{
+						{Key: "type", Value: "test"},
+						{Key: "name", Value: "entity1"},
+					},
+					NumericAnnotations: []entity.NumericAnnotation{
+						{Key: "size", Value: 1024},
+						{Key: "priority", Value: 1},
+					},
+				},
+			}
+			if !yield(entity1, []byte("payload1")) {
+				return
+			}
+
+			// Entity 2
+			entity2 := struct {
+				Key      common.Hash
+				Metadata entity.EntityMetaData
+			}{
+				Key: common.HexToHash("0xdef4567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+				Metadata: entity.EntityMetaData{
+					ExpiresAtBlock: 300,
+					Owner:          common.HexToAddress("0x9876543210987654321098765432109876543210"),
+					StringAnnotations: []entity.StringAnnotation{
+						{Key: "type", Value: "test"},
+						{Key: "name", Value: "entity2"},
+					},
+					NumericAnnotations: []entity.NumericAnnotation{
+						{Key: "size", Value: 2048},
+						{Key: "priority", Value: 2},
+					},
+				},
+			}
+			yield(entity2, []byte("payload2"))
+		}
+
+		// Perform snap sync
+		err = store.SnapSyncToBlock(ctx, networkID, blockNumber, blockHash, entities)
+		require.NoError(t, err)
+
+		// Verify processing status
+		status, err := store.GetProcessingStatus(ctx, networkID)
+		require.NoError(t, err)
+		assert.Equal(t, int64(blockNumber), status.LastProcessedBlockNumber)
+		assert.Equal(t, blockHash.Hex(), status.LastProcessedBlockHash)
+
+		// Verify entities were inserted
+		queries := store.GetQueries()
+
+		entity1Exists, err := queries.EntityExists(ctx, "0xabc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc")
+		require.NoError(t, err)
+		assert.True(t, entity1Exists)
+
+		entity2Exists, err := queries.EntityExists(ctx, "0xdef4567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+		require.NoError(t, err)
+		assert.True(t, entity2Exists)
+
+		// Verify entity details
+		entity1Data, err := queries.GetEntity(ctx, "0xabc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc")
+		require.NoError(t, err)
+		assert.Equal(t, int64(200), entity1Data.ExpiresAt)
+		assert.Equal(t, []byte("payload1"), entity1Data.Payload)
+		assert.Equal(t, "0x1234567890123456789012345678901234567890", entity1Data.OwnerAddress)
+
+		// Verify annotations
+		stringAnnotations, err := queries.GetStringAnnotations(ctx, "0xabc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc")
+		require.NoError(t, err)
+		assert.Len(t, stringAnnotations, 2)
+
+		numericAnnotations, err := queries.GetNumericAnnotations(ctx, "0xabc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc")
+		require.NoError(t, err)
+		assert.Len(t, numericAnnotations, 2)
+	})
+
+	t.Run("snap sync clears existing data", func(t *testing.T) {
+		dbFile := filepath.Join(t.TempDir(), "test.db")
+		store, err := NewStore(dbFile)
+		require.NoError(t, err)
+		defer store.Close()
+
+		ctx := context.Background()
+		networkID := "testnet"
+
+		// First, insert some data
+		queries := store.GetQueries()
+		err = queries.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
+			Network:                  networkID,
+			LastProcessedBlockNumber: 50,
+			LastProcessedBlockHash:   "0x0000000000000000000000000000000000000000000000000000000000000050",
+		})
+		require.NoError(t, err)
+
+		// Insert an entity that should be cleared
+		err = queries.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
+			Key:          "0xold1234567890abcdef1234567890abcdef1234567890abcdef1234567890old",
+			ExpiresAt:    150,
+			Payload:      []byte("old payload"),
+			OwnerAddress: "0xoldaddress1234567890123456789012345678901",
+		})
+		require.NoError(t, err)
+
+		// Now perform snap sync with new data
+		blockNumber := uint64(100)
+		blockHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+		entities := func(yield func(struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+		}, []byte) bool) {
+			newEntity := struct {
+				Key      common.Hash
+				Metadata entity.EntityMetaData
+			}{
+				Key: common.HexToHash("0x1e71234567890abcdef1234567890abcdef1234567890abcdef12345678901e7"),
+				Metadata: entity.EntityMetaData{
+					ExpiresAtBlock:     200,
+					Owner:              common.HexToAddress("0x1234567890123456789012345678901234567890"),
+					StringAnnotations:  []entity.StringAnnotation{},
+					NumericAnnotations: []entity.NumericAnnotation{},
+				},
+			}
+			if !yield(newEntity, []byte("new payload")) {
+				return
+			}
+		}
+
+		err = store.SnapSyncToBlock(ctx, networkID, blockNumber, blockHash, entities)
+		require.NoError(t, err)
+
+		// Verify old entity was cleared
+		oldEntityExists, err := queries.EntityExists(ctx, "0xold1234567890abcdef1234567890abcdef1234567890abcdef1234567890old")
+		require.NoError(t, err)
+		assert.False(t, oldEntityExists)
+
+		// Verify new entity exists (using a valid hash)
+		newKey := common.HexToHash("0x1e71234567890abcdef1234567890abcdef1234567890abcdef12345678901e7")
+		newEntityExists, err := queries.EntityExists(ctx, newKey.Hex())
+		require.NoError(t, err)
+		assert.True(t, newEntityExists)
+
+		// Verify processing status was updated
+		status, err := store.GetProcessingStatus(ctx, networkID)
+		require.NoError(t, err)
+		assert.Equal(t, int64(blockNumber), status.LastProcessedBlockNumber)
+		assert.Equal(t, blockHash.Hex(), status.LastProcessedBlockHash)
+	})
+
+	t.Run("snap sync with single network constraint", func(t *testing.T) {
+		dbFile := filepath.Join(t.TempDir(), "test.db")
+		store, err := NewStore(dbFile)
+		require.NoError(t, err)
+		defer store.Close()
+
+		ctx := context.Background()
+
+		// First network snap sync
+		networkID1 := "network1"
+		blockNumber1 := uint64(100)
+		blockHash1 := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+
+		entities1 := func(yield func(struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+		}, []byte) bool) {
+			// Empty snapshot
+		}
+
+		err = store.SnapSyncToBlock(ctx, networkID1, blockNumber1, blockHash1, entities1)
+		require.NoError(t, err)
+
+		// Try to snap sync a different network - should fail
+		networkID2 := "network2"
+		blockNumber2 := uint64(200)
+		blockHash2 := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+
+		entities2 := func(yield func(struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+		}, []byte) bool) {
+			// Empty snapshot
+		}
+
+		err = store.SnapSyncToBlock(ctx, networkID2, blockNumber2, blockHash2, entities2)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "only one network is allowed")
+	})
+
+	t.Run("snap sync to same network updates data", func(t *testing.T) {
+		dbFile := filepath.Join(t.TempDir(), "test.db")
+		store, err := NewStore(dbFile)
+		require.NoError(t, err)
+		defer store.Close()
+
+		ctx := context.Background()
+		networkID := "testnet"
+
+		// First snap sync
+		blockNumber1 := uint64(100)
+		blockHash1 := common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+
+		entities1 := func(yield func(struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+		}, []byte) bool) {
+			entity := struct {
+				Key      common.Hash
+				Metadata entity.EntityMetaData
+			}{
+				Key: common.HexToHash("0xaaa1234567890abcdef1234567890abcdef1234567890abcdef1234567890aaa"),
+				Metadata: entity.EntityMetaData{
+					ExpiresAtBlock: 200,
+					Owner:          common.HexToAddress("0x1111111111111111111111111111111111111111"),
+				},
+			}
+			if !yield(entity, []byte("first payload")) {
+				return
+			}
+		}
+
+		err = store.SnapSyncToBlock(ctx, networkID, blockNumber1, blockHash1, entities1)
+		require.NoError(t, err)
+
+		// Second snap sync to same network with different data
+		blockNumber2 := uint64(200)
+		blockHash2 := common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+
+		entities2 := func(yield func(struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+		}, []byte) bool) {
+			entity := struct {
+				Key      common.Hash
+				Metadata entity.EntityMetaData
+			}{
+				Key: common.HexToHash("0xbbb1234567890abcdef1234567890abcdef1234567890abcdef1234567890bbb"),
+				Metadata: entity.EntityMetaData{
+					ExpiresAtBlock: 300,
+					Owner:          common.HexToAddress("0x2222222222222222222222222222222222222222"),
+				},
+			}
+			if !yield(entity, []byte("second payload")) {
+				return
+			}
+		}
+
+		err = store.SnapSyncToBlock(ctx, networkID, blockNumber2, blockHash2, entities2)
+		require.NoError(t, err)
+
+		queries := store.GetQueries()
+
+		// Verify first entity was cleared
+		entity1Exists, err := queries.EntityExists(ctx, "0xaaa1234567890abcdef1234567890abcdef1234567890abcdef1234567890aaa")
+		require.NoError(t, err)
+		assert.False(t, entity1Exists)
+
+		// Verify second entity exists
+		entity2Exists, err := queries.EntityExists(ctx, "0xbbb1234567890abcdef1234567890abcdef1234567890abcdef1234567890bbb")
+		require.NoError(t, err)
+		assert.True(t, entity2Exists)
+
+		// Verify processing status was updated
+		status, err := store.GetProcessingStatus(ctx, networkID)
+		require.NoError(t, err)
+		assert.Equal(t, int64(blockNumber2), status.LastProcessedBlockNumber)
+		assert.Equal(t, blockHash2.Hex(), status.LastProcessedBlockHash)
+	})
+
+	t.Run("snap sync with empty entities", func(t *testing.T) {
+		dbFile := filepath.Join(t.TempDir(), "test.db")
+		store, err := NewStore(dbFile)
+		require.NoError(t, err)
+		defer store.Close()
+
+		ctx := context.Background()
+		networkID := "testnet"
+		blockNumber := uint64(100)
+		blockHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+
+		// Empty entities iterator
+		entities := func(yield func(struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+		}, []byte) bool) {
+			// No entities
+		}
+
+		err = store.SnapSyncToBlock(ctx, networkID, blockNumber, blockHash, entities)
+		require.NoError(t, err)
+
+		// Verify processing status was created
+		status, err := store.GetProcessingStatus(ctx, networkID)
+		require.NoError(t, err)
+		assert.Equal(t, int64(blockNumber), status.LastProcessedBlockNumber)
+		assert.Equal(t, blockHash.Hex(), status.LastProcessedBlockHash)
+	})
+}
