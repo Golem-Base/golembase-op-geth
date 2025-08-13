@@ -30,7 +30,11 @@ func Create() *cli.Command {
 
 			fmt.Println("walletPath", walletPath)
 
-			if info, err := os.Stat(walletPath); err == nil && info.Size() != 0 {
+			info, err := os.Stat(walletPath)
+			if err != nil {
+				return fmt.Errorf("failed to stat walletPath %s: %w", walletPath, err)
+			}
+			if info.Size() != 0 {
 				return fmt.Errorf("A wallet already exists at %s", walletPath)
 			}
 
