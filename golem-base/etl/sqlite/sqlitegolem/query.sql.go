@@ -9,6 +9,42 @@ import (
 	"context"
 )
 
+const deleteAllEntities = `-- name: DeleteAllEntities :exec
+DELETE FROM entities
+`
+
+func (q *Queries) DeleteAllEntities(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllEntities)
+	return err
+}
+
+const deleteAllNumericAnnotations = `-- name: DeleteAllNumericAnnotations :exec
+DELETE FROM numeric_annotations
+`
+
+func (q *Queries) DeleteAllNumericAnnotations(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllNumericAnnotations)
+	return err
+}
+
+const deleteAllProcessingStatus = `-- name: DeleteAllProcessingStatus :exec
+DELETE FROM processing_status
+`
+
+func (q *Queries) DeleteAllProcessingStatus(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllProcessingStatus)
+	return err
+}
+
+const deleteAllStringAnnotations = `-- name: DeleteAllStringAnnotations :exec
+DELETE FROM string_annotations
+`
+
+func (q *Queries) DeleteAllStringAnnotations(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllStringAnnotations)
+	return err
+}
+
 const deleteEntity = `-- name: DeleteEntity :exec
 DELETE FROM entities WHERE key = ?
 `

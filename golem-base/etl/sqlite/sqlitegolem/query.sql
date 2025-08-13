@@ -55,3 +55,14 @@ SELECT COUNT(*) > 0 FROM string_annotations WHERE entity_key = ?;
 -- name: NumericAnnotationsForEntityExists :one
 SELECT COUNT(*) > 0 FROM numeric_annotations WHERE entity_key = ?;
 
+-- name: DeleteAllEntities :exec
+DELETE FROM entities;
+
+-- name: DeleteAllStringAnnotations :exec
+DELETE FROM string_annotations;
+
+-- name: DeleteAllNumericAnnotations :exec
+DELETE FROM numeric_annotations;
+
+-- name: DeleteAllProcessingStatus :exec
+DELETE FROM processing_status;
