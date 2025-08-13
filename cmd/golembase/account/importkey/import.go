@@ -46,6 +46,9 @@ func ImportAccount() *cli.Command {
 
 			ks := keystore.NewKeyStore(filepath.Dir(walletPath), keystore.StandardScryptN, keystore.StandardScryptP)
 			account, err := ks.ImportECDSA(privateKeyBytes, password)
+			if err != nil {
+				return fmt.Errorf("failed to encrypt keystore: %w", err)
+			}
 
 			imported := account.URL.Path
 			if imported != walletPath {
