@@ -136,7 +136,10 @@ func TestAddAnnotation(t *testing.T) {
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
 	))
-	require.Equal(t, 290, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 473, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+
+	require.Equal(t, ix.getRootNode().getChild([]byte("f")[0]).prefix, []byte("foo"))
+	require.Equal(t, ix.getRootNode().getChild([]byte("f")[0]).getChild([]byte("b")[0]).prefix, []byte("bar"))
 }
 
 func TestContaining(t *testing.T) {
@@ -167,6 +170,9 @@ func TestContaining(t *testing.T) {
 	require.NoError(t, ix.addEntity("foobar",
 		common.HexToHash("0xe5"),
 	))
+	require.NoError(t, ix.addEntity("foobars",
+		common.HexToHash("0xe50"),
+	))
 	require.NoError(t, ix.addEntity("quxbar",
 		common.HexToHash("0xe6"),
 	))
@@ -182,6 +188,7 @@ func TestContaining(t *testing.T) {
 			common.HexToHash("0xe2"),
 			common.HexToHash("0xe3"),
 			common.HexToHash("0xe4"),
+			common.HexToHash("0xe50"),
 		},
 	)
 
@@ -201,6 +208,7 @@ func TestContaining(t *testing.T) {
 		[]common.Hash{
 			common.HexToHash("0xe4"),
 			common.HexToHash("0xe5"),
+			common.HexToHash("0xe50"),
 		},
 	)
 
@@ -211,6 +219,7 @@ func TestContaining(t *testing.T) {
 			common.HexToHash("0xe5"),
 			common.HexToHash("0xe6"),
 			common.HexToHash("0xe7"),
+			common.HexToHash("0xe50"),
 		},
 	)
 
@@ -249,6 +258,7 @@ func TestContaining(t *testing.T) {
 		slices.Collect(ix.findEntitiesStartingWith("foo")),
 		[]common.Hash{
 			common.HexToHash("0xe5"),
+			common.HexToHash("0xe50"),
 		},
 	)
 
@@ -258,6 +268,7 @@ func TestContaining(t *testing.T) {
 		[]common.Hash{
 			common.HexToHash("0xe4"),
 			common.HexToHash("0xe5"),
+			common.HexToHash("0xe50"),
 		},
 	)
 }
@@ -282,16 +293,19 @@ func TestAddRemoveAnnotation(t *testing.T) {
 	require.NoError(t, ix.addEntity("t", common.HexToHash("0xe5")))
 	require.Equal(t, 9, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
-	require.NoError(t, ix.addEntity("te", common.HexToHash("0xe7")))
-	//require.Equal(t, 44, db.GetStorageEntryCount(storageutil.GolemDBAddress))
-	db.Print(storageutil.GolemDBAddress)
+	require.NoError(t, ix.addEntity("test", common.HexToHash("0xe7")))
+	require.Equal(t, 31, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+
+	require.NoError(t, ix.addEntity("thisisaverylongstringthatshouldnotincreasethelengthbymuch", common.HexToHash("0xe8")))
+
+	require.Equal(t, 543, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.NoError(t, ix.removeEntity("thisisaverylongstringthatshouldnotincreasethelengthbymuch", common.HexToHash("0xe8")))
 
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe6")))
-	//require.Equal(t, 42, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 29, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe5")))
-	//require.Equal(t, 39, db.GetStorageEntryCount(storageutil.GolemDBAddress))
-	require.NoError(t, ix.removeEntity("te", common.HexToHash("0xe7")))
+	require.Equal(t, 26, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.NoError(t, ix.removeEntity("test", common.HexToHash("0xe7")))
 
-	db.Print(storageutil.GolemDBAddress)
 	require.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 }
