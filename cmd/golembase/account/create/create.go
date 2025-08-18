@@ -31,14 +31,17 @@ func Create() *cli.Command {
 			fmt.Println("walletPath", walletPath)
 
 			info, err := os.Stat(walletPath)
-			if err != nil {
+			// We only care if the error is insufficient permissions. If the file does not
+			// exist or its size is zero, we can ignore the error since we are creating it.
+			if err == nil {
+				if info.Size() != 0 {
+					return fmt.Errorf("A wallet already exists at %s", walletPath)
+				}
+			} else if os.IsPermission(err) {
 				return fmt.Errorf("failed to stat walletPath %s: %w", walletPath, err)
 			}
-			if info.Size() != 0 {
-				return fmt.Errorf("A wallet already exists at %s", walletPath)
-			}
 
-			password, err := CreatePassword()
+			password, err := GetPasswordFromStdinOrPrompt()
 			if err != nil {
 				return fmt.Errorf("failed to create password: %w", err)
 			}
@@ -64,9 +67,9 @@ func Create() *cli.Command {
 	}
 }
 
-// CreatePassword reads a password from stdin if piped, or interactively if in a terminal
+// GetPasswordFromStdinOrPrompt reads a password from stdin if piped, or interactively if in a terminal
 // confirming that the passwords match
-func CreatePassword() (string, error) {
+func GetPasswordFromStdinOrPrompt() (string, error) {
 	// Check if input is coming from a terminal
 	if term.IsTerminal(int(syscall.Stdin)) {
 

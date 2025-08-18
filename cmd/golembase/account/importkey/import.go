@@ -39,7 +39,7 @@ func ImportAccount() *cli.Command {
 				return fmt.Errorf("failed to get config file path: %w", err)
 			}
 
-			password, err := create.CreatePassword()
+			password, err := create.GetPasswordFromStdinOrPrompt()
 			if err != nil {
 				return fmt.Errorf("failed to create password: %w", err)
 			}
