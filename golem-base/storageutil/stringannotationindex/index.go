@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/bytekeyset"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"golang.org/x/text/unicode/norm"
 )
@@ -46,27 +47,44 @@ func findCommonPrefix(s1 []byte, s2 []byte) []byte {
 }
 
 func (n *node) getEntityKeySetAddress() common.Hash {
-	path := slices.Concat(n.path, n.prefix)
-	return crypto.Keccak256Hash(entitiesSetKey, []byte(n.ix.annotationKey), path)
+	return crypto.Keccak256Hash(
+		entitiesSetKey,
+		n.ix.annotationKey,
+		n.path,
+		n.prefix,
+	)
 }
 
 func (n *node) getSuffixEntityKeySetAddress() common.Hash {
-	path := slices.Concat(n.path, n.prefix)
-	return crypto.Keccak256Hash(suffixEntitiesKey, []byte(n.ix.annotationKey), path)
+	return crypto.Keccak256Hash(
+		suffixEntitiesKey,
+		n.ix.annotationKey,
+		n.path,
+		n.prefix,
+	)
 }
 
 func (n *node) getChildrenKeySetAddress() common.Hash {
-	path := slices.Concat(n.path, n.prefix)
-	return crypto.Keccak256Hash(childrenKey, []byte(n.ix.annotationKey), path)
+	return crypto.Keccak256Hash(
+		childrenKey,
+		n.ix.annotationKey,
+		n.path,
+		n.prefix,
+	)
 }
 
 func (n *node) getPrefixAddressOfChild(childByte byte) common.Hash {
-	path := slices.Concat(n.path, n.prefix, []byte{childByte})
-	return crypto.Keccak256Hash(prefixesKey, []byte(n.ix.annotationKey), path)
+	return crypto.Keccak256Hash(
+		prefixesKey,
+		n.ix.annotationKey,
+		n.path,
+		n.prefix,
+		[]byte{childByte},
+	)
 }
 
 func (n *node) isEmpty() bool {
-	numOfChildren := keyset.Size(n.ix.db, n.getChildrenKeySetAddress())
+	numOfChildren := bytekeyset.Size(n.ix.db, n.getChildrenKeySetAddress())
 	numOfEntities := keyset.Size(n.ix.db, n.getEntityKeySetAddress())
 	numOfSuffixEntities := keyset.Size(n.ix.db, n.getSuffixEntityKeySetAddress())
 
@@ -180,8 +198,7 @@ func (n *node) addEntity(
 }
 
 func (n *node) getChild(b byte) *node {
-	// TODO: we use a 32B slot to store one byte, can we optimise this??
-	if keyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{b})) {
+	if bytekeyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), b) {
 		prefixHash := n.ix.db.GetState(storageutil.GolemDBAddress, n.getPrefixAddressOfChild(b))
 		// Trim the extra zero bytes that were introduced when we converted to a 32 byte hash
 		prefix := bytes.TrimLeft(prefixHash.Bytes(), "\x00")
@@ -214,14 +231,14 @@ func (n *node) addChild(prefix []byte) (*node, error) {
 		prefix: prefix,
 	}
 
-	// The key is the first byte of the child's prefix, converted to a 32B hash
-	key := common.BytesToHash([]byte{child.prefix[0]})
-	if keyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), key) {
+	// The key is the first byte of the child's prefix
+	key := child.prefix[0]
+	if bytekeyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), key) {
 		return nil, fmt.Errorf("key already present in the keyset, this is a bug")
 	}
 
 	// Register the new child as a child of n
-	err := keyset.AddValue(n.ix.db, n.getChildrenKeySetAddress(), key)
+	err := bytekeyset.AddValue(n.ix.db, n.getChildrenKeySetAddress(), key)
 	if err != nil {
 		return nil, fmt.Errorf("error adding child to node: %w", err)
 	}
@@ -285,10 +302,10 @@ func (n *node) removeEntity(
 					return false, fmt.Errorf("error removing entity from index: %w", err)
 				}
 				if erased {
-					if !keyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{childByte})) {
+					if !bytekeyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), childByte) {
 						return false, fmt.Errorf("keyset does not contain child")
 					}
-					err := keyset.RemoveValue(n.ix.db, n.getChildrenKeySetAddress(), common.BytesToHash([]byte{childByte}))
+					err := bytekeyset.RemoveValue(n.ix.db, n.getChildrenKeySetAddress(), childByte)
 					if err != nil {
 						return false, fmt.Errorf("error removing entity from index: %w", err)
 					}
@@ -297,7 +314,7 @@ func (n *node) removeEntity(
 
 					// If possible, fuse nodes together again
 					if len(n.prefix) != 0 &&
-						keyset.Size(n.ix.db, n.getChildrenKeySetAddress()).CmpUint64(1) == 0 &&
+						bytekeyset.Size(n.ix.db, n.getChildrenKeySetAddress()).CmpUint64(1) == 0 &&
 						keyset.Size(n.ix.db, n.getEntityKeySetAddress()).CmpUint64(0) == 0 &&
 						keyset.Size(n.ix.db, n.getSuffixEntityKeySetAddress()).CmpUint64(0) == 0 {
 						// We know that this will only iterate once
@@ -305,13 +322,13 @@ func (n *node) removeEntity(
 							fusedPrefix := slices.Concat(n.prefix, child.prefix)
 
 							if len(fusedPrefix) <= 32 {
-								keyset.Clear(n.ix.db, n.getChildrenKeySetAddress())
+								bytekeyset.Clear(n.ix.db, n.getChildrenKeySetAddress())
 								n.ix.db.SetState(storageutil.GolemDBAddress, n.getPrefixAddressOfChild(child.prefix[0]), common.Hash{})
 
 								n.prefix = fusedPrefix
 								prefixAddress := crypto.Keccak256Hash(
 									prefixesKey,
-									[]byte(n.ix.annotationKey),
+									n.ix.annotationKey,
 									slices.Concat(n.path, n.prefix[0:1]),
 								)
 								n.ix.db.SetState(
@@ -332,25 +349,22 @@ func (n *node) removeEntity(
 
 func (n *node) getChildren() iter.Seq[*node] {
 	return iter.Seq[*node](func(yield func(*node) bool) {
-		keyset.Iterate(n.ix.db, n.getChildrenKeySetAddress())(
-			func(hash common.Hash) bool {
-				// Trim the extra zero bytes that were introduced when we converted this to a 32 byte hash
-				path := bytes.TrimLeft(hash.Bytes(), "\x00")
-				// Find the child based on the first byte of the path
-				return yield(n.getChild(path[0]))
+		bytekeyset.Iterate(n.ix.db, n.getChildrenKeySetAddress())(
+			func(b byte) bool {
+				return yield(n.getChild(b))
 			})
 	})
 }
 
 type Index struct {
 	db            storageutil.StateAccess
-	annotationKey string
+	annotationKey []byte
 }
 
-func NewIndex(db storageutil.StateAccess, annannotationKey string) *Index {
+func NewIndex(db storageutil.StateAccess, annotationKey string) *Index {
 	return &Index{
 		db:            db,
-		annotationKey: annannotationKey,
+		annotationKey: []byte(annotationKey),
 	}
 }
 

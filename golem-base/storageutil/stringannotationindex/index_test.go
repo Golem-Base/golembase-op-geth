@@ -136,7 +136,7 @@ func TestAddAnnotation(t *testing.T) {
 		common.HexToHash("0xe2"),
 		common.HexToHash("0xe3"),
 	))
-	require.Equal(t, 473, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 455, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.Equal(t, ix.getRootNode().getChild([]byte("f")[0]).prefix, []byte("foo"))
 	require.Equal(t, ix.getRootNode().getChild([]byte("f")[0]).getChild([]byte("b")[0]).prefix, []byte("bar"))
@@ -294,17 +294,17 @@ func TestAddRemoveAnnotation(t *testing.T) {
 	require.Equal(t, 9, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.NoError(t, ix.addEntity("test", common.HexToHash("0xe7")))
-	require.Equal(t, 31, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 29, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 
 	require.NoError(t, ix.addEntity("thisisaverylongstringthatshouldnotincreasethelengthbymuch", common.HexToHash("0xe8")))
 
-	require.Equal(t, 543, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 486, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.removeEntity("thisisaverylongstringthatshouldnotincreasethelengthbymuch", common.HexToHash("0xe8")))
 
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe6")))
-	require.Equal(t, 29, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 27, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.removeEntity("t", common.HexToHash("0xe5")))
-	require.Equal(t, 26, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	require.Equal(t, 24, db.GetStorageEntryCount(storageutil.GolemDBAddress))
 	require.NoError(t, ix.removeEntity("test", common.HexToHash("0xe7")))
 
 	require.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
