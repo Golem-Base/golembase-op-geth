@@ -3,6 +3,8 @@ package stringannotationindex
 
 // TODO:
 // * add lexicographical sort
+// * can we avoid storing the entities for a suffix entry again, and instead
+//   somehow link back to the array that was created for the non-suffix entry?
 
 import (
 	"bytes"
@@ -93,35 +95,94 @@ func (n *node) isEmpty() bool {
 		numOfSuffixEntities.CmpUint64(0) == 0
 }
 
-func (n *node) AddEntity(value string, entryType EntryType, entityKeys ...common.Hash) error {
-	return n.addEntity(&strings.Builder{}, []byte(value), entryType, entityKeys...)
+func (n *node) splitChild(remaining []byte, child *node) error {
+	existingChildPrefix := child.prefix
+
+	// Find the common prefix between the two, this will be the new prefix of the child
+	prefix := findCommonPrefix(remaining, child.prefix)
+	if len(prefix) == 0 {
+		panic("prefix was empty, this should never happen")
+	}
+
+	// Set the new prefix for the child
+	child.prefix = prefix
+	// Rewrite the prefix of the modified child
+	n.setPrefixOf(child)
+
+	// The new prefix for the existing child that we pushed down
+	newChildPrefix, found := bytes.CutPrefix(existingChildPrefix, prefix)
+	if !found {
+		panic("this should never happen")
+	}
+	// By creating this child, it should automatically have its keysets pointing
+	// to the sets that already existed before the split, since the addresses of
+	// these sets are calculated purely based on the concatenation of the node's
+	// path and prefix
+	newChild, err := child.addChild(newChildPrefix)
+	if err != nil {
+		return fmt.Errorf("error splitting node: %w", err)
+	}
+
+	if newChild.isEmpty() {
+		panic("the new child resulting from the split was empty, this should never happen")
+	}
+
+	rest, found := bytes.CutPrefix(remaining, prefix)
+	if !found {
+		panic("this should never happen")
+	}
+	if len(rest) > 0 {
+		if _, err := child.addChild([]byte(rest)); err != nil {
+			return fmt.Errorf("error splitting node: %w", err)
+		}
+	}
+
+	return nil
 }
 
-func (n *node) getEntityKeySetAddressByType(entryType EntryType) (common.Hash, error) {
-	switch entryType {
-	case RealEntry:
-		return n.getEntityKeySetAddress(), nil
-	case SuffixEntry:
-		return n.getSuffixEntityKeySetAddress(), nil
-	default:
-		return common.Hash{}, fmt.Errorf("tried to add an entity with an undefined entry type")
+func (n *node) fuse() {
+	// We can't fuse the root node, which is the only node with an empty prefix
+	// We can only fuse a node with its child if it has only one child, and if the
+	// node doesn't store any entities or suffixes
+	if len(n.prefix) != 0 &&
+		bytekeyset.Size(n.ix.db, n.getChildrenKeySetAddress()).CmpUint64(1) == 0 &&
+		keyset.Size(n.ix.db, n.getEntityKeySetAddress()).CmpUint64(0) == 0 &&
+		keyset.Size(n.ix.db, n.getSuffixEntityKeySetAddress()).CmpUint64(0) == 0 {
+		// We know that this will only iterate once
+		for child := range n.getChildren() {
+			fusedPrefix := slices.Concat(n.prefix, child.prefix)
+
+			if len(fusedPrefix) <= 32 {
+				bytekeyset.Clear(n.ix.db, n.getChildrenKeySetAddress())
+				n.ix.db.SetState(storageutil.GolemDBAddress, n.getPrefixAddressOfChild(child.prefix[0]), common.Hash{})
+
+				n.prefix = fusedPrefix
+				prefixAddress := crypto.Keccak256Hash(
+					prefixesKey,
+					n.ix.annotationKey,
+					n.path,
+					n.prefix[0:1],
+				)
+				n.ix.db.SetState(
+					storageutil.GolemDBAddress,
+					prefixAddress,
+					common.BytesToHash(n.prefix),
+				)
+			}
+		}
 	}
 }
 
-func (n *node) addEntity(
-	seen *strings.Builder,
-	remaining []byte,
-	entryType EntryType,
-	entityKeys ...common.Hash) error {
+func (n *node) addEntity(value string, entityKeys ...common.Hash) error {
+	return n.doAddEntity(&strings.Builder{}, []byte(value), entityKeys...)
+}
+
+func (n *node) doAddEntity(seen *strings.Builder, remaining []byte, entityKeys ...common.Hash) error {
 
 	if len(remaining) == 0 {
 		// We found an existing node for the annotation value, so we just add the entities to it
-		keysetAddr, err := n.getEntityKeySetAddressByType(entryType)
-		if err != nil {
-			return fmt.Errorf("error adding entity to index: %w", err)
-		}
 		for _, entityKey := range entityKeys {
-			err := keyset.AddValue(n.ix.db, keysetAddr, entityKey)
+			err := keyset.AddValue(n.ix.db, n.getEntityKeySetAddress(), entityKey)
 			if err != nil {
 				return fmt.Errorf("error adding entity to index: %w", err)
 			}
@@ -147,53 +208,61 @@ func (n *node) addEntity(
 		if _, err := seen.Write(child.prefix); err != nil {
 			return fmt.Errorf("error adding entity to index: %w", err)
 		}
-		return child.addEntity(seen, rest, entryType, entityKeys...)
+		return child.doAddEntity(seen, rest, entityKeys...)
 	} else {
 		// The child prefix is not a prefix of the remaining search string.
-		// The child matches at least one byte though, so need to split the child
-
-		existingChildPrefix := child.prefix
-
-		// Find the common prefix between the two, this will be the new prefix of the child
-		prefix := findCommonPrefix(remaining, child.prefix)
-		if len(prefix) == 0 {
-			panic("prefix was empty, this should never happen")
+		// The child matches at least one byte though, so we need to split the child
+		if err := n.splitChild(remaining, child); err != nil {
+			return fmt.Errorf("error while adding entity to index: %w", err)
 		}
 
-		// Set the new prefix for the child
-		child.prefix = prefix
-		// Rewrite the prefix of the modified child
-		n.setPrefixOf(child)
+		return n.doAddEntity(seen, remaining, entityKeys...)
+	}
+}
 
-		// The new prefix for the existing child that we pushed down
-		newChildPrefix, found := bytes.CutPrefix(existingChildPrefix, prefix)
-		if !found {
-			panic("this should never happen")
-		}
-		// By creating this child, it should automatically have its keysets pointing
-		// to the sets that already existed before the split, since the addresses of
-		// these sets are calculated purely based on the concatenation of the node's
-		// path and prefix
-		newChild, err := child.addChild(newChildPrefix)
-		if err != nil {
-			return fmt.Errorf("error splitting node: %w", err)
-		}
+func (n *node) addSuffix(fullPath string, suffix string, entityKeys ...common.Hash) error {
+	return n.doAddSuffix([]byte(fullPath), &strings.Builder{}, []byte(suffix), entityKeys...)
+}
 
-		if newChild.isEmpty() {
-			panic("the new child resulting from the split was empty, this should never happen")
-		}
-
-		rest, found := bytes.CutPrefix(remaining, prefix)
-		if !found {
-			panic("this should never happen")
-		}
-		if len(rest) > 0 {
-			if _, err := child.addChild([]byte(rest)); err != nil {
-				return fmt.Errorf("error splitting node: %w", err)
+func (n *node) doAddSuffix(fullPath []byte, seen *strings.Builder, remaining []byte, entityKeys ...common.Hash) error {
+	if len(remaining) == 0 {
+		// We found an existing node for the annotation value, so we just add the entities to it
+		for _, entityKey := range entityKeys {
+			err := keyset.AddValue(n.ix.db, n.getSuffixEntityKeySetAddress(), entityKey)
+			if err != nil {
+				return fmt.Errorf("error adding entity to index: %w", err)
 			}
 		}
+		return nil
+	}
 
-		return n.addEntity(seen, remaining, entryType, entityKeys...)
+	// Get the child corresponding to the next byte
+	child := n.getChild(remaining[0])
+	if child == nil {
+		// No such child exists, so let's create one
+		newChild, err := n.addChild([]byte(remaining))
+		if err != nil {
+			return err
+		}
+		child = newChild
+	}
+
+	// Check whether the child prefix is a prefix of the remaining search string
+	// this includes the case where the child prefix equals the remaining search string
+	if rest, found := bytes.CutPrefix(remaining, child.prefix); found {
+		// The child prefix is a prefix, so we can simply consume the prefix and recurse
+		if _, err := seen.Write(child.prefix); err != nil {
+			return fmt.Errorf("error adding entity to index: %w", err)
+		}
+		return child.doAddSuffix(fullPath, seen, rest, entityKeys...)
+	} else {
+		// The child prefix is not a prefix of the remaining search string.
+		// The child matches at least one byte though, so we need to split the child
+		if err := n.splitChild(remaining, child); err != nil {
+			return fmt.Errorf("error while adding entity to index: %w", err)
+		}
+
+		return n.doAddSuffix(fullPath, seen, remaining, entityKeys...)
 	}
 }
 
@@ -257,28 +326,18 @@ func (n *node) setPrefixOf(child *node) {
 	)
 }
 
-func (n *node) RemoveEntity(value string, entryType EntryType, entityKeys ...common.Hash) (bool, error) {
-	return n.removeEntity(&strings.Builder{}, []byte(value), entryType, entityKeys...)
+func (n *node) removeEntity(value string, entityKeys ...common.Hash) error {
+	_, err := n.doRemoveEntity(&strings.Builder{}, []byte(value), entityKeys...)
+	return err
 }
 
 // removeEntity removes the given entity from the given value, and returns
 // a boolean indicating whether this removal led to the node becoming empty
-func (n *node) removeEntity(
-	seen *strings.Builder,
-	remaining []byte,
-	entryType EntryType,
-	entityKeys ...common.Hash) (bool, error) {
+func (n *node) doRemoveEntity(seen *strings.Builder, remaining []byte, entityKeys ...common.Hash) (bool, error) {
 
 	if len(remaining) == 0 {
-		keysetAddr, err := n.getEntityKeySetAddressByType(entryType)
-		if err != nil {
-			return false, fmt.Errorf("error removing entity from index: %w", err)
-		}
 		for _, entityKey := range entityKeys {
-			if !keyset.ContainsValue(n.ix.db, keysetAddr, entityKey) {
-				return false, fmt.Errorf("keyset does not contain entity")
-			}
-			err := keyset.RemoveValue(n.ix.db, keysetAddr, entityKey)
+			err := keyset.RemoveValue(n.ix.db, n.getEntityKeySetAddress(), entityKey)
 			if err != nil {
 				return false, fmt.Errorf("error removing entity from index: %w", err)
 			}
@@ -297,14 +356,11 @@ func (n *node) removeEntity(
 					return false, fmt.Errorf("error removing entity from index: %w", err)
 				}
 
-				erased, err := child.removeEntity(seen, rest, entryType, entityKeys...)
+				erased, err := child.doRemoveEntity(seen, rest, entityKeys...)
 				if err != nil {
 					return false, fmt.Errorf("error removing entity from index: %w", err)
 				}
 				if erased {
-					if !bytekeyset.ContainsValue(n.ix.db, n.getChildrenKeySetAddress(), childByte) {
-						return false, fmt.Errorf("keyset does not contain child")
-					}
 					err := bytekeyset.RemoveValue(n.ix.db, n.getChildrenKeySetAddress(), childByte)
 					if err != nil {
 						return false, fmt.Errorf("error removing entity from index: %w", err)
@@ -312,33 +368,58 @@ func (n *node) removeEntity(
 
 					n.ix.db.SetState(storageutil.GolemDBAddress, n.getPrefixAddressOfChild(childByte), common.Hash{})
 
-					// If possible, fuse nodes together again
-					if len(n.prefix) != 0 &&
-						bytekeyset.Size(n.ix.db, n.getChildrenKeySetAddress()).CmpUint64(1) == 0 &&
-						keyset.Size(n.ix.db, n.getEntityKeySetAddress()).CmpUint64(0) == 0 &&
-						keyset.Size(n.ix.db, n.getSuffixEntityKeySetAddress()).CmpUint64(0) == 0 {
-						// We know that this will only iterate once
-						for child := range n.getChildren() {
-							fusedPrefix := slices.Concat(n.prefix, child.prefix)
+					// Try to fuse the node to compact the trie
+					n.fuse()
+				}
+			}
+		}
+	}
 
-							if len(fusedPrefix) <= 32 {
-								bytekeyset.Clear(n.ix.db, n.getChildrenKeySetAddress())
-								n.ix.db.SetState(storageutil.GolemDBAddress, n.getPrefixAddressOfChild(child.prefix[0]), common.Hash{})
+	return n.isEmpty(), nil
+}
 
-								n.prefix = fusedPrefix
-								prefixAddress := crypto.Keccak256Hash(
-									prefixesKey,
-									n.ix.annotationKey,
-									slices.Concat(n.path, n.prefix[0:1]),
-								)
-								n.ix.db.SetState(
-									storageutil.GolemDBAddress,
-									prefixAddress,
-									common.BytesToHash(n.prefix),
-								)
-							}
-						}
+func (n *node) removeSuffix(value string, entityKeys ...common.Hash) error {
+	_, err := n.doRemoveSuffix(&strings.Builder{}, []byte(value), entityKeys...)
+	return err
+}
+
+func (n *node) doRemoveSuffix(seen *strings.Builder, remaining []byte, entityKeys ...common.Hash) (bool, error) {
+
+	if len(remaining) == 0 {
+		for _, entityKey := range entityKeys {
+			err := keyset.RemoveValue(n.ix.db, n.getSuffixEntityKeySetAddress(), entityKey)
+			if err != nil {
+				return false, fmt.Errorf("error removing suffix from index: %w", err)
+			}
+		}
+	} else {
+
+		childByte := remaining[0]
+		child := n.getChild(childByte)
+
+		if child != nil {
+
+			rest, found := bytes.CutPrefix(remaining, child.prefix)
+			if found {
+
+				if _, err := seen.Write(child.prefix); err != nil {
+					return false, fmt.Errorf("error removing suffix from index: %w", err)
+				}
+
+				erased, err := child.doRemoveSuffix(seen, rest, entityKeys...)
+				if err != nil {
+					return false, fmt.Errorf("error removing suffix from index: %w", err)
+				}
+				if erased {
+					err := bytekeyset.RemoveValue(n.ix.db, n.getChildrenKeySetAddress(), childByte)
+					if err != nil {
+						return false, fmt.Errorf("error removing suffix from index: %w", err)
 					}
+
+					n.ix.db.SetState(storageutil.GolemDBAddress, n.getPrefixAddressOfChild(childByte), common.Hash{})
+
+					// Try to fuse the node to compact the trie
+					n.fuse()
 				}
 			}
 		}
@@ -376,37 +457,50 @@ func (ix *Index) getRootNode() *node {
 	}
 }
 
-func (ix *Index) addEntity(value string, entityKeys ...common.Hash) error {
-	rest := norm.NFC.String(value)
-	entryType := RealEntry
+func (ix *Index) AddEntity(value string, entityKeys ...common.Hash) error {
+	normalised := norm.NFC.String(value)
+	rest := normalised
+
+	isSuffix := false
+
 	for len(rest) != 0 {
-		err := ix.getRootNode().AddEntity(rest, entryType, entityKeys...)
+		var err error
+		if !isSuffix {
+			err = ix.getRootNode().addEntity(rest, entityKeys...)
+		} else {
+			err = ix.getRootNode().addSuffix(normalised, rest, entityKeys...)
+		}
 		if err != nil {
 			return fmt.Errorf("error adding entity to index: %w", err)
 		}
 
 		rest = rest[1:]
-		entryType = SuffixEntry
+		isSuffix = true
 	}
 	return nil
 }
 
-func (ix *Index) removeEntity(value string, entityKey common.Hash) error {
+func (ix *Index) RemoveEntity(value string, entityKey common.Hash) error {
 	rest := norm.NFC.String(value)
-	entryType := RealEntry
+	isSuffix := false
 	for len(rest) != 0 {
-		_, err := ix.getRootNode().RemoveEntity(rest, entryType, entityKey)
+		var err error
+		if !isSuffix {
+			err = ix.getRootNode().removeEntity(rest, entityKey)
+		} else {
+			err = ix.getRootNode().removeSuffix(rest, entityKey)
+		}
 		if err != nil {
 			return fmt.Errorf("error removing entity from index: %w", err)
 		}
 
 		rest = rest[1:]
-		entryType = SuffixEntry
+		isSuffix = true
 	}
 	return nil
 }
 
-func (ix *Index) findEntitiesStartingWith(pattern string) iter.Seq[common.Hash] {
+func (ix *Index) FindEntitiesStartingWith(pattern string) iter.Seq[common.Hash] {
 
 	rest := []byte(norm.NFC.String(pattern))
 
@@ -467,7 +561,7 @@ func (ix *Index) findEntitiesStartingWith(pattern string) iter.Seq[common.Hash] 
 	})
 }
 
-func (ix *Index) findEntitiesEndingWith(pattern string) iter.Seq[common.Hash] {
+func (ix *Index) FindEntitiesEndingWith(pattern string) iter.Seq[common.Hash] {
 
 	rest := []byte(norm.NFC.String(pattern))
 
@@ -513,7 +607,7 @@ func (ix *Index) findEntitiesEndingWith(pattern string) iter.Seq[common.Hash] {
 	})
 }
 
-func (ix *Index) findEntitiesContaining(pattern string) iter.Seq[common.Hash] {
+func (ix *Index) FindEntitiesContaining(pattern string) iter.Seq[common.Hash] {
 
 	rest := []byte(norm.NFC.String(pattern))
 
