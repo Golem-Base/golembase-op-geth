@@ -2,6 +2,7 @@ package bytearray
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
@@ -95,6 +96,31 @@ func (a *ByteArray) RemoveLast() error {
 	}
 
 	return nil
+}
+
+func (a *ByteArray) RemoveUnordered(index *uint256.Int) (byte, error) {
+
+	size := a.Size()
+	if size.CmpUint64(0) == 0 {
+		return byte(0), ErrArrayEmpty
+	}
+
+	lastElementIndex := new(uint256.Int).Set(size)
+	lastElementIndex.SubUint64(lastElementIndex, 1)
+	lastElementValue, err := a.Get(lastElementIndex)
+	if err != nil {
+		return byte(0), fmt.Errorf("failed to get last element: %w", err)
+	}
+
+	if lastElementIndex.Cmp(index) != 0 {
+		a.Set(index, lastElementValue)
+	}
+
+	err = a.RemoveLast()
+	if err != nil {
+		return byte(0), fmt.Errorf("failed to remove last element: %w", err)
+	}
+	return lastElementValue, nil
 }
 
 func (a *ByteArray) Set(index *uint256.Int, value byte) error {

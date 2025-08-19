@@ -2,6 +2,7 @@ package array
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
@@ -68,6 +69,31 @@ func (a *Array) RemoveLast() error {
 	return nil
 }
 
+func (a *Array) RemoveUnordered(index *uint256.Int) (common.Hash, error) {
+
+	size := a.Size()
+	if size.CmpUint64(0) == 0 {
+		return common.Hash{}, ErrArrayEmpty
+	}
+
+	lastElementIndex := new(uint256.Int).Set(size)
+	lastElementIndex.SubUint64(lastElementIndex, 1)
+	lastElementValue, err := a.Get(lastElementIndex)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to get last element: %w", err)
+	}
+
+	if lastElementIndex.Cmp(index) != 0 {
+		a.Set(index, lastElementValue)
+	}
+
+	err = a.RemoveLast()
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to remove last element: %w", err)
+	}
+	return lastElementValue, nil
+}
+
 func (a *Array) Set(index *uint256.Int, value common.Hash) error {
 	size := a.Size()
 	if index.Cmp(size) >= 0 {
@@ -91,6 +117,19 @@ func (a *Array) Iterate(yield func(value common.Hash) bool) {
 			return
 		}
 		if !yield(value) {
+			return
+		}
+	}
+}
+
+func (a *Array) IterateWithIndex(yield func(index *uint256.Int, value common.Hash) bool) {
+	size := a.Size()
+	for i := new(uint256.Int).SetUint64(0); i.Cmp(size) < 0; i.AddUint64(i, 1) {
+		value, err := a.Get(i)
+		if err != nil {
+			return
+		}
+		if !yield(uint256.NewInt(0).SetBytes(i.Bytes()), value) {
 			return
 		}
 	}

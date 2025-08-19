@@ -69,6 +69,22 @@ func TestRemoveLastFromNonEmptyArray(t *testing.T) {
 
 }
 
+func TestRemoveUnordered(t *testing.T) {
+	db := newMockStateAccess()
+	array := array.NewArray(db, common.HexToHash("0xabc"))
+	for range 500 {
+		array.Append(common.HexToHash("0xa"))
+	}
+	array.Append(common.HexToHash("0xc"))
+	array.Set(uint256.NewInt(201), common.HexToHash("0xb"))
+
+	el, err := array.RemoveUnordered(uint256.NewInt(201))
+	require.NoError(t, err)
+
+	require.Equal(t, uint256.NewInt(500), array.Size())
+	require.Equal(t, common.HexToHash("0xc"), el)
+}
+
 func TestRemoveLastFromArrayWithOneElement(t *testing.T) {
 	db := newMockStateAccess()
 	array := array.NewArray(db, common.HexToHash("0xabc"))

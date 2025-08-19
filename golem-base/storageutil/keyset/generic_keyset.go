@@ -16,6 +16,7 @@ type Array[T any] interface {
 	Get(index *uint256.Int) (T, error)
 	Append(value T)
 	RemoveLast() error
+	RemoveUnordered(index *uint256.Int) (T, error)
 	Set(index *uint256.Int, value T) error
 	Iterate(yield func(T) bool)
 	Clear()
@@ -72,31 +73,19 @@ func GenericRemoveValue[T any](db StateAccess, impl StorageImpl[T], setKey commo
 	elementIndex := new(uint256.Int).SetBytes32(m.Get(impl.ValueToHash(value)).Bytes())
 	elementIndex.SubUint64(elementIndex, 1)
 
-	oldSize := array.Size()
-
-	lastElementIndex := new(uint256.Int).Set(oldSize)
-	lastElementIndex.SubUint64(lastElementIndex, 1)
-	lastElementValue, err := array.Get(lastElementIndex)
+	lastElementValue, err := array.RemoveUnordered(elementIndex)
 	if err != nil {
-		return fmt.Errorf("failed to get last element: %w", err)
+		return fmt.Errorf("failed to remove element from array: %w", err)
 	}
-
 	m.Set(impl.ValueToHash(value), zeroHash)
 
-	if lastElementIndex.Cmp(elementIndex) != 0 {
-		array.Set(elementIndex, lastElementValue)
+	if !array.Size().Eq(elementIndex) {
 		elementIndexPlusOne := new(uint256.Int).Set(elementIndex)
 		elementIndexPlusOne.AddUint64(elementIndexPlusOne, 1)
 		m.Set(impl.ValueToHash(lastElementValue), elementIndexPlusOne.Bytes32())
 	}
 
-	err = array.RemoveLast()
-	if err != nil {
-		return fmt.Errorf("failed to remove last element: %w", err)
-	}
-
 	return nil
-
 }
 
 // GenericSize returns the number of elements in the set as a uint256

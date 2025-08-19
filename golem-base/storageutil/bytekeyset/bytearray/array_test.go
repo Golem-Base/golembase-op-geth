@@ -170,6 +170,22 @@ func TestRemoveLastFromLongArray(t *testing.T) {
 	require.Equal(t, uint256.NewInt(511), array.Size())
 }
 
+func TestRemoveUnordered(t *testing.T) {
+	db := newMockStateAccess()
+	array := bytearray.NewArray(db, common.HexToHash("0xabc"))
+	for range 500 {
+		array.Append(byte(1))
+	}
+	array.Append(byte(3))
+	array.Set(uint256.NewInt(201), byte(0))
+
+	el, err := array.RemoveUnordered(uint256.NewInt(201))
+	require.NoError(t, err)
+
+	require.Equal(t, uint256.NewInt(500), array.Size())
+	require.Equal(t, byte(3), el)
+}
+
 func TestSetElementForOneElementArray(t *testing.T) {
 	db := newMockStateAccess()
 	array := bytearray.NewArray(db, common.HexToHash("0xabc"))
