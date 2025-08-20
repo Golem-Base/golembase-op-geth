@@ -1,18 +1,4 @@
 services:
-  setup:
-    image: alpine:latest
-    volumes:
-      - mongodb_keyfile:/mongodb-keyfile
-    command: >
-      /bin/sh -c "
-      mkdir -p /mongodb-keyfile;
-      if [ ! -f /mongodb-keyfile/mongodb-keyfile ]; then
-          echo 'ThisIsA32ByteKeyForMongoDBReplSet' > /mongodb-keyfile/mongodb-keyfile;
-          chmod 400 /mongodb-keyfile/mongodb-keyfile;
-          chown 999:999 /mongodb-keyfile/mongodb-keyfile;
-      fi;
-      echo 'MongoDB keyfile initialized'
-      "
 
   op-geth:
     build:

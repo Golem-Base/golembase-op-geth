@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"os"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore/sqlitegolem"
@@ -62,6 +64,12 @@ type SQLStore struct {
 
 // NewStore creates a new ETL instance with database connection and schema setup
 func NewStore(dbFile string) (*SQLStore, error) {
+	dir := filepath.Dir(dbFile)
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database directory: %w", err)
+	}
+
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

@@ -269,6 +269,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	overrides.ApplySuperchainUpgrades = config.ApplySuperchainUpgrades
 
+	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
 	)

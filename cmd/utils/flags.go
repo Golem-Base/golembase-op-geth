@@ -2477,8 +2477,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		}
 	}
 
+	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
 	st, err := sqlstore.NewStore(
-		"sqlstate.db",
+		stack.Config().GolemBaseSQLStateFile,
 	)
 	if err != nil {
 		Fatalf("failed to create SQLStore: %v", err)
