@@ -1,62 +1,34 @@
 package wal2
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
-	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/etl"
+	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
-type BlockInfo struct {
-	Number     uint64      `json:"number,string"`
-	Hash       common.Hash `json:"hash"`
-	ParentHash common.Hash `json:"parentHash"`
-}
-
-type Operation struct {
-	Create *Create      `json:"create,omitempty"`
-	Update *Update      `json:"update,omitempty"`
-	Delete *common.Hash `json:"delete,omitempty"`
-	Extend *ExtendBTL   `json:"extend,omitempty"`
-}
-
-type Create struct {
-	EntityKey          common.Hash                `json:"entityKey"`
-	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
-	Payload            []byte                     `json:"payload"`
-	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
-	Owner              common.Address             `json:"owner"`
-}
-
-type Update struct {
-	EntityKey          common.Hash                `json:"entityKey"`
-	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
-	Payload            []byte                     `json:"payload"`
-	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
-	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
-}
-
-type ExtendBTL struct {
-	EntityKey    common.Hash `json:"entityKey"`
-	OldExpiresAt uint64      `json:"oldExpiresAt"`
-	NewExpiresAt uint64      `json:"newExpiresAt"`
-}
-
 func WriteLogForBlockSqlite(
-	sqliteETL *etl.ETL,
+	sqlStore *sqlstore.SQLStore,
+	db *state.CachingDB,
+	hc *core.HeaderChain,
 	block *types.Block,
 	chainID *big.Int,
 	receipts []*types.Receipt,
 ) (err error) {
+
+	ctx := context.Background()
 
 	defer func() {
 		if err != nil {
@@ -64,20 +36,121 @@ func WriteLogForBlockSqlite(
 		}
 	}()
 
-	// enc.Encode(BlockInfo{
-	// 	Number:     block.NumberU64(),
-	// 	Hash:       block.Hash(),
-	// 	ParentHash: block.ParentHash(),
-	// })
+	networkID := chainID.String()
 
-	// sqliteETL.Begin()
-	// defer sqliteETL.
+	processingStatus, err := sqlStore.GetProcessingStatus(ctx, networkID)
+	if err != nil {
+		return fmt.Errorf("failed to get processing status 11: %w", err)
+	}
 
-	// sqliteETL.InsertBlock(context.Background(), block.NumberU64(), block.Hash(), block.ParentHash())
+	var haveToResync bool
+	switch {
+	case processingStatus.LastProcessedBlockNumber == 0 && block.NumberU64() == 1:
+		haveToResync = false
+	case processingStatus.LastProcessedBlockNumber == 0 && block.NumberU64() != 1:
+		haveToResync = true
+	case processingStatus.LastProcessedBlockNumber != int64(block.NumberU64()-1):
+		haveToResync = true
+	case processingStatus.LastProcessedBlockHash != block.ParentHash().Hex():
+		haveToResync = true
+	default:
+		haveToResync = false
+	}
+
+	log.Info(
+		"processing status",
+		"lastProcessedBlockNumber", processingStatus.LastProcessedBlockNumber,
+		"lastProcessedBlockHash", processingStatus.LastProcessedBlockHash,
+		"block", block.NumberU64(),
+		"parentHash", block.ParentHash().Hex(),
+		"haveToResync", haveToResync,
+	)
+
+	if haveToResync {
+
+		log.Info("resyncing", "block", block.NumberU64(), "parentHash", block.ParentHash().Hex())
+
+		entityIterator := func(
+			yield func(*struct {
+				Key      common.Hash
+				Metadata entity.EntityMetaData
+				Payload  []byte
+			},
+				error,
+			) bool,
+		) {
+
+			parentHash := hc.GetHeaderByHash(block.ParentHash())
+			statedb, err := state.New(parentHash.Root, db)
+			if err != nil {
+				yield(nil, fmt.Errorf("failed to get statedb: %w", err))
+				return
+			}
+
+			log.Info("starting entity iteration")
+
+			for entityKey := range allentities.Iterate(statedb) {
+				log.Info("iterating over entity", "entityKey", entityKey.Hex())
+				emd, err := entity.GetEntityMetaData(statedb, entityKey)
+				if err != nil {
+					yield(nil, fmt.Errorf("failed to get entity metadata for key %s: %w", entityKey.Hex(), err))
+					return
+				}
+				payload := entity.GetPayload(statedb, entityKey)
+
+				if !yield(&struct {
+					Key      common.Hash
+					Metadata entity.EntityMetaData
+					Payload  []byte
+				}{
+					Key:      entityKey,
+					Metadata: *emd,
+					Payload:  payload,
+				}, nil) {
+					return
+				}
+			}
+		}
+
+		log.Info("resyncing -1", "block", block.NumberU64(), "parentHash", block.ParentHash().Hex())
+
+		if block.NumberU64() == uint64(1) {
+
+			// for genesis block, we need to iterate over all entities in the database, this is an empty iterator
+
+			log.Info("resyncing on top of genesis block", "block", block.NumberU64(), "parentHash", block.ParentHash().Hex())
+			entityIterator = func(
+				yield func(*struct {
+					Key      common.Hash
+					Metadata entity.EntityMetaData
+					Payload  []byte
+				},
+					error,
+				) bool,
+			) {
+
+			}
+		}
+
+		err = sqlStore.SnapSyncToBlock(ctx, chainID.String(), block.NumberU64()-1, block.ParentHash(), entityIterator)
+		if err != nil {
+			return fmt.Errorf("failed to snap sync to block: %w", err)
+		}
+
+	}
 
 	txns := block.Transactions()
 
 	signer := types.LatestSignerForChainID(chainID)
+
+	wal := sqlstore.BlockWal{
+		BlockInfo: sqlstore.BlockInfo{
+			Number:     block.NumberU64(),
+			Hash:       block.Hash(),
+			ParentHash: block.ParentHash(),
+		},
+		Operations: []sqlstore.Operation{},
+	}
 
 	for i, tx := range txns {
 		receipt := receipts[i]
@@ -103,15 +176,9 @@ func WriteLogForBlockSqlite(
 
 				key := l.Topics[1]
 
-				key = key
-
-				// TODO insert delete operation into sqlite
-				// err := enc.Encode(Operation{
-				// 	Delete: &key,
-				// })
-				// if err != nil {
-				// 	return fmt.Errorf("failed to encode delete operation: %w", err)
-				// }
+				wal.Operations = append(wal.Operations, sqlstore.Operation{
+					Delete: &key,
+				})
 
 			}
 			// create
@@ -158,7 +225,7 @@ func WriteLogForBlockSqlite(
 					return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
 				}
 
-				cr := Create{
+				cr := sqlstore.Create{
 					EntityKey:          key,
 					ExpiresAtBlock:     expiresAtBlock,
 					Payload:            create.Payload,
@@ -167,27 +234,16 @@ func WriteLogForBlockSqlite(
 					Owner:              from,
 				}
 
-				cr = cr
-
-				// TODO insert create operation into sqlite
-				// err = enc.Encode(Operation{
-				// 	Create: &cr,
-				// })
-				// if err != nil {
-				// 	return fmt.Errorf("failed to encode create operation: %w", err)
-				// }
+				wal.Operations = append(wal.Operations, sqlstore.Operation{
+					Create: &cr,
+				})
 
 			}
 
 			for _, del := range stx.Delete {
-				del = del
-				// TODO insert delete operation into sqlite
-				// err := enc.Encode(Operation{
-				// 	Delete: &del,
-				// })
-				// if err != nil {
-				// 	return fmt.Errorf("failed to encode delete operation: %w", err)
-				// }
+				wal.Operations = append(wal.Operations, sqlstore.Operation{
+					Delete: &del,
+				})
 			}
 
 			for i, update := range stx.Update {
@@ -197,7 +253,7 @@ func WriteLogForBlockSqlite(
 				expiresAtBlockU256 := uint256.NewInt(0).SetBytes(log.Data)
 				expiresAtBlock := expiresAtBlockU256.Uint64()
 
-				ur := Update{
+				ur := sqlstore.Update{
 					EntityKey:          key,
 					ExpiresAtBlock:     expiresAtBlock,
 					Payload:            update.Payload,
@@ -205,15 +261,9 @@ func WriteLogForBlockSqlite(
 					NumericAnnotations: update.NumericAnnotations,
 				}
 
-				ur = ur
-
-				// TODO insert update operation into sqlite
-				// err := enc.Encode(Operation{
-				// 	Update: &ur,
-				// })
-				// if err != nil {
-				// 	return fmt.Errorf("failed to encode update operation: %w", err)
-				// }
+				wal.Operations = append(wal.Operations, sqlstore.Operation{
+					Update: &ur,
+				})
 			}
 
 			for i, extend := range stx.Extend {
@@ -226,26 +276,29 @@ func WriteLogForBlockSqlite(
 				newExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[32:])
 				newExpiresAt := newExpiresAtU256.Uint64()
 
-				ex := ExtendBTL{
+				ex := sqlstore.ExtendBTL{
 					EntityKey:    extend.EntityKey,
 					OldExpiresAt: oldExpiresAt,
 					NewExpiresAt: newExpiresAt,
 				}
 
-				ex = ex
-
-				// TODO insert extend operation into sqlite
-				// err := enc.Encode(Operation{
-				// 	Extend: &ex,
-				// })
-				// if err != nil {
-				// 	return fmt.Errorf("failed to encode extend operation: %w", err)
-				// }
+				wal.Operations = append(wal.Operations, sqlstore.Operation{
+					Extend: &ex,
+				})
 			}
 
 		default:
 		}
 
+	}
+
+	err = sqlStore.InsertBlock(
+		ctx,
+		wal,
+		networkID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert block: %w", err)
 	}
 
 	return nil

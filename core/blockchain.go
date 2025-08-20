@@ -282,7 +282,7 @@ type BlockChain struct {
 	logger     *tracing.Hooks
 
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
-	onNewBlock         func(db ethdb.Database, block *types.Block, receipts []*types.Receipt) error
+	onNewBlock         func(db *state.CachingDB, hc *HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -295,7 +295,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
-func NewBlockChainWithOnNewBlock(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64, onNewBlock func(db ethdb.Database, block *types.Block, receipts []*types.Receipt) error) (*BlockChain, error) {
+func NewBlockChainWithOnNewBlock(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64, onNewBlock func(db *state.CachingDB, hc *HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -1165,14 +1165,6 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 
-	if bc.onNewBlock != nil {
-		receipts := bc.GetReceiptsByHash(block.Hash())
-		err := bc.onNewBlock(bc.db, block, receipts)
-		if err != nil {
-			log.Crit("Failed to call onNewBlock", "err", err)
-		}
-	}
-
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	rawdb.WriteHeadHeaderHash(batch, block.Hash())
@@ -1185,6 +1177,15 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to update chain indexes and markers", "err", err)
 	}
+
+	if bc.onNewBlock != nil {
+		receipts := bc.GetReceiptsByHash(block.Hash())
+		err := bc.onNewBlock(bc.statedb, bc.hc, bc.chainConfig.ChainID, block, receipts)
+		if err != nil {
+			log.Warn("Failed to call onNewBlock", "err", err)
+		}
+	}
+
 	// Update all in-memory chain markers in the last step
 	bc.hc.SetCurrentHeader(block.Header())
 

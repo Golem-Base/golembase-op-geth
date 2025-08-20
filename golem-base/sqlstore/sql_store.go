@@ -1,4 +1,4 @@
-package sqls
+package sqlstore
 
 import (
 	"context"
@@ -7,15 +7,53 @@ import (
 	"errors"
 	"fmt"
 	"iter"
-	"log/slog"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/etl/sqlite/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
-	"github.com/ethereum/go-ethereum/golem-base/wal"
 	"github.com/ethereum/go-ethereum/log"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+type BlockWal struct {
+	BlockInfo  BlockInfo
+	Operations []Operation
+}
+type BlockInfo struct {
+	Number     uint64      `json:"number,string"`
+	Hash       common.Hash `json:"hash"`
+	ParentHash common.Hash `json:"parentHash"`
+}
+
+type Operation struct {
+	Create *Create      `json:"create,omitempty"`
+	Update *Update      `json:"update,omitempty"`
+	Delete *common.Hash `json:"delete,omitempty"`
+	Extend *ExtendBTL   `json:"extend,omitempty"`
+}
+
+type Create struct {
+	EntityKey          common.Hash                `json:"entityKey"`
+	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
+	Payload            []byte                     `json:"payload"`
+	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
+	Owner              common.Address             `json:"owner"`
+}
+
+type Update struct {
+	EntityKey          common.Hash                `json:"entityKey"`
+	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
+	Payload            []byte                     `json:"payload"`
+	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
+}
+
+type ExtendBTL struct {
+	EntityKey    common.Hash `json:"entityKey"`
+	OldExpiresAt uint64      `json:"oldExpiresAt"`
+	NewExpiresAt uint64      `json:"newExpiresAt"`
+}
 
 // SQLStore encapsulates the SQLite SQLStore functionality
 type SQLStore struct {
@@ -64,8 +102,18 @@ func (e *SQLStore) GetQueries() *sqlitegolem.Queries {
 	return sqlitegolem.New(e.db)
 }
 
-func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (sqlitegolem.GetProcessingStatusRow, error) {
-	return e.GetQueries().GetProcessingStatus(ctx, networkID)
+func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*sqlitegolem.GetProcessingStatusRow, error) {
+	result, err := e.GetQueries().GetProcessingStatus(ctx, networkID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &sqlitegolem.GetProcessingStatusRow{
+				LastProcessedBlockNumber: 0,
+				LastProcessedBlockHash:   "",
+			}, nil
+		}
+		return nil, err
+	}
+	return &result, nil
 }
 
 func (e *SQLStore) SnapSyncToBlock(
@@ -73,11 +121,18 @@ func (e *SQLStore) SnapSyncToBlock(
 	networkID string,
 	blockNumber uint64,
 	blockHash common.Hash,
-	entities iter.Seq2[struct {
-		Key      common.Hash
-		Metadata entity.EntityMetaData
-	}, []byte],
-) error {
+	entities iter.Seq2[
+		*struct {
+			Key      common.Hash
+			Metadata entity.EntityMetaData
+			Payload  []byte
+		},
+		error,
+	],
+) (err error) {
+	log.Info("snap syncing to block start", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
+	defer log.Info("snap syncing to block end", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
+
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -117,19 +172,6 @@ func (e *SQLStore) SnapSyncToBlock(
 		if err != nil {
 			return fmt.Errorf("failed to insert initial processing status: %w", err)
 		}
-	} else {
-		// Network exists, validate we can snap sync to this block
-		processingStatus, err := txDB.GetProcessingStatus(ctx, networkID)
-		if err != nil {
-			return fmt.Errorf("failed to get processing status: %w", err)
-		}
-
-		// Log warning if snap syncing to an earlier block than current
-		if int64(blockNumber) < processingStatus.LastProcessedBlockNumber {
-			log.Warn("snap syncing to earlier block",
-				"current", processingStatus.LastProcessedBlockNumber,
-				"target", blockNumber)
-		}
 	}
 
 	// Clear all existing entities, annotations for a clean snap sync
@@ -149,12 +191,16 @@ func (e *SQLStore) SnapSyncToBlock(
 	}
 
 	// Insert all entities from the snapshot
-	for entity, payload := range entities {
+	for entity, err := range entities {
+		if err != nil {
+			return fmt.Errorf("failed to get entity: %w", err)
+		}
+
 		// Insert the entity
 		err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
 			Key:          entity.Key.Hex(),
 			ExpiresAt:    int64(entity.Metadata.ExpiresAtBlock),
-			Payload:      payload,
+			Payload:      entity.Payload,
 			OwnerAddress: entity.Metadata.Owner.Hex(),
 		})
 		if err != nil {
@@ -200,8 +246,9 @@ func (e *SQLStore) SnapSyncToBlock(
 }
 
 // InsertBlock processes a single block from the WAL and inserts it into the database
-func (e *SQLStore) InsertBlock(ctx context.Context, blockWal wal.BlockWal, networkID string, log *slog.Logger) error {
+func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID string) (err error) {
 	log.Info("processing block", "block", blockWal.BlockInfo.Number)
+	defer log.Info("processing block end", "block", blockWal.BlockInfo.Number)
 
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -232,10 +279,21 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal wal.BlockWal, netwo
 		if networkCount > 0 {
 			return fmt.Errorf("cannot add network %s: database already contains %d network(s), only one network is allowed", networkID, networkCount)
 		}
+
+		err = txDB.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
+			Network:                  networkID,
+			LastProcessedBlockNumber: int64(blockWal.BlockInfo.Number - 1),
+			LastProcessedBlockHash:   blockWal.BlockInfo.ParentHash.Hex(),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to insert initial processing status: %w", err)
+		}
 	}
 
+	log.Info("hasNetwork", "hasNetwork", hasNetwork)
+
 	// Check if parent block hash matches the expected value from processing status
-	if blockWal.BlockInfo.Number > 0 { // Skip check for genesis block
+	if blockWal.BlockInfo.Number > 1 { // Skip check for genesis block
 		processingStatus, err := txDB.GetProcessingStatus(ctx, networkID)
 		if err != nil {
 			return fmt.Errorf("failed to get processing status: %w", err)
@@ -255,10 +313,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal wal.BlockWal, netwo
 		}
 	}
 
-	for op, err := range blockWal.OperationsIterator {
-		if err != nil {
-			return fmt.Errorf("failed to iterate over operations: %w", err)
-		}
+	for _, op := range blockWal.Operations {
 
 		switch {
 		case op.Create != nil:
