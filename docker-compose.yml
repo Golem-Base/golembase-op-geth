@@ -36,7 +36,6 @@ services:
       --ws 
       --ws.addr '0.0.0.0' 
       --ws.port 8545 
-      --golembase.writeaheadlog '/golembase.wal/'
       --datadir '/geth_data'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8545"]

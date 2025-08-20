@@ -60,7 +60,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/remotedb"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
-	"github.com/ethereum/go-ethereum/golem-base/wal2"
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -906,10 +905,11 @@ var (
 	}
 
 	// Golem Base Settings
-	GolemBaseWriteAheadLogDir = &flags.DirectoryFlag{
-		Name:     "golembase.writeaheadlog",
-		Usage:    "Path to the write-ahead log directory for the Golem Base",
+	GolemBaseSQLStateFile = &cli.PathFlag{
+		Name:     "golembase.sqlstatefile",
+		Usage:    "Path to the SQL state file for the Golem Base",
 		Category: flags.MiscCategory,
+		Value:    cli.Path(filepath.Join(node.DefaultDataDir(), "golem-base.db")),
 	}
 
 	// Console
@@ -1576,19 +1576,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.DBEngine = dbEngine
 	}
 
-	if ctx.IsSet(GolemBaseWriteAheadLogDir.Name) {
-
-		_, err := os.Stat(GolemBaseWriteAheadLogDir.Value.String())
-
-		if errors.Is(err, os.ErrNotExist) {
-			err = os.MkdirAll(GolemBaseWriteAheadLogDir.Value.String(), 0755)
-			if err != nil {
-				Fatalf("Failed to create write-ahead log directory: %v", err)
-			}
-		}
-
-		cfg.GolemBaseWriteAheadLogDir = ctx.String(GolemBaseWriteAheadLogDir.Name)
-	}
+	cfg.GolemBaseSQLStateFile = ctx.String(GolemBaseSQLStateFile.Name)
 
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
 	if ctx.IsSet(LogBacktraceAtFlag.Name) {
@@ -2497,7 +2485,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 
 	chain, err := core.NewBlockChainWithOnNewBlock(chainDb, cache, gspec, nil, engine, vmcfg, nil, func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
-		return wal2.WriteLogForBlockSqlite(
+		return sqlstore.WriteLogForBlockSqlite(
 			st,
 			db,
 			hc,

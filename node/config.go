@@ -212,8 +212,8 @@ type Config struct {
 
 	DBEngine string `toml:",omitempty"`
 
-	// GolemBaseWriteAheadLogDir is the path to the write-ahead log file for the Golem Base.
-	GolemBaseWriteAheadLogDir string `toml:",omitempty"`
+	// GolemBaseSQLStateFile is the path to the write-ahead log file for the Golem Base.
+	GolemBaseSQLStateFile string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

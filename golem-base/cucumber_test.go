@@ -10,13 +10,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/alecthomas/repr"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,11 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
-	"github.com/ethereum/go-ethereum/golem-base/wal"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
-	"github.com/warpfork/go-wish/difflib"
 )
 
 var opts = godog.Options{
@@ -45,7 +41,7 @@ func init() {
 	godog.BindCommandLineFlags("godog.", &opts)
 
 	if os.Getenv("CUCUMBER_WIP_ONLY") == "true" {
-		opts.Tags = "@wip"
+		// opts.Tags = "@wip"
 		opts.Concurrency = 1
 		opts.Format = "pretty"
 	}
@@ -153,9 +149,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^there is a new block$`, thereIsANewBlock)
 	ctx.Step(`^the expired entity should be deleted$`, theExpiredEntityShouldBeDeleted)
 	ctx.Step(`^there is an entity that will expire in the next block$`, thereIsAnEntityThatWillExpireInTheNextBlock)
-	ctx.Step(`^the write-ahead log for the create should be created$`, theWriteaheadLogForTheCreateShouldBeCreated)
-	ctx.Step(`^the write-ahead log for the update should be created$`, theWriteaheadLogForTheUpdateShouldBeCreated)
-	ctx.Step(`^the write-ahead log for the delete should be created$`, theWriteaheadLogForTheDeleteShouldBeCreated)
 	ctx.Step(`^the number of entities should be (\d+)$`, theNumberOfEntitiesShouldBe)
 	ctx.Step(`^the entity should be in the list of all entities$`, theEntityShouldBeInTheListOfAllEntities)
 	ctx.Step(`^the list of all entities should be empty$`, theListOfAllEntitiesShouldBeEmpty)
@@ -980,124 +973,6 @@ func theExpiredEntityShouldBeDeleted(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func theWriteaheadLogForTheCreateShouldBeCreated(ctx context.Context) error {
-	w := testutil.GetWorld(ctx)
-
-	wl, err := w.ReadWAL(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to read write-ahead log: %w", err)
-	}
-
-	err = checkIfEqual(
-		wl,
-		[]wal.Operation{
-			{
-				Create: &wal.Create{
-					EntityKey:      w.CreatedEntityKey,
-					ExpiresAtBlock: 103,
-					Payload:        []byte("test payload"),
-					StringAnnotations: []entity.StringAnnotation{
-						{Key: "test_key", Value: "test_value"},
-					},
-					NumericAnnotations: []entity.NumericAnnotation{
-						{Key: "test_number", Value: 42},
-					},
-					Owner: w.FundedAccount.Address,
-				},
-			},
-		},
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to check if write-ahead log is equal: %w", err)
-	}
-
-	return nil
-
-}
-
-func checkIfEqual(actual, expected []wal.Operation) error {
-
-	if !reflect.DeepEqual(actual, expected) {
-
-		expectedText := repr.String(expected, repr.Indent("  "))
-		actualText := repr.String(actual, repr.Indent("  "))
-
-		diff := difflib.UnifiedDiff{
-			A:        difflib.SplitLines(expectedText),
-			B:        difflib.SplitLines(actualText),
-			FromFile: "Expected",
-			ToFile:   "Current",
-			Context:  3,
-		}
-
-		diffText, _ := difflib.GetUnifiedDiffString(diff)
-
-		return fmt.Errorf("expected\n%s\nbut got\n%s\ndiff:\n%s", expectedText, actualText, diffText)
-	}
-
-	return nil
-}
-
-func theWriteaheadLogForTheUpdateShouldBeCreated(ctx context.Context) error {
-	w := testutil.GetWorld(ctx)
-
-	wl, err := w.ReadWAL(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to read write-ahead log: %w", err)
-	}
-
-	err = checkIfEqual(wl[1:],
-		[]wal.Operation{
-			{
-				Update: &wal.Update{
-					EntityKey:      w.CreatedEntityKey,
-					ExpiresAtBlock: 104,
-					Payload:        []byte("new payload"),
-					StringAnnotations: []entity.StringAnnotation{
-						{Key: "test_key", Value: "test_value"},
-					},
-					NumericAnnotations: []entity.NumericAnnotation{
-						{Key: "test_number", Value: 42},
-					},
-				},
-			},
-		},
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to check if write-ahead log is equal: %w", err)
-	}
-
-	return nil
-
-}
-
-func theWriteaheadLogForTheDeleteShouldBeCreated(ctx context.Context) error {
-	w := testutil.GetWorld(ctx)
-
-	wl, err := w.ReadWAL(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to read write-ahead log: %w", err)
-	}
-
-	err = checkIfEqual(
-		wl[1:],
-		[]wal.Operation{
-			{
-				Delete: &w.CreatedEntityKey,
-			},
-		},
-	)
-
-	if err != nil {
-		return fmt.Errorf("check deleted: failed to check if write-ahead log is equal: %w", err)
-	}
-
-	return nil
-
 }
 
 func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {

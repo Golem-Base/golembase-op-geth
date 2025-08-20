@@ -1,4 +1,4 @@
-package wal2
+package sqlstore
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
-	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
@@ -20,7 +19,7 @@ import (
 )
 
 func WriteLogForBlockSqlite(
-	sqlStore *sqlstore.SQLStore,
+	sqlStore *SQLStore,
 	db *state.CachingDB,
 	hc *core.HeaderChain,
 	block *types.Block,
@@ -143,13 +142,13 @@ func WriteLogForBlockSqlite(
 
 	signer := types.LatestSignerForChainID(chainID)
 
-	wal := sqlstore.BlockWal{
-		BlockInfo: sqlstore.BlockInfo{
+	wal := BlockWal{
+		BlockInfo: BlockInfo{
 			Number:     block.NumberU64(),
 			Hash:       block.Hash(),
 			ParentHash: block.ParentHash(),
 		},
-		Operations: []sqlstore.Operation{},
+		Operations: []Operation{},
 	}
 
 	for i, tx := range txns {
@@ -176,7 +175,7 @@ func WriteLogForBlockSqlite(
 
 				key := l.Topics[1]
 
-				wal.Operations = append(wal.Operations, sqlstore.Operation{
+				wal.Operations = append(wal.Operations, Operation{
 					Delete: &key,
 				})
 
@@ -225,7 +224,7 @@ func WriteLogForBlockSqlite(
 					return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
 				}
 
-				cr := sqlstore.Create{
+				cr := Create{
 					EntityKey:          key,
 					ExpiresAtBlock:     expiresAtBlock,
 					Payload:            create.Payload,
@@ -234,14 +233,14 @@ func WriteLogForBlockSqlite(
 					Owner:              from,
 				}
 
-				wal.Operations = append(wal.Operations, sqlstore.Operation{
+				wal.Operations = append(wal.Operations, Operation{
 					Create: &cr,
 				})
 
 			}
 
 			for _, del := range stx.Delete {
-				wal.Operations = append(wal.Operations, sqlstore.Operation{
+				wal.Operations = append(wal.Operations, Operation{
 					Delete: &del,
 				})
 			}
@@ -253,7 +252,7 @@ func WriteLogForBlockSqlite(
 				expiresAtBlockU256 := uint256.NewInt(0).SetBytes(log.Data)
 				expiresAtBlock := expiresAtBlockU256.Uint64()
 
-				ur := sqlstore.Update{
+				ur := Update{
 					EntityKey:          key,
 					ExpiresAtBlock:     expiresAtBlock,
 					Payload:            update.Payload,
@@ -261,7 +260,7 @@ func WriteLogForBlockSqlite(
 					NumericAnnotations: update.NumericAnnotations,
 				}
 
-				wal.Operations = append(wal.Operations, sqlstore.Operation{
+				wal.Operations = append(wal.Operations, Operation{
 					Update: &ur,
 				})
 			}
@@ -276,13 +275,13 @@ func WriteLogForBlockSqlite(
 				newExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[32:])
 				newExpiresAt := newExpiresAtU256.Uint64()
 
-				ex := sqlstore.ExtendBTL{
+				ex := ExtendBTL{
 					EntityKey:    extend.EntityKey,
 					OldExpiresAt: oldExpiresAt,
 					NewExpiresAt: newExpiresAt,
 				}
 
-				wal.Operations = append(wal.Operations, sqlstore.Operation{
+				wal.Operations = append(wal.Operations, Operation{
 					Extend: &ex,
 				})
 			}

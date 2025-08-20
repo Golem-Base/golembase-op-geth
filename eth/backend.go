@@ -51,7 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
-	"github.com/ethereum/go-ethereum/golem-base/wal2"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/sequencerapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
@@ -270,25 +269,15 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	overrides.ApplySuperchainUpgrades = config.ApplySuperchainUpgrades
 
-	// walDir := stack.Config().GolemBaseWriteAheadLogDir
-
-	// if walDir != "" {
-	// 	eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, func(db ethdb.Database, block *types.Block, receipts []*types.Receipt) error {
-	// 		return wal.WriteLogForBlock(walDir, block, chainConfig.ChainID, receipts)
-	// 	})
-	// } else {
-	// 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory)
-	// }
-
 	st, err := sqlstore.NewStore(
-		"sqlstate.db",
+		stack.Config().GolemBaseSQLStateFile,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SQLStore: %w", err)
 	}
 
 	eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
-		return wal2.WriteLogForBlockSqlite(
+		return sqlstore.WriteLogForBlockSqlite(
 			st,
 			db,
 			hc,
