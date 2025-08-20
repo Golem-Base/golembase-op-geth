@@ -269,25 +269,33 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	overrides.ApplySuperchainUpgrades = config.ApplySuperchainUpgrades
 
-	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
-	st, err := sqlstore.NewStore(
-		stack.Config().GolemBaseSQLStateFile,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SQLStore: %w", err)
+	onNewBlock := func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
+		return nil
 	}
 
-	eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
-		return sqlstore.WriteLogForBlockSqlite(
-			st,
-			db,
-			hc,
-			block,
-			chainID,
-			receipts,
-		)
-	})
+	if stack.Config().GolemBaseSQLStateFile != "" {
 
+		log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
+		st, err := sqlstore.NewStore(
+			stack.Config().GolemBaseSQLStateFile,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SQLStore: %w", err)
+		}
+
+		onNewBlock = func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
+			return sqlstore.WriteLogForBlockSqlite(
+				st,
+				db,
+				hc,
+				block,
+				chainID,
+				receipts,
+			)
+		}
+	}
+
+	eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, onNewBlock)
 	if err != nil {
 		return nil, err
 	}
