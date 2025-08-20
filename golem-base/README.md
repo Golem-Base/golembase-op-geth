@@ -70,6 +70,21 @@ When storage transactions are executed, the system emits logs to track entity li
 
 These logs enable efficient tracking of storage changes and can be used by applications to monitor entity lifecycle events. The event signatures are defined as keccak256 hashes of their respective function signatures.
 
+## State Storage
+
+Golem Base uses SQLite as its primary storage backend for maintaining state information. The SQLite database provides:
+
+- **Persistent State Storage**: All entity data and metadata is stored in a SQLite database
+- **Efficient Indexing**: Built-in support for annotation-based queries through database indexes
+- **Transaction Consistency**: Database transactions ensure atomic updates to state
+- **Simplified Architecture**: Replaced the previous WAL (Write-Ahead Logging) system with direct database operations
+
+The SQLite database stores:
+- Entity payloads and metadata
+- String and numeric annotations for querying
+- Expiration tracking information
+- Owner mapping for entities
+
 ## Housekeeping Transaction
 
 The Golem Base system includes an automatic housekeeping mechanism that runs during block processing to manage entity lifecycle. This process:
@@ -138,11 +153,11 @@ Golem Base provides a development environment that includes all necessary servic
 
 This will start all required services defined in the Procfile, including:
 - Geth node in dev mode with Golem Base support
-- SQLite ETL (Extract, Transform, Load) process
+- SQLite database for state storage
 - MongoDB database
 - MongoDB ETL process
 
-The script automatically cleans up old WAL (Write-Ahead Logging) files and uses Overmind to manage all processes. You can press Ctrl+C to stop all services.
+The script uses Overmind to manage all processes. You can press Ctrl+C to stop all services.
 
 ### Using the Golem Base CLI
 
