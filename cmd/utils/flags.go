@@ -909,7 +909,6 @@ var (
 		Name:     "golembase.sqlstatefile",
 		Usage:    "Path to the SQL state file for the Golem Base",
 		Category: flags.MiscCategory,
-		Value:    cli.Path(filepath.Join(node.DefaultDataDir(), "golem-base.db")),
 	}
 
 	// Console
@@ -1576,7 +1575,11 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.DBEngine = dbEngine
 	}
 
-	cfg.GolemBaseSQLStateFile = ctx.String(GolemBaseSQLStateFile.Name)
+	cfg.GolemBaseSQLStateFile = filepath.Join(cfg.DataDir, "golem-base.db")
+
+	if ctx.IsSet(GolemBaseSQLStateFile.Name) {
+		cfg.GolemBaseSQLStateFile = ctx.String(GolemBaseSQLStateFile.Name)
+	}
 
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
 	if ctx.IsSet(LogBacktraceAtFlag.Name) {

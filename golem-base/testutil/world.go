@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,10 +22,17 @@ type World struct {
 	SecondCreatedEntityKey common.Hash
 	LastError              error
 	LastTrace              json.RawMessage
+
+	tempDir string
 }
 
 func NewWorld(ctx context.Context, gethPath string) (*World, error) {
-	geth, err := startGethInstance(ctx, gethPath)
+	td, err := os.MkdirTemp("", "golem-base")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	geth, err := startGethInstance(ctx, gethPath, td)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start geth instance: %w", err)
 	}
@@ -61,12 +69,14 @@ func NewWorld(ctx context.Context, gethPath string) (*World, error) {
 		GethInstance:        geth,
 		FundedAccount:       acc,
 		SecondFundedAccount: acc2,
+		tempDir:             td,
 	}, nil
 
 }
 
 func (w *World) Shutdown() {
 	w.GethInstance.shutdown()
+	os.RemoveAll(w.tempDir)
 }
 
 func (w *World) AddLogsToTestError(err error) error {

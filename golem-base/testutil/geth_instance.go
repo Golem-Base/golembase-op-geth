@@ -42,7 +42,7 @@ type gethProcess struct {
 	output *bytes.Buffer
 }
 
-func startGethInstance(ctx context.Context, gethPath string) (_ *GethInstance, err error) {
+func startGethInstance(ctx context.Context, gethPath string, tempDir string) (_ *GethInstance, err error) {
 	// Start geth in dev mode
 
 	td, err := os.MkdirTemp("", "geth-dev-wal")
@@ -62,6 +62,7 @@ func startGethInstance(ctx context.Context, gethPath string) (_ *GethInstance, e
 		"--http.port", "0", // Use random port
 		"--http.api", "eth,web3,net,debug,golembase", // Enable necessary APIs
 		"--verbosity", "3", // Increase logging to see HTTP endpoint
+		"--golembase.sqlstatefile", filepath.Join(tempDir, "golem-base.db"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start geth: %w", err)
