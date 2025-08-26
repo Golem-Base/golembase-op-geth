@@ -153,6 +153,17 @@ func (q *Queries) GetEntity(ctx context.Context, key string) (GetEntityRow, erro
 	return i, err
 }
 
+const getEntityPayload = `-- name: GetEntityPayload :one
+SELECT payload FROM entities WHERE key = ?
+`
+
+func (q *Queries) GetEntityPayload(ctx context.Context, key string) ([]byte, error) {
+	row := q.db.QueryRowContext(ctx, getEntityPayload, key)
+	var payload []byte
+	err := row.Scan(&payload)
+	return payload, err
+}
+
 const getNumericAnnotations = `-- name: GetNumericAnnotations :many
 SELECT annotation_key, value FROM numeric_annotations WHERE entity_key = ?
 `

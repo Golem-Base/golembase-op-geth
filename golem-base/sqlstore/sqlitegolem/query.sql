@@ -10,6 +10,9 @@ INSERT INTO numeric_annotations (entity_key, annotation_key, value) VALUES (?, ?
 -- name: GetEntity :one
 SELECT expires_at, payload, owner_address FROM entities WHERE key = ?;
 
+-- name: GetEntityPayload :one
+SELECT payload FROM entities WHERE key = ?;
+
 -- name: GetEntitiesByOwner :many
 SELECT key, expires_at, payload FROM entities WHERE owner_address = ?;
 

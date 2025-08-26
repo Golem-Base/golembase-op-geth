@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"slices"
@@ -32,14 +33,14 @@ func NewGolemBaseAPI(eth *Ethereum, store *sqlstore.SQLStore) *golemBaseAPI {
 	}
 }
 
-func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) ([]byte, error) {
+
+	payload, err := api.store.GetQueries().GetEntityPayload(ctx, key.Hex())
 	if err != nil {
 		return nil, err
 	}
+	return payload, nil
 
-	return entity.GetPayload(stateDb, key), nil
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(key common.Hash) (*entity.EntityMetaData, error) {
@@ -98,7 +99,7 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value 
 	return out, nil
 }
 
-func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, error) {
+func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -114,7 +115,7 @@ func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, er
 	searchResults := make([]golemtype.SearchResult, 0)
 
 	for _, key := range entities {
-		v, err := api.GetStorageValue(key)
+		v, err := api.GetStorageValue(ctx, key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get storage value for key %s: %w", key.Hex(), err)
 		}
