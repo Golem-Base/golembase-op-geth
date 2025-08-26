@@ -19,15 +19,12 @@ package simulated
 import (
 	"context"
 	"math/big"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -35,12 +32,7 @@ import (
 // and that it keeps the same target value.
 func TestWithBlockGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
-	sim := NewBackend(types.GenesisAlloc{}, WithBlockGasLimit(12_345_678),
-		func(nodeConf *node.Config, ethConf *ethconfig.Config) {
-			nodeConf.GolemBaseSQLStateFile = filepath.Join(t.TempDir(), "golem-base.db")
-			nodeConf.GolemBaseDisableSQLState = true
-		},
-	)
+	sim := NewBackend(types.GenesisAlloc{}, WithBlockGasLimit(12_345_678))
 	defer sim.Close()
 
 	client := sim.Client()
@@ -67,12 +59,7 @@ func TestWithCallGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
 	sim := NewBackend(types.GenesisAlloc{
 		testAddr: {Balance: big.NewInt(10000000000000000)},
-	}, WithCallGasLimit(params.TxGas-1),
-		func(nodeConf *node.Config, ethConf *ethconfig.Config) {
-			nodeConf.GolemBaseSQLStateFile = filepath.Join(t.TempDir(), "golem-base.db")
-			nodeConf.GolemBaseDisableSQLState = true
-		},
-	)
+	}, WithCallGasLimit(params.TxGas-1))
 	defer sim.Close()
 
 	client := sim.Client()

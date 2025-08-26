@@ -288,12 +288,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		)
 	}
 
-	if stack.Config().GolemBaseDisableSQLState {
-		onNewBlock = func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
-			return nil
-		}
-	}
-
 	eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, onNewBlock)
 	if err != nil {
 		return nil, err

@@ -20,13 +20,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"math/big"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
 )
 
 // TestTransactionRollbackBehavior tests that calling Rollback on the simulated backend doesn't prevent subsequent
@@ -36,10 +33,6 @@ func TestTransactionRollbackBehavior(t *testing.T) {
 		types.GenesisAlloc{
 			testAddr:  {Balance: big.NewInt(10000000000000000)},
 			testAddr2: {Balance: big.NewInt(10000000000000000)},
-		},
-		func(nodeConf *node.Config, ethConf *ethconfig.Config) {
-			nodeConf.GolemBaseSQLStateFile = filepath.Join(t.TempDir(), "golem-base.db")
-			nodeConf.GolemBaseDisableSQLState = true
 		},
 	)
 	defer sim.Close()
