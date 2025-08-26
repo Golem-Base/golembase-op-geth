@@ -72,3 +72,27 @@ DELETE FROM numeric_annotations;
 
 -- name: DeleteAllProcessingStatus :exec
 DELETE FROM processing_status;
+
+-- name: GetEntityMetadata :one
+SELECT 
+  expires_at,
+  owner_address,
+  payload
+FROM entities
+WHERE key = ?;
+
+-- name: GetEntityStringAnnotations :many
+SELECT 
+  annotation_key,
+  value
+FROM string_annotations
+WHERE entity_key = ?
+ORDER BY annotation_key;
+
+-- name: GetEntityNumericAnnotations :many
+SELECT 
+  annotation_key,
+  value
+FROM numeric_annotations
+WHERE entity_key = ?
+ORDER BY annotation_key;

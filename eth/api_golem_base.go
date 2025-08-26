@@ -43,14 +43,14 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 
 }
 
-func (api *golemBaseAPI) GetEntityMetaData(key common.Hash) (*entity.EntityMetaData, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
+	// Try to get metadata from SQL store first
+	metadata, err := api.store.GetEntityMetaData(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state: %w", err)
+		return nil, err
 	}
 
-	return entity.GetEntityMetaData(stateDb, key)
+	return metadata, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]common.Hash, error) {
