@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
+	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
@@ -20,12 +21,14 @@ import (
 
 // golemBaseAPI offers helper utils
 type golemBaseAPI struct {
-	eth *Ethereum
+	eth   *Ethereum
+	store *sqlstore.SQLStore
 }
 
-func NewGolemBaseAPI(eth *Ethereum) *golemBaseAPI {
+func NewGolemBaseAPI(eth *Ethereum, store *sqlstore.SQLStore) *golemBaseAPI {
 	return &golemBaseAPI{
-		eth: eth,
+		eth:   eth,
+		store: store,
 	}
 }
 
