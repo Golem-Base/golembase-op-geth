@@ -12,8 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 )
 
 // golemBaseAPI offers helper utils
@@ -122,16 +120,13 @@ func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.H
 }
 
 // GetEntityCount returns the total number of entities in the storage.
-func (api *golemBaseAPI) GetEntityCount() (uint64, error) {
-	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
+func (api *golemBaseAPI) GetEntityCount(ctx context.Context) (uint64, error) {
+	count, err := api.store.GetEntityCount(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get state: %w", err)
+		return 0, err
 	}
 
-	// Use keyset.Size to get the count of entities from the global registry
-	count := keyset.Size(stateDb, allentities.AllEntitiesKey)
-
-	return count.Uint64(), nil
+	return count, nil
 }
 
 // GetAllEntityKeys returns all entity keys in the storage.

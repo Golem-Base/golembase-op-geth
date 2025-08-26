@@ -120,3 +120,6 @@ ORDER BY entity_key;
 
 -- name: GetAllEntityKeys :many
 SELECT key FROM entities ORDER BY key;
+
+-- name: GetEntityCount :one
+SELECT COUNT(*) FROM entities;

@@ -280,6 +280,17 @@ func (q *Queries) GetEntity(ctx context.Context, key string) (GetEntityRow, erro
 	return i, err
 }
 
+const getEntityCount = `-- name: GetEntityCount :one
+SELECT COUNT(*) FROM entities
+`
+
+func (q *Queries) GetEntityCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getEntityCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getEntityKeysByOwner = `-- name: GetEntityKeysByOwner :many
 SELECT key FROM entities WHERE owner_address = ? ORDER BY key
 `

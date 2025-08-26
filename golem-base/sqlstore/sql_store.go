@@ -210,6 +210,16 @@ func (e *SQLStore) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) 
 	return result, nil
 }
 
+// GetEntityCount retrieves the total number of entities in the database
+func (e *SQLStore) GetEntityCount(ctx context.Context) (uint64, error) {
+	count, err := e.GetQueries().GetEntityCount(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	return uint64(count), nil
+}
+
 // GetEntityMetaData retrieves entity metadata from the database using a transaction
 func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
 	// Begin a read-only transaction for consistency
