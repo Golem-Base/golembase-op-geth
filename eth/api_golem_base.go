@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 )
 
@@ -53,18 +52,14 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 	return metadata, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]common.Hash, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
+	// Try to get from SQL store first
+	entities, err := api.store.GetEntitiesToExpireAtBlock(ctx, blockNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	out := slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(stateDb, blockNumber))
-	if out == nil {
-		out = make([]common.Hash, 0)
-	}
-	return out, nil
+	return entities, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) ([]common.Hash, error) {

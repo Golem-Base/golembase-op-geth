@@ -136,6 +136,36 @@ func (q *Queries) GetEntitiesByOwner(ctx context.Context, ownerAddress string) (
 	return items, nil
 }
 
+const getEntitiesToExpireAtBlock = `-- name: GetEntitiesToExpireAtBlock :many
+SELECT key
+FROM entities
+WHERE expires_at = ?
+ORDER BY key
+`
+
+func (q *Queries) GetEntitiesToExpireAtBlock(ctx context.Context, expiresAt int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getEntitiesToExpireAtBlock, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEntity = `-- name: GetEntity :one
 SELECT expires_at, payload, owner_address FROM entities WHERE key = ?
 `

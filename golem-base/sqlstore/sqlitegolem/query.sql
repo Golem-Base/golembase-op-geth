@@ -96,3 +96,9 @@ SELECT
 FROM numeric_annotations
 WHERE entity_key = ?
 ORDER BY annotation_key;
+
+-- name: GetEntitiesToExpireAtBlock :many
+SELECT key
+FROM entities
+WHERE expires_at = ?
+ORDER BY key;
