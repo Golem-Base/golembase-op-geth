@@ -135,23 +135,13 @@ func (api *golemBaseAPI) GetEntityCount() (uint64, error) {
 }
 
 // GetAllEntityKeys returns all entity keys in the storage.
-func (api *golemBaseAPI) GetAllEntityKeys() ([]common.Hash, error) {
-	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
+func (api *golemBaseAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
+	entities, err := api.store.GetAllEntityKeys(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state: %w", err)
+		return nil, err
 	}
 
-	// Use the iterator from allentities package to gather all entity hashes
-	var entityKeys []common.Hash
-
-	for hash := range allentities.Iterate(stateDb) {
-		entityKeys = append(entityKeys, hash)
-	}
-
-	if entityKeys == nil {
-		entityKeys = make([]common.Hash, 0)
-	}
-	return entityKeys, nil
+	return entities, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {

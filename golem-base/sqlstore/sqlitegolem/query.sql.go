@@ -103,6 +103,33 @@ func (q *Queries) EntityExists(ctx context.Context, key string) (bool, error) {
 	return column_1, err
 }
 
+const getAllEntityKeys = `-- name: GetAllEntityKeys :many
+SELECT key FROM entities ORDER BY key
+`
+
+func (q *Queries) GetAllEntityKeys(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getAllEntityKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEntitiesByOwner = `-- name: GetEntitiesByOwner :many
 SELECT key, expires_at, payload FROM entities WHERE owner_address = ?
 `

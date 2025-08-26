@@ -117,3 +117,6 @@ SELECT entity_key
 FROM numeric_annotations
 WHERE annotation_key = ? AND value = ?
 ORDER BY entity_key;
+
+-- name: GetAllEntityKeys :many
+SELECT key FROM entities ORDER BY key;

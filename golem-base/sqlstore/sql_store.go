@@ -194,6 +194,22 @@ func (e *SQLStore) GetEntitiesOfOwner(ctx context.Context, owner common.Address)
 	return result, nil
 }
 
+// GetAllEntityKeys retrieves all entity keys from the database
+func (e *SQLStore) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetAllEntityKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all entity keys: %w", err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
 // GetEntityMetaData retrieves entity metadata from the database using a transaction
 func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
 	// Begin a read-only transaction for consistency
