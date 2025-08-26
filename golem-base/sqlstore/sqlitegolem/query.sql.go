@@ -136,6 +136,76 @@ func (q *Queries) GetEntitiesByOwner(ctx context.Context, ownerAddress string) (
 	return items, nil
 }
 
+const getEntitiesForNumericAnnotation = `-- name: GetEntitiesForNumericAnnotation :many
+SELECT entity_key
+FROM numeric_annotations
+WHERE annotation_key = ? AND value = ?
+ORDER BY entity_key
+`
+
+type GetEntitiesForNumericAnnotationParams struct {
+	AnnotationKey string
+	Value         int64
+}
+
+func (q *Queries) GetEntitiesForNumericAnnotation(ctx context.Context, arg GetEntitiesForNumericAnnotationParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getEntitiesForNumericAnnotation, arg.AnnotationKey, arg.Value)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var entity_key string
+		if err := rows.Scan(&entity_key); err != nil {
+			return nil, err
+		}
+		items = append(items, entity_key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getEntitiesForStringAnnotation = `-- name: GetEntitiesForStringAnnotation :many
+SELECT entity_key
+FROM string_annotations
+WHERE annotation_key = ? AND value = ?
+ORDER BY entity_key
+`
+
+type GetEntitiesForStringAnnotationParams struct {
+	AnnotationKey string
+	Value         string
+}
+
+func (q *Queries) GetEntitiesForStringAnnotation(ctx context.Context, arg GetEntitiesForStringAnnotationParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getEntitiesForStringAnnotation, arg.AnnotationKey, arg.Value)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var entity_key string
+		if err := rows.Scan(&entity_key); err != nil {
+			return nil, err
+		}
+		items = append(items, entity_key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEntitiesToExpireAtBlock = `-- name: GetEntitiesToExpireAtBlock :many
 SELECT key
 FROM entities

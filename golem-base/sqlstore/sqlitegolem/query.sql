@@ -102,3 +102,15 @@ SELECT key
 FROM entities
 WHERE expires_at = ?
 ORDER BY key;
+
+-- name: GetEntitiesForStringAnnotation :many
+SELECT entity_key
+FROM string_annotations
+WHERE annotation_key = ? AND value = ?
+ORDER BY entity_key;
+
+-- name: GetEntitiesForNumericAnnotation :many
+SELECT entity_key
+FROM numeric_annotations
+WHERE annotation_key = ? AND value = ?
+ORDER BY entity_key;

@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 )
@@ -33,7 +32,6 @@ func NewGolemBaseAPI(eth *Ethereum, store *sqlstore.SQLStore) *golemBaseAPI {
 }
 
 func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) ([]byte, error) {
-
 	payload, err := api.store.GetQueries().GetEntityPayload(ctx, key.Hex())
 	if err != nil {
 		return nil, err
@@ -43,7 +41,6 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
-	// Try to get metadata from SQL store first
 	metadata, err := api.store.GetEntityMetaData(ctx, key)
 	if err != nil {
 		return nil, err
@@ -53,7 +50,6 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 }
 
 func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
-	// Try to get from SQL store first
 	entities, err := api.store.GetEntitiesToExpireAtBlock(ctx, blockNumber)
 	if err != nil {
 		return nil, err
@@ -62,36 +58,22 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, blockNu
 	return entities, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) ([]common.Hash, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context, key, value string) ([]common.Hash, error) {
+	entities, err := api.store.GetEntitiesForStringAnnotationValue(ctx, key, value)
 	if err != nil {
 		return nil, err
 	}
 
-	entitySetKey := annotationindex.StringAnnotationIndexKey(key, value)
-
-	out := slices.Collect(keyset.Iterate(stateDb, entitySetKey))
-	if out == nil {
-		out = make([]common.Hash, 0)
-	}
-	return out, nil
+	return entities, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value uint64) ([]common.Hash, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Context, key string, value uint64) ([]common.Hash, error) {
+	entities, err := api.store.GetEntitiesForNumericAnnotationValue(ctx, key, value)
 	if err != nil {
 		return nil, err
 	}
 
-	entityKeys := annotationindex.NumericAnnotationIndexKey(key, value)
-
-	out := slices.Collect(keyset.Iterate(stateDb, entityKeys))
-	if out == nil {
-		out = make([]common.Hash, 0)
-	}
-	return out, nil
+	return entities, nil
 }
 
 func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
@@ -101,7 +83,7 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 		return nil, fmt.Errorf("failed to parse query: %w", err)
 	}
 
-	ds := &golemBaseDataSource{api: api}
+	ds := &golemBaseDataSource{api: api, ctx: ctx}
 	entities, err := expr.Evaluate(ds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate query: %w", err)
@@ -126,14 +108,15 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 
 type golemBaseDataSource struct {
 	api *golemBaseAPI
+	ctx context.Context
 }
 
 func (ds *golemBaseDataSource) GetKeysForStringAnnotation(key, value string) ([]common.Hash, error) {
-	return ds.api.GetEntitiesForStringAnnotationValue(key, value)
+	return ds.api.GetEntitiesForStringAnnotationValue(ds.ctx, key, value)
 }
 
 func (ds *golemBaseDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
-	return ds.api.GetEntitiesForNumericAnnotationValue(key, value)
+	return ds.api.GetEntitiesForNumericAnnotationValue(ds.ctx, key, value)
 }
 
 func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {

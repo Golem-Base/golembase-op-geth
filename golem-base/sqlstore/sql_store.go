@@ -140,6 +140,44 @@ func (e *SQLStore) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber u
 	return result, nil
 }
 
+// GetEntitiesForStringAnnotationValue retrieves all entity keys that have a specific string annotation with the given value
+func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, annotationKey, value string) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesForStringAnnotation(ctx, sqlitegolem.GetEntitiesForStringAnnotationParams{
+		AnnotationKey: annotationKey,
+		Value:         value,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for string annotation %s=%s: %w", annotationKey, value, err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
+// GetEntitiesForNumericAnnotationValue retrieves all entity keys that have a specific numeric annotation with the given value
+func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, annotationKey string, value uint64) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesForNumericAnnotation(ctx, sqlitegolem.GetEntitiesForNumericAnnotationParams{
+		AnnotationKey: annotationKey,
+		Value:         int64(value),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for numeric annotation %s=%d: %w", annotationKey, value, err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
 // GetEntityMetaData retrieves entity metadata from the database using a transaction
 func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
 	// Begin a read-only transaction for consistency
