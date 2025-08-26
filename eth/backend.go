@@ -270,6 +270,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	overrides.ApplySuperchainUpgrades = config.ApplySuperchainUpgrades
 
 	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
+	sqlStateFile := stack.Config().GolemBaseSQLStateFile
+
+	if sqlStateFile == "" {
+		sqlStateFile = ":memory:"
+	}
+
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
 	)
@@ -278,6 +284,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	onNewBlock := func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
+		if sqlStateFile == ":memory:" {
+			return nil
+		}
 		return sqlstore.WriteLogForBlockSqlite(
 			st,
 			db,
