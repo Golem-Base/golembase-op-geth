@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -14,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 )
 
@@ -120,7 +118,7 @@ func (ds *golemBaseDataSource) GetKeysForNumericAnnotation(key string, value uin
 }
 
 func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {
-	return ds.api.GetEntitiesOfOwner(owner)
+	return ds.api.GetEntitiesOfOwner(ds.ctx, owner)
 }
 
 // GetEntityCount returns the total number of entities in the storage.
@@ -156,18 +154,13 @@ func (api *golemBaseAPI) GetAllEntityKeys() ([]common.Hash, error) {
 	return entityKeys, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesOfOwner(owner common.Address) ([]common.Hash, error) {
-	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get state: %w", err)
+func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
+	entities, err := api.store.GetEntitiesOfOwner(ctx, owner)
+	if err == nil {
+		return entities, nil
 	}
 
-	entityKeys := slices.Collect(entitiesofowner.Iterate(stateDb, owner))
-
-	if entityKeys == nil {
-		entityKeys = make([]common.Hash, 0)
-	}
-	return entityKeys, nil
+	return entities, nil
 }
 
 func (api *golemBaseAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {

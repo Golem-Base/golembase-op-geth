@@ -253,6 +253,33 @@ func (q *Queries) GetEntity(ctx context.Context, key string) (GetEntityRow, erro
 	return i, err
 }
 
+const getEntityKeysByOwner = `-- name: GetEntityKeysByOwner :many
+SELECT key FROM entities WHERE owner_address = ? ORDER BY key
+`
+
+func (q *Queries) GetEntityKeysByOwner(ctx context.Context, ownerAddress string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getEntityKeysByOwner, ownerAddress)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEntityMetadata = `-- name: GetEntityMetadata :one
 SELECT 
   expires_at,

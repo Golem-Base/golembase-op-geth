@@ -16,6 +16,9 @@ SELECT payload FROM entities WHERE key = ?;
 -- name: GetEntitiesByOwner :many
 SELECT key, expires_at, payload FROM entities WHERE owner_address = ?;
 
+-- name: GetEntityKeysByOwner :many
+SELECT key FROM entities WHERE owner_address = ? ORDER BY key;
+
 -- name: GetStringAnnotations :many
 SELECT annotation_key, value FROM string_annotations WHERE entity_key = ?;
 
