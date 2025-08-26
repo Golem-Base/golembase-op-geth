@@ -214,6 +214,8 @@ type Config struct {
 
 	// GolemBaseSQLStateFile is the path to the write-ahead log file for the Golem Base.
 	GolemBaseSQLStateFile string `toml:",omitempty"`
+
+	GolemBaseDisableSQLState bool `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
