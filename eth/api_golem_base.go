@@ -74,10 +74,19 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 
 func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
 
+	// q.Build(ctx)
+
 	expr, err := query.Parse(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse query: %w", err)
 	}
+
+	q := expr.DBQuery("")
+
+	// log.Info("query", "query", query, "args", args)
+
+	fmt.Println(q.Q)
+	fmt.Println(q.Args)
 
 	ds := &golemBaseDataSource{api: api, ctx: ctx}
 	entities, err := expr.Evaluate(ds)

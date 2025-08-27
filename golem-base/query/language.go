@@ -3,6 +3,8 @@ package query
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -35,10 +37,51 @@ func (e *Expression) Evaluate(ds DataSource) ([]common.Hash, error) {
 	return e.Or.Evaluate(ds)
 }
 
+type SelectQuery struct {
+	Q    string
+	Args []any
+}
+
+func (e *Expression) DBQuery(prefix string) SelectQuery {
+	return e.Or.DBQuery(prefix)
+}
+
 // OrExpression handles expressions connected with ||.
 type OrExpression struct {
 	Left  *AndExpression `parser:"@@"`
 	Right []*OrRHS       `parser:"@@*"`
+}
+
+func (e *OrExpression) DBQuery(prefix string) SelectQuery {
+
+	q := e.Left.DBQuery(prefix)
+
+	if len(e.Right) == 0 {
+		return q
+	}
+
+	q = e.Left.DBQuery(prefix + "    ")
+
+	allArgs := slices.Clone(q.Args)
+
+	sb := &strings.Builder{}
+	sb.WriteString(prefix + "WITH or_data AS (\n")
+	sb.WriteString(q.Q + "\n")
+	for _, rh := range e.Right {
+		sb.WriteString(prefix + "  UNION \n")
+		rhQ := rh.DBQuery(prefix + "    ")
+		sb.WriteString(rhQ.Q + "\n")
+		allArgs = append(allArgs, rhQ.Args...)
+	}
+	sb.WriteString(prefix + ")\n")
+
+	sb.WriteString(prefix + "SELECT * from or_data")
+
+	return SelectQuery{
+		Q:    sb.String(),
+		Args: allArgs,
+	}
+
 }
 
 func union(a, b []common.Hash) []common.Hash {
@@ -91,10 +134,46 @@ func (e *OrRHS) Evaluate(ds DataSource) ([]common.Hash, error) {
 	return e.Expr.Evaluate(ds)
 }
 
+func (e *OrRHS) DBQuery(prefix string) SelectQuery {
+	return e.Expr.DBQuery(prefix)
+}
+
 // AndExpression handles expressions connected with &&.
 type AndExpression struct {
 	Left  *EqualExpr `parser:"@@"`
 	Right []*AndRHS  `parser:"@@*"`
+}
+
+func (e *AndExpression) DBQuery(prefix string) SelectQuery {
+
+	q := e.Left.DBQuery(prefix)
+
+	if len(e.Right) == 0 {
+		return q
+	}
+
+	q = e.Left.DBQuery(prefix + "    ")
+
+	allArgs := slices.Clone(q.Args)
+
+	sb := &strings.Builder{}
+	sb.WriteString(prefix + "WITH and_data AS (\n")
+	sb.WriteString(q.Q + "\n")
+	for _, rh := range e.Right {
+		sb.WriteString(prefix + "  INTERSECT \n")
+		rhQ := rh.DBQuery(prefix + "    ")
+		sb.WriteString(rhQ.Q + "\n")
+		allArgs = append(allArgs, rhQ.Args...)
+	}
+	sb.WriteString(prefix + ")\n")
+
+	sb.WriteString(prefix + "SELECT * from and_data")
+
+	return SelectQuery{
+		Q:    sb.String(),
+		Args: allArgs,
+	}
+
 }
 
 func intersect(a, b []common.Hash) []common.Hash {
@@ -145,11 +224,28 @@ func (e *AndRHS) Evaluate(ds DataSource) ([]common.Hash, error) {
 	return e.Expr.Evaluate(ds)
 }
 
+func (e *AndRHS) DBQuery(prefix string) SelectQuery {
+	return e.Expr.DBQuery(prefix)
+}
+
 // EqualExpr can be either an equality or a parenthesized expression.
 type EqualExpr struct {
 	Paren  *Expression `parser:"  \"(\" @@ \")\""`
 	Owner  *Ownership  `parser:"| @@"`
 	Assign *Equality   `parser:"| @@"`
+}
+
+func (e *EqualExpr) DBQuery(prefix string) SelectQuery {
+
+	if e.Paren != nil {
+		return e.Paren.DBQuery(prefix)
+	}
+
+	if e.Owner != nil {
+		return e.Owner.DBQuery(prefix)
+	}
+
+	return e.Assign.DBQuery(prefix)
 }
 
 func (e *EqualExpr) Evaluate(ds DataSource) ([]common.Hash, error) {
@@ -183,6 +279,20 @@ func (e *Ownership) Evaluate(ds DataSource) ([]common.Hash, error) {
 
 }
 
+func (e *Ownership) DBQuery(prefix string) SelectQuery {
+
+	return SelectQuery{
+		Q: fmt.Sprintf(`%sSELECT key FROM entities WHERE owner_address = '%s'`, prefix, *e.Owner),
+		// Args: []any{*e.Owner},
+	}
+
+	// return sqlite.Select(
+	// 	sm.Columns("key"),
+	// 	sm.From("entities"),
+	// 	sm.Where(sqlite.Quote("owner").EQ(sqlite.S(*e.Owner))),
+	// )
+}
+
 // Equality represents a simple equality (e.g. name = 123).
 type Equality struct {
 	Var   string `parser:"@Ident \"=\""`
@@ -200,6 +310,30 @@ func (e *Equality) Evaluate(ds DataSource) ([]common.Hash, error) {
 	}
 
 	return nil, errors.New("unsupported value type")
+}
+
+func (e *Equality) DBQuery(prefix string) SelectQuery {
+	if e.Value.String != nil {
+		return SelectQuery{
+			Q: fmt.Sprintf(`%sSELECT entity_key FROM string_annotations WHERE annotation_key = '%s' AND value = '%s'`, prefix, e.Var, *e.Value.String),
+			// Args: []any{e.Var, *e.Value.String},
+		}
+	}
+
+	return SelectQuery{
+		Q: fmt.Sprintf(`%sSELECT entity_key FROM numeric_annotations WHERE annotation_key = '%s' AND value = %d`, prefix, e.Var, *e.Value.Number),
+		// Args: []any{e.Var, *e.Value.Number},
+	}
+
+	// return sqlite.Select(
+	// 	sm.Columns("entity_key"),
+	// 	sm.From("numeric_annotations"),
+	// 	sm.Where(
+	// 		sqlite.Quote("annotation_key").EQ(sqlite.S(e.Var)).And(
+	// 			sqlite.Quote("value").EQ(sqlite.Arg(e.Value.Number)),
+	// 		),
+	// 	),
+	// )
 }
 
 // Value is a literal value (a number or a string).
