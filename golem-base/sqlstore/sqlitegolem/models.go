@@ -4,27 +4,21 @@
 
 package sqlitegolem
 
-type Entity struct {
-	Key          string
-	ExpiresAt    int64
-	Payload      []byte
-	OwnerAddress string
-}
-
-type NumericAnnotation struct {
+type Annotation struct {
 	EntityKey     string
 	AnnotationKey string
-	Value         int64
+	StringValue   *string
+	NumericValue  *int64
+}
+
+type Entity struct {
+	Key       string
+	ExpiresAt int64
+	Payload   []byte
 }
 
 type ProcessingStatus struct {
 	Network                  string
 	LastProcessedBlockNumber int64
 	LastProcessedBlockHash   string
-}
-
-type StringAnnotation struct {
-	EntityKey     string
-	AnnotationKey string
-	Value         string
 }

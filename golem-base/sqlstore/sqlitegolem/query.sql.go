@@ -20,6 +20,15 @@ func (q *Queries) CountNetworks(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const deleteAllAnnotations = `-- name: DeleteAllAnnotations :exec
+DELETE FROM annotations
+`
+
+func (q *Queries) DeleteAllAnnotations(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllAnnotations)
+	return err
+}
+
 const deleteAllEntities = `-- name: DeleteAllEntities :exec
 DELETE FROM entities
 `
@@ -30,7 +39,7 @@ func (q *Queries) DeleteAllEntities(ctx context.Context) error {
 }
 
 const deleteAllNumericAnnotations = `-- name: DeleteAllNumericAnnotations :exec
-DELETE FROM numeric_annotations
+DELETE FROM annotations WHERE numeric_value IS NOT NULL
 `
 
 func (q *Queries) DeleteAllNumericAnnotations(ctx context.Context) error {
@@ -48,11 +57,20 @@ func (q *Queries) DeleteAllProcessingStatus(ctx context.Context) error {
 }
 
 const deleteAllStringAnnotations = `-- name: DeleteAllStringAnnotations :exec
-DELETE FROM string_annotations
+DELETE FROM annotations WHERE string_value IS NOT NULL
 `
 
 func (q *Queries) DeleteAllStringAnnotations(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteAllStringAnnotations)
+	return err
+}
+
+const deleteAnnotations = `-- name: DeleteAnnotations :exec
+DELETE FROM annotations WHERE entity_key = ?
+`
+
+func (q *Queries) DeleteAnnotations(ctx context.Context, entityKey string) error {
+	_, err := q.db.ExecContext(ctx, deleteAnnotations, entityKey)
 	return err
 }
 
@@ -66,7 +84,7 @@ func (q *Queries) DeleteEntity(ctx context.Context, key string) error {
 }
 
 const deleteNumericAnnotations = `-- name: DeleteNumericAnnotations :exec
-DELETE FROM numeric_annotations WHERE entity_key = ?
+DELETE FROM annotations WHERE entity_key = ? AND numeric_value IS NOT NULL
 `
 
 func (q *Queries) DeleteNumericAnnotations(ctx context.Context, entityKey string) error {
@@ -84,7 +102,7 @@ func (q *Queries) DeleteProcessingStatus(ctx context.Context, network string) er
 }
 
 const deleteStringAnnotations = `-- name: DeleteStringAnnotations :exec
-DELETE FROM string_annotations WHERE entity_key = ?
+DELETE FROM annotations WHERE entity_key = ? AND string_value IS NOT NULL
 `
 
 func (q *Queries) DeleteStringAnnotations(ctx context.Context, entityKey string) error {
@@ -131,24 +149,21 @@ func (q *Queries) GetAllEntityKeys(ctx context.Context) ([]string, error) {
 }
 
 const getEntitiesByOwner = `-- name: GetEntitiesByOwner :many
-SELECT key, expires_at, payload FROM entities WHERE owner_address = ?
+SELECT e.key, e.expires_at, e.payload
+FROM entities e INNER JOIN annotations a
+  ON e.key = a.entity_key AND a.annotation_key = "$owner"
+WHERE a.string_value = ?
 `
 
-type GetEntitiesByOwnerRow struct {
-	Key       string
-	ExpiresAt int64
-	Payload   []byte
-}
-
-func (q *Queries) GetEntitiesByOwner(ctx context.Context, ownerAddress string) ([]GetEntitiesByOwnerRow, error) {
-	rows, err := q.db.QueryContext(ctx, getEntitiesByOwner, ownerAddress)
+func (q *Queries) GetEntitiesByOwner(ctx context.Context, stringValue *string) ([]Entity, error) {
+	rows, err := q.db.QueryContext(ctx, getEntitiesByOwner, stringValue)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetEntitiesByOwnerRow
+	var items []Entity
 	for rows.Next() {
-		var i GetEntitiesByOwnerRow
+		var i Entity
 		if err := rows.Scan(&i.Key, &i.ExpiresAt, &i.Payload); err != nil {
 			return nil, err
 		}
@@ -165,18 +180,18 @@ func (q *Queries) GetEntitiesByOwner(ctx context.Context, ownerAddress string) (
 
 const getEntitiesForNumericAnnotation = `-- name: GetEntitiesForNumericAnnotation :many
 SELECT entity_key
-FROM numeric_annotations
-WHERE annotation_key = ? AND value = ?
+FROM annotations
+WHERE annotation_key = ? AND numeric_value = ?
 ORDER BY entity_key
 `
 
 type GetEntitiesForNumericAnnotationParams struct {
 	AnnotationKey string
-	Value         int64
+	NumericValue  *int64
 }
 
 func (q *Queries) GetEntitiesForNumericAnnotation(ctx context.Context, arg GetEntitiesForNumericAnnotationParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getEntitiesForNumericAnnotation, arg.AnnotationKey, arg.Value)
+	rows, err := q.db.QueryContext(ctx, getEntitiesForNumericAnnotation, arg.AnnotationKey, arg.NumericValue)
 	if err != nil {
 		return nil, err
 	}
@@ -200,18 +215,18 @@ func (q *Queries) GetEntitiesForNumericAnnotation(ctx context.Context, arg GetEn
 
 const getEntitiesForStringAnnotation = `-- name: GetEntitiesForStringAnnotation :many
 SELECT entity_key
-FROM string_annotations
-WHERE annotation_key = ? AND value = ?
+FROM annotations
+WHERE annotation_key = ? AND string_value = ?
 ORDER BY entity_key
 `
 
 type GetEntitiesForStringAnnotationParams struct {
 	AnnotationKey string
-	Value         string
+	StringValue   *string
 }
 
 func (q *Queries) GetEntitiesForStringAnnotation(ctx context.Context, arg GetEntitiesForStringAnnotationParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getEntitiesForStringAnnotation, arg.AnnotationKey, arg.Value)
+	rows, err := q.db.QueryContext(ctx, getEntitiesForStringAnnotation, arg.AnnotationKey, arg.StringValue)
 	if err != nil {
 		return nil, err
 	}
@@ -264,13 +279,16 @@ func (q *Queries) GetEntitiesToExpireAtBlock(ctx context.Context, expiresAt int6
 }
 
 const getEntity = `-- name: GetEntity :one
-SELECT expires_at, payload, owner_address FROM entities WHERE key = ?
+SELECT e.expires_at, e.payload, a.string_value AS owner_address
+FROM entities e INNER JOIN annotations a
+  ON e.key = a.entity_key AND a.annotation_key = "$owner"
+WHERE key = ?
 `
 
 type GetEntityRow struct {
 	ExpiresAt    int64
 	Payload      []byte
-	OwnerAddress string
+	OwnerAddress *string
 }
 
 func (q *Queries) GetEntity(ctx context.Context, key string) (GetEntityRow, error) {
@@ -278,6 +296,45 @@ func (q *Queries) GetEntity(ctx context.Context, key string) (GetEntityRow, erro
 	var i GetEntityRow
 	err := row.Scan(&i.ExpiresAt, &i.Payload, &i.OwnerAddress)
 	return i, err
+}
+
+const getEntityAnnotations = `-- name: GetEntityAnnotations :many
+SELECT
+  annotation_key,
+  string_value,
+  numeric_value
+FROM annotations
+WHERE entity_key = ?
+ORDER BY annotation_key
+`
+
+type GetEntityAnnotationsRow struct {
+	AnnotationKey string
+	StringValue   *string
+	NumericValue  *int64
+}
+
+func (q *Queries) GetEntityAnnotations(ctx context.Context, entityKey string) ([]GetEntityAnnotationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getEntityAnnotations, entityKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetEntityAnnotationsRow
+	for rows.Next() {
+		var i GetEntityAnnotationsRow
+		if err := rows.Scan(&i.AnnotationKey, &i.StringValue, &i.NumericValue); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getEntityCount = `-- name: GetEntityCount :one
@@ -292,11 +349,14 @@ func (q *Queries) GetEntityCount(ctx context.Context) (int64, error) {
 }
 
 const getEntityKeysByOwner = `-- name: GetEntityKeysByOwner :many
-SELECT key FROM entities WHERE owner_address = ? ORDER BY key
+SELECT e.key
+FROM entities e INNER JOIN annotations a
+  ON e.key = a.entity_key AND a.annotation_key = "$owner"
+WHERE a.string_value = ? ORDER BY e.key
 `
 
-func (q *Queries) GetEntityKeysByOwner(ctx context.Context, ownerAddress string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getEntityKeysByOwner, ownerAddress)
+func (q *Queries) GetEntityKeysByOwner(ctx context.Context, stringValue *string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getEntityKeysByOwner, stringValue)
 	if err != nil {
 		return nil, err
 	}
@@ -319,17 +379,18 @@ func (q *Queries) GetEntityKeysByOwner(ctx context.Context, ownerAddress string)
 }
 
 const getEntityMetadata = `-- name: GetEntityMetadata :one
-SELECT 
-  expires_at,
-  owner_address,
-  payload
-FROM entities
-WHERE key = ?
+SELECT
+  e.expires_at,
+  a.string_value AS owner_address,
+  e.payload
+FROM entities e INNER JOIN annotations a
+  ON e.key = a.entity_key AND a.annotation_key = "$owner"
+WHERE e.key = ?
 `
 
 type GetEntityMetadataRow struct {
 	ExpiresAt    int64
-	OwnerAddress string
+	OwnerAddress *string
 	Payload      []byte
 }
 
@@ -341,17 +402,17 @@ func (q *Queries) GetEntityMetadata(ctx context.Context, key string) (GetEntityM
 }
 
 const getEntityNumericAnnotations = `-- name: GetEntityNumericAnnotations :many
-SELECT 
+SELECT
   annotation_key,
-  value
-FROM numeric_annotations
-WHERE entity_key = ?
+  numeric_value
+FROM annotations
+WHERE entity_key = ? AND numeric_value IS NOT NULL
 ORDER BY annotation_key
 `
 
 type GetEntityNumericAnnotationsRow struct {
 	AnnotationKey string
-	Value         int64
+	NumericValue  *int64
 }
 
 func (q *Queries) GetEntityNumericAnnotations(ctx context.Context, entityKey string) ([]GetEntityNumericAnnotationsRow, error) {
@@ -363,7 +424,7 @@ func (q *Queries) GetEntityNumericAnnotations(ctx context.Context, entityKey str
 	var items []GetEntityNumericAnnotationsRow
 	for rows.Next() {
 		var i GetEntityNumericAnnotationsRow
-		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
+		if err := rows.Scan(&i.AnnotationKey, &i.NumericValue); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -389,17 +450,17 @@ func (q *Queries) GetEntityPayload(ctx context.Context, key string) ([]byte, err
 }
 
 const getEntityStringAnnotations = `-- name: GetEntityStringAnnotations :many
-SELECT 
+SELECT
   annotation_key,
-  value
-FROM string_annotations
-WHERE entity_key = ?
+  string_value
+FROM annotations
+WHERE entity_key = ? AND string_value IS NOT NULL
 ORDER BY annotation_key
 `
 
 type GetEntityStringAnnotationsRow struct {
 	AnnotationKey string
-	Value         string
+	StringValue   *string
 }
 
 func (q *Queries) GetEntityStringAnnotations(ctx context.Context, entityKey string) ([]GetEntityStringAnnotationsRow, error) {
@@ -411,7 +472,7 @@ func (q *Queries) GetEntityStringAnnotations(ctx context.Context, entityKey stri
 	var items []GetEntityStringAnnotationsRow
 	for rows.Next() {
 		var i GetEntityStringAnnotationsRow
-		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
+		if err := rows.Scan(&i.AnnotationKey, &i.StringValue); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -426,12 +487,14 @@ func (q *Queries) GetEntityStringAnnotations(ctx context.Context, entityKey stri
 }
 
 const getNumericAnnotations = `-- name: GetNumericAnnotations :many
-SELECT annotation_key, value FROM numeric_annotations WHERE entity_key = ?
+SELECT annotation_key, numeric_value
+FROM annotations
+WHERE entity_key = ? AND numeric_value IS NOT NULL
 `
 
 type GetNumericAnnotationsRow struct {
 	AnnotationKey string
-	Value         int64
+	NumericValue  *int64
 }
 
 func (q *Queries) GetNumericAnnotations(ctx context.Context, entityKey string) ([]GetNumericAnnotationsRow, error) {
@@ -443,7 +506,7 @@ func (q *Queries) GetNumericAnnotations(ctx context.Context, entityKey string) (
 	var items []GetNumericAnnotationsRow
 	for rows.Next() {
 		var i GetNumericAnnotationsRow
-		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
+		if err := rows.Scan(&i.AnnotationKey, &i.NumericValue); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -474,12 +537,14 @@ func (q *Queries) GetProcessingStatus(ctx context.Context, network string) (GetP
 }
 
 const getStringAnnotations = `-- name: GetStringAnnotations :many
-SELECT annotation_key, value FROM string_annotations WHERE entity_key = ?
+SELECT annotation_key, string_value
+FROM annotations
+WHERE entity_key = ? AND string_value IS NOT NULL
 `
 
 type GetStringAnnotationsRow struct {
 	AnnotationKey string
-	Value         string
+	StringValue   *string
 }
 
 func (q *Queries) GetStringAnnotations(ctx context.Context, entityKey string) ([]GetStringAnnotationsRow, error) {
@@ -491,7 +556,7 @@ func (q *Queries) GetStringAnnotations(ctx context.Context, entityKey string) ([
 	var items []GetStringAnnotationsRow
 	for rows.Next() {
 		var i GetStringAnnotationsRow
-		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
+		if err := rows.Scan(&i.AnnotationKey, &i.StringValue); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -517,38 +582,32 @@ func (q *Queries) HasProcessingStatus(ctx context.Context, network string) (bool
 }
 
 const insertEntity = `-- name: InsertEntity :exec
-INSERT INTO entities (key, expires_at, payload, owner_address) VALUES (?, ?, ?, ?)
+INSERT INTO entities (key, expires_at, payload) VALUES (?, ?, ?)
 `
 
 type InsertEntityParams struct {
-	Key          string
-	ExpiresAt    int64
-	Payload      []byte
-	OwnerAddress string
+	Key       string
+	ExpiresAt int64
+	Payload   []byte
 }
 
 func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) error {
-	_, err := q.db.ExecContext(ctx, insertEntity,
-		arg.Key,
-		arg.ExpiresAt,
-		arg.Payload,
-		arg.OwnerAddress,
-	)
+	_, err := q.db.ExecContext(ctx, insertEntity, arg.Key, arg.ExpiresAt, arg.Payload)
 	return err
 }
 
 const insertNumericAnnotation = `-- name: InsertNumericAnnotation :exec
-INSERT INTO numeric_annotations (entity_key, annotation_key, value) VALUES (?, ?, ?)
+INSERT INTO annotations (entity_key, annotation_key, numeric_value) VALUES (?, ?, ?)
 `
 
 type InsertNumericAnnotationParams struct {
 	EntityKey     string
 	AnnotationKey string
-	Value         int64
+	NumericValue  *int64
 }
 
 func (q *Queries) InsertNumericAnnotation(ctx context.Context, arg InsertNumericAnnotationParams) error {
-	_, err := q.db.ExecContext(ctx, insertNumericAnnotation, arg.EntityKey, arg.AnnotationKey, arg.Value)
+	_, err := q.db.ExecContext(ctx, insertNumericAnnotation, arg.EntityKey, arg.AnnotationKey, arg.NumericValue)
 	return err
 }
 
@@ -568,22 +627,22 @@ func (q *Queries) InsertProcessingStatus(ctx context.Context, arg InsertProcessi
 }
 
 const insertStringAnnotation = `-- name: InsertStringAnnotation :exec
-INSERT INTO string_annotations (entity_key, annotation_key, value) VALUES (?, ?, ?)
+INSERT INTO annotations (entity_key, annotation_key, string_value) VALUES (?, ?, ?)
 `
 
 type InsertStringAnnotationParams struct {
 	EntityKey     string
 	AnnotationKey string
-	Value         string
+	StringValue   *string
 }
 
 func (q *Queries) InsertStringAnnotation(ctx context.Context, arg InsertStringAnnotationParams) error {
-	_, err := q.db.ExecContext(ctx, insertStringAnnotation, arg.EntityKey, arg.AnnotationKey, arg.Value)
+	_, err := q.db.ExecContext(ctx, insertStringAnnotation, arg.EntityKey, arg.AnnotationKey, arg.StringValue)
 	return err
 }
 
 const numericAnnotationsForEntityExists = `-- name: NumericAnnotationsForEntityExists :one
-SELECT COUNT(*) > 0 FROM numeric_annotations WHERE entity_key = ?
+SELECT COUNT(*) > 0 FROM annotations WHERE entity_key = ? AND numeric_value IS NOT NULL
 `
 
 func (q *Queries) NumericAnnotationsForEntityExists(ctx context.Context, entityKey string) (bool, error) {
@@ -594,7 +653,7 @@ func (q *Queries) NumericAnnotationsForEntityExists(ctx context.Context, entityK
 }
 
 const stringAnnotationsForEntityExists = `-- name: StringAnnotationsForEntityExists :one
-SELECT COUNT(*) > 0 FROM string_annotations WHERE entity_key = ?
+SELECT COUNT(*) > 0 FROM annotations WHERE entity_key = ? AND string_value IS NOT NULL
 `
 
 func (q *Queries) StringAnnotationsForEntityExists(ctx context.Context, entityKey string) (bool, error) {

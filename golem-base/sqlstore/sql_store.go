@@ -79,7 +79,7 @@ func NewStore(dbFile string) (*SQLStore, error) {
 	ctx := context.Background()
 	var tableName string
 	err = db.QueryRowContext(ctx, `
-		SELECT name FROM sqlite_master 
+		SELECT name FROM sqlite_master
 		WHERE type='table' AND name='entities';
 	`).Scan(&tableName)
 
@@ -144,7 +144,7 @@ func (e *SQLStore) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber u
 func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, annotationKey, value string) ([]common.Hash, error) {
 	keys, err := e.GetQueries().GetEntitiesForStringAnnotation(ctx, sqlitegolem.GetEntitiesForStringAnnotationParams{
 		AnnotationKey: annotationKey,
-		Value:         value,
+		StringValue:   &value,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entities for string annotation %s=%s: %w", annotationKey, value, err)
@@ -161,9 +161,10 @@ func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, anno
 
 // GetEntitiesForNumericAnnotationValue retrieves all entity keys that have a specific numeric annotation with the given value
 func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, annotationKey string, value uint64) ([]common.Hash, error) {
+	intValue := int64(value)
 	keys, err := e.GetQueries().GetEntitiesForNumericAnnotation(ctx, sqlitegolem.GetEntitiesForNumericAnnotationParams{
 		AnnotationKey: annotationKey,
-		Value:         int64(value),
+		NumericValue:  &intValue,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entities for numeric annotation %s=%d: %w", annotationKey, value, err)
@@ -178,9 +179,37 @@ func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, ann
 	return result, nil
 }
 
+func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any) ([]common.Hash, error) {
+
+	log.Info(fmt.Sprintf("Query engine, executing query: %s\n", query))
+	log.Info(fmt.Sprintf("Query engine, number of args: %d\n", len(args)))
+	log.Info(fmt.Sprintf("Query engine, args: %v\n", args))
+
+	rows, err := e.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+	defer rows.Close()
+
+	keys := []common.Hash{}
+	var key string
+	for rows.Next() {
+		if err := rows.Scan(&key); err != nil {
+			return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+		}
+		keys = append(keys, common.HexToHash(key))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+
+	return keys, nil
+}
+
 // GetEntitiesOfOwner retrieves all entity keys owned by the specified address
 func (e *SQLStore) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntityKeysByOwner(ctx, owner.Hex())
+	ownerAddress := owner.Hex()
+	keys, err := e.GetQueries().GetEntityKeysByOwner(ctx, &ownerAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entities for owner %s: %w", owner.Hex(), err)
 	}
@@ -258,14 +287,14 @@ func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*ent
 		ExpiresAtBlock:     uint64(entityData.ExpiresAt),
 		StringAnnotations:  make([]entity.StringAnnotation, len(stringAnnotRows)),
 		NumericAnnotations: make([]entity.NumericAnnotation, len(numericAnnotRows)),
-		Owner:              common.HexToAddress(entityData.OwnerAddress),
+		Owner:              common.HexToAddress(*entityData.OwnerAddress),
 	}
 
 	// Convert string annotations
 	for i, row := range stringAnnotRows {
 		metadata.StringAnnotations[i] = entity.StringAnnotation{
 			Key:   row.AnnotationKey,
-			Value: row.Value,
+			Value: *row.StringValue,
 		}
 	}
 
@@ -273,7 +302,7 @@ func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*ent
 	for i, row := range numericAnnotRows {
 		metadata.NumericAnnotations[i] = entity.NumericAnnotation{
 			Key:   row.AnnotationKey,
-			Value: uint64(row.Value),
+			Value: uint64(*row.NumericValue),
 		}
 	}
 
@@ -349,14 +378,9 @@ func (e *SQLStore) SnapSyncToBlock(
 		return fmt.Errorf("failed to clear entities: %w", err)
 	}
 
-	err = txDB.DeleteAllStringAnnotations(ctx)
+	err = txDB.DeleteAllAnnotations(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to clear string annotations: %w", err)
-	}
-
-	err = txDB.DeleteAllNumericAnnotations(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to clear numeric annotations: %w", err)
+		return fmt.Errorf("failed to clear annotations: %w", err)
 	}
 
 	// Insert all entities from the snapshot
@@ -367,13 +391,22 @@ func (e *SQLStore) SnapSyncToBlock(
 
 		// Insert the entity
 		err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-			Key:          entity.Key.Hex(),
-			ExpiresAt:    int64(entity.Metadata.ExpiresAtBlock),
-			Payload:      entity.Payload,
-			OwnerAddress: entity.Metadata.Owner.Hex(),
+			Key:       entity.Key.Hex(),
+			ExpiresAt: int64(entity.Metadata.ExpiresAtBlock),
+			Payload:   entity.Payload,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to insert entity %s: %w", entity.Key.Hex(), err)
+		}
+
+		ownerValue := entity.Metadata.Owner.Hex()
+		err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+			EntityKey:     entity.Key.Hex(),
+			AnnotationKey: "$owner",
+			StringValue:   &ownerValue,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to insert owner annotation for entity %s: %w", entity.Key.Hex(), err)
 		}
 
 		// Insert string annotations
@@ -381,7 +414,7 @@ func (e *SQLStore) SnapSyncToBlock(
 			err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
 				EntityKey:     entity.Key.Hex(),
 				AnnotationKey: annotation.Key,
-				Value:         annotation.Value,
+				StringValue:   &annotation.Value,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert string annotation for entity %s: %w", entity.Key.Hex(), err)
@@ -390,10 +423,11 @@ func (e *SQLStore) SnapSyncToBlock(
 
 		// Insert numeric annotations
 		for _, annotation := range entity.Metadata.NumericAnnotations {
+			value := int64(annotation.Value)
 			err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 				EntityKey:     entity.Key.Hex(),
 				AnnotationKey: annotation.Key,
-				Value:         int64(annotation.Value),
+				NumericValue:  &value,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert numeric annotation for entity %s: %w", entity.Key.Hex(), err)
@@ -488,20 +522,30 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 		case op.Create != nil:
 			log.Info("create", "entity", op.Create.EntityKey.Hex())
 			err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-				Key:          op.Create.EntityKey.Hex(),
-				ExpiresAt:    int64(op.Create.ExpiresAtBlock),
-				Payload:      op.Create.Payload,
-				OwnerAddress: op.Create.Owner.Hex(),
+				Key:       op.Create.EntityKey.Hex(),
+				ExpiresAt: int64(op.Create.ExpiresAtBlock),
+				Payload:   op.Create.Payload,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert entity: %w", err)
 			}
 
+			ownerValue := op.Create.Owner.Hex()
+			err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+				EntityKey:     op.Create.EntityKey.Hex(),
+				AnnotationKey: "$owner",
+				StringValue:   &ownerValue,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to insert owner annotation for entity %s: %w", op.Create.EntityKey.Hex(), err)
+			}
+
 			for _, annotation := range op.Create.NumericAnnotations {
+				value := int64(annotation.Value)
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 					EntityKey:     op.Create.EntityKey.Hex(),
 					AnnotationKey: annotation.Key,
-					Value:         int64(annotation.Value),
+					NumericValue:  &value,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert numeric annotation: %w", err)
@@ -512,7 +556,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
 					EntityKey:     op.Create.EntityKey.Hex(),
 					AnnotationKey: annotation.Key,
-					Value:         annotation.Value,
+					StringValue:   &annotation.Value,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert string annotation: %w", err)
@@ -524,22 +568,37 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				return fmt.Errorf("failed to get existing entity: %w", err)
 			}
 
-			txDB.DeleteEntity(ctx, op.Update.EntityKey.Hex())
-			txDB.DeleteNumericAnnotations(ctx, op.Update.EntityKey.Hex())
-			txDB.DeleteStringAnnotations(ctx, op.Update.EntityKey.Hex())
+			if err := txDB.DeleteEntity(ctx, op.Update.EntityKey.Hex()); err != nil {
+				return fmt.Errorf("failed to delete entity: %w", err)
+			}
+			if err := txDB.DeleteAnnotations(ctx, op.Update.EntityKey.Hex()); err != nil {
+				return fmt.Errorf("failed to delete annotations: %w", err)
+			}
 
-			txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-				Key:          op.Update.EntityKey.Hex(),
-				ExpiresAt:    int64(op.Update.ExpiresAtBlock),
-				Payload:      op.Update.Payload,
-				OwnerAddress: existingEntity.OwnerAddress,
+			err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
+				Key:       op.Update.EntityKey.Hex(),
+				ExpiresAt: int64(op.Update.ExpiresAtBlock),
+				Payload:   op.Update.Payload,
 			})
+			if err != nil {
+				return fmt.Errorf("failed to update entity %s: %w", op.Update.EntityKey.Hex(), err)
+			}
+
+			err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+				EntityKey:     op.Update.EntityKey.Hex(),
+				AnnotationKey: "$owner",
+				StringValue:   existingEntity.OwnerAddress,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to insert owner annotation for entity %s: %w", op.Update.EntityKey.Hex(), err)
+			}
 
 			for _, annotation := range op.Update.NumericAnnotations {
+				value := int64(annotation.Value)
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 					EntityKey:     op.Update.EntityKey.Hex(),
 					AnnotationKey: annotation.Key,
-					Value:         int64(annotation.Value),
+					NumericValue:  &value,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert numeric annotation: %w", err)
@@ -550,7 +609,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
 					EntityKey:     op.Update.EntityKey.Hex(),
 					AnnotationKey: annotation.Key,
-					Value:         annotation.Value,
+					StringValue:   &annotation.Value,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert string annotation: %w", err)
@@ -562,15 +621,11 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				return fmt.Errorf("failed to delete entity: %w", err)
 			}
 
-			err = txDB.DeleteNumericAnnotations(ctx, op.Delete.Hex())
+			err = txDB.DeleteAnnotations(ctx, op.Delete.Hex())
 			if err != nil {
-				return fmt.Errorf("failed to delete numeric annotations: %w", err)
+				return fmt.Errorf("failed to delete annotations: %w", err)
 			}
 
-			err = txDB.DeleteStringAnnotations(ctx, op.Delete.Hex())
-			if err != nil {
-				return fmt.Errorf("failed to delete string annotations: %w", err)
-			}
 		case op.Extend != nil:
 			log.Info("extend BTL", "entity", op.Extend.EntityKey.Hex())
 
