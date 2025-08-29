@@ -27,3 +27,18 @@ CREATE TABLE numeric_annotations (
   PRIMARY KEY (entity_key, annotation_key)
 );
 
+-- For numeric_annotations direct lookups 
+CREATE INDEX idx_numeric_annotations_key_value
+ON numeric_annotations(annotation_key, value, entity_key);
+
+-- For numeric_annotations range lookups 
+CREATE INDEX idx_numeric_annotations_range
+ON numeric_annotations(annotation_key, value);
+
+-- For string_annotations lookups 
+CREATE INDEX idx_string_annotations_key_value
+ON string_annotations(annotation_key, value, entity_key);
+
+-- For string_annotations range lookups 
+CREATE INDEX idx_string_annotations_range
+ON string_annotations(annotation_key, value);
