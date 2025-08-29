@@ -79,10 +79,11 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 		return nil, fmt.Errorf("failed to parse query: %w", err)
 	}
 
-	ds := &golemBaseDataSource{api: api, ctx: ctx}
-	entities, err := expr.Evaluate(ds)
+	query := expr.Evaluate()
+
+	entities, err := api.store.QueryEntities(ctx, query.Query, query.Args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate query: %w", err)
+		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
 	searchResults := make([]golemtype.SearchResult, 0)
@@ -99,24 +100,6 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 	}
 
 	return searchResults, nil
-
-}
-
-type golemBaseDataSource struct {
-	api *golemBaseAPI
-	ctx context.Context
-}
-
-func (ds *golemBaseDataSource) GetKeysForStringAnnotation(key, value string) ([]common.Hash, error) {
-	return ds.api.GetEntitiesForStringAnnotationValue(ds.ctx, key, value)
-}
-
-func (ds *golemBaseDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
-	return ds.api.GetEntitiesForNumericAnnotationValue(ds.ctx, key, value)
-}
-
-func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {
-	return ds.api.GetEntitiesOfOwner(ds.ctx, owner)
 }
 
 // GetEntityCount returns the total number of entities in the storage.

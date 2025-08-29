@@ -1,8 +1,8 @@
 package query
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -19,6 +19,10 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "And", Pattern: `&&`},
 	{Name: "Or", Pattern: `\|\|`},
 	{Name: "Eq", Pattern: `=`},
+	{Name: "Geqt", Pattern: `>=`},
+	{Name: "Leqt", Pattern: `<=`},
+	{Name: "Gt", Pattern: `>`},
+	{Name: "Lt", Pattern: `<`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
 	{Name: "Number", Pattern: `[0-9]+`},
 	{Name: "Ident", Pattern: entity.AnnotationIdentRegex},
@@ -26,13 +30,56 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Owner", Pattern: `\$owner`},
 })
 
+type SelectQuery struct {
+	Query string
+	Args  []any
+}
+
+type QueryBuilder struct {
+	tableBuilder *strings.Builder
+	args         []any
+	needsComma   bool
+	tableCounter uint64
+}
+
+func (b *QueryBuilder) nextTableName() string {
+	b.tableCounter = b.tableCounter + 1
+	return fmt.Sprintf("table_%d", b.tableCounter)
+}
+
 // Expression is the top-level rule.
 type Expression struct {
 	Or *OrExpression `parser:"@@"`
 }
 
-func (e *Expression) Evaluate(ds DataSource) ([]common.Hash, error) {
-	return e.Or.Evaluate(ds)
+func (e *Expression) Evaluate() *SelectQuery {
+	tableBuilder := strings.Builder{}
+	args := []any{}
+
+	tableBuilder.WriteString("WITH ")
+
+	builder := QueryBuilder{
+		tableBuilder: &tableBuilder,
+		args:         args,
+		needsComma:   false,
+	}
+
+	tableName := e.Or.Evaluate(&builder)
+
+	tableBuilder.WriteString(" SELECT * FROM ")
+	tableBuilder.WriteString(tableName)
+	tableBuilder.WriteString(" ORDER BY 1")
+
+	return &SelectQuery{
+		Query: tableBuilder.String(),
+		Args:  builder.args,
+	}
+}
+
+func (e *Expression) Recurse(b *QueryBuilder) string {
+	// We don't have to do anything here, the parsing order is already taking care
+	// of precedence since the nested OR node will create a subquery
+	return e.Or.Evaluate(b)
 }
 
 // OrExpression handles expressions connected with ||.
@@ -41,54 +88,42 @@ type OrExpression struct {
 	Right []*OrRHS       `parser:"@@*"`
 }
 
-func union(a, b []common.Hash) []common.Hash {
-	result := make([]common.Hash, 0, len(a)+len(b))
-	seen := make(map[common.Hash]bool)
-
-	// Add all hashes from a
-	for _, hash := range a {
-		if !seen[hash] {
-			seen[hash] = true
-			result = append(result, hash)
-		}
-	}
-
-	// Add any new hashes from b
-	for _, hash := range b {
-		if !seen[hash] {
-			seen[hash] = true
-			result = append(result, hash)
-		}
-	}
-
-	return result
-}
-
-func (e *OrExpression) Evaluate(ds DataSource) ([]common.Hash, error) {
-	res, err := e.Left.Evaluate(ds)
-	if err != nil {
-		return nil, err
-	}
+func (e *OrExpression) Evaluate(b *QueryBuilder) string {
+	leftTable := e.Left.Evaluate(b)
+	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rh, err := rhs.Evaluate(ds)
-		if err != nil {
-			return nil, err
+		rightTable := rhs.Evaluate(b)
+		tableName = b.nextTableName()
+
+		if b.needsComma {
+			b.tableBuilder.WriteString(", ")
+		} else {
+			b.needsComma = true
 		}
-		res = union(res, rh)
+
+		b.tableBuilder.WriteString(tableName)
+		b.tableBuilder.WriteString(" AS (")
+		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString(leftTable)
+		b.tableBuilder.WriteString(" UNION ")
+		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString(rightTable)
+		b.tableBuilder.WriteString(")")
+
+		leftTable = rightTable
 	}
 
-	return res, nil
+	return tableName
 }
 
 // OrRHS represents the right-hand side of an OR.
 type OrRHS struct {
-	Op   string         `parser:"@Or"`
-	Expr *AndExpression `parser:"@@"`
+	Expr *AndExpression `parser:"Or @@"`
 }
 
-func (e *OrRHS) Evaluate(ds DataSource) ([]common.Hash, error) {
-	return e.Expr.Evaluate(ds)
+func (e *OrRHS) Evaluate(b *QueryBuilder) string {
+	return e.Expr.Evaluate(b)
 }
 
 // AndExpression handles expressions connected with &&.
@@ -97,52 +132,42 @@ type AndExpression struct {
 	Right []*AndRHS  `parser:"@@*"`
 }
 
-func intersect(a, b []common.Hash) []common.Hash {
-	result := make([]common.Hash, 0)
-	seen := make(map[common.Hash]bool)
-
-	// Build map of hashes in a
-	for _, hash := range a {
-		seen[hash] = true
-	}
-
-	// Check which hashes from b exist in map
-	for _, hash := range b {
-		if seen[hash] {
-			result = append(result, hash)
-		}
-	}
-
-	return result
-
-}
-
-func (e *AndExpression) Evaluate(ds DataSource) ([]common.Hash, error) {
-
-	res, err := e.Left.Evaluate(ds)
-	if err != nil {
-		return nil, err
-	}
+func (e *AndExpression) Evaluate(b *QueryBuilder) string {
+	leftTable := e.Left.Evaluate(b)
+	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rh, err := rhs.Evaluate(ds)
-		if err != nil {
-			return nil, err
+		rightTable := rhs.Evaluate(b)
+		tableName = b.nextTableName()
+
+		if b.needsComma {
+			b.tableBuilder.WriteString(", ")
+		} else {
+			b.needsComma = true
 		}
-		res = intersect(res, rh)
+
+		b.tableBuilder.WriteString(tableName)
+		b.tableBuilder.WriteString(" AS (")
+		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString(leftTable)
+		b.tableBuilder.WriteString(" INTERSECT ")
+		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString(rightTable)
+		b.tableBuilder.WriteString(")")
+
+		leftTable = rightTable
 	}
 
-	return res, nil
+	return tableName
 }
 
 // AndRHS represents the right-hand side of an AND.
 type AndRHS struct {
-	Op   string     `parser:"@And"`
-	Expr *EqualExpr `parser:"@@"`
+	Expr *EqualExpr `parser:"And @@"`
 }
 
-func (e *AndRHS) Evaluate(ds DataSource) ([]common.Hash, error) {
-	return e.Expr.Evaluate(ds)
+func (e *AndRHS) Evaluate(b *QueryBuilder) string {
+	return e.Expr.Evaluate(b)
 }
 
 // EqualExpr can be either an equality or a parenthesized expression.
@@ -150,37 +175,167 @@ type EqualExpr struct {
 	Paren  *Expression `parser:"  \"(\" @@ \")\""`
 	Owner  *Ownership  `parser:"| @@"`
 	Assign *Equality   `parser:"| @@"`
+
+	LessThan           *LessThan           `parser:"| @@"`
+	LessOrEqualThan    *LessOrEqualThan    `parser:"| @@"`
+	GreaterThan        *GreaterThan        `parser:"| @@"`
+	GreaterOrEqualThan *GreaterOrEqualThan `parser:"| @@"`
 }
 
-func (e *EqualExpr) Evaluate(ds DataSource) ([]common.Hash, error) {
+func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 	if e.Paren != nil {
-		return e.Paren.Evaluate(ds)
+		return e.Paren.Recurse(b)
 	}
 
 	if e.Owner != nil {
-		return e.Owner.Evaluate(ds)
+		return e.Owner.Evaluate(b)
 	}
 
-	return e.Assign.Evaluate(ds)
+	if e.LessThan != nil {
+		return e.LessThan.Evaluate(b)
+	}
+
+	if e.LessOrEqualThan != nil {
+		return e.LessOrEqualThan.Evaluate(b)
+	}
+
+	if e.GreaterThan != nil {
+		return e.GreaterThan.Evaluate(b)
+	}
+
+	if e.GreaterOrEqualThan != nil {
+		return e.GreaterOrEqualThan.Evaluate(b)
+	}
+
+	if e.Assign != nil {
+		return e.Assign.Evaluate(b)
+	}
+
+	panic("This should not happen!")
+}
+
+type LessThan struct {
+	Var   string `parser:"@Ident Lt"`
+	Value uint64 `parser:"@Number"`
+}
+
+func (e *LessThan) Evaluate(b *QueryBuilder) string {
+	tableName := b.nextTableName()
+	if b.needsComma {
+		b.tableBuilder.WriteString(", ")
+	} else {
+		b.needsComma = true
+	}
+	b.tableBuilder.WriteString(tableName)
+	b.tableBuilder.WriteString(" AS (")
+	b.tableBuilder.WriteString(
+		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value < ?",
+	)
+	b.tableBuilder.WriteString(")")
+
+	b.args = append(b.args, e.Var, e.Value)
+
+	return tableName
+}
+
+type LessOrEqualThan struct {
+	Var   string `parser:"@Ident Leqt"`
+	Value uint64 `parser:"@Number"`
+}
+
+func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
+	tableName := b.nextTableName()
+	if b.needsComma {
+		b.tableBuilder.WriteString(", ")
+	} else {
+		b.needsComma = true
+	}
+	b.tableBuilder.WriteString(tableName)
+	b.tableBuilder.WriteString(" AS (")
+	b.tableBuilder.WriteString(
+		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value <= ?",
+	)
+	b.tableBuilder.WriteString(")")
+
+	b.args = append(b.args, e.Var, e.Value)
+
+	return tableName
+}
+
+type GreaterThan struct {
+	Var   string `parser:"@Ident Gt"`
+	Value uint64 `parser:"@Number"`
+}
+
+func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
+	tableName := b.nextTableName()
+	if b.needsComma {
+		b.tableBuilder.WriteString(", ")
+	} else {
+		b.needsComma = true
+	}
+	b.tableBuilder.WriteString(tableName)
+	b.tableBuilder.WriteString(" AS (")
+	b.tableBuilder.WriteString(
+		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value > ?",
+	)
+	b.tableBuilder.WriteString(")")
+
+	b.args = append(b.args, e.Var, e.Value)
+
+	return tableName
+}
+
+type GreaterOrEqualThan struct {
+	Var   string `parser:"@Ident Geqt"`
+	Value uint64 `parser:"@Number"`
+}
+
+func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
+	tableName := b.nextTableName()
+	if b.needsComma {
+		b.tableBuilder.WriteString(", ")
+	} else {
+		b.needsComma = true
+	}
+	b.tableBuilder.WriteString(tableName)
+	b.tableBuilder.WriteString(" AS (")
+	b.tableBuilder.WriteString(
+		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value >= ?",
+	)
+	b.tableBuilder.WriteString(")")
+
+	b.args = append(b.args, e.Var, e.Value)
+
+	return tableName
 }
 
 // Ownership represents an ownership query, $owner = 0x....
 type Ownership struct {
-	Owner *string `parser:"Owner '=' @String"`
+	Owner string `parser:"Owner Eq @String"`
 }
 
-func (e *Ownership) Evaluate(ds DataSource) ([]common.Hash, error) {
-
-	if common.IsHexAddress(*e.Owner) {
-		address := common.HexToAddress(*e.Owner)
-		return ds.GetKeysForOwner(address)
+func (e *Ownership) Evaluate(b *QueryBuilder) string {
+	var address = common.Address{}
+	if common.IsHexAddress(e.Owner) {
+		address = common.HexToAddress(e.Owner)
 	}
-
-	return nil, fmt.Errorf(
-		"invalid value for owner, expected 20-byte hex string, got: %s",
-		*e.Owner,
+	tableName := b.nextTableName()
+	if b.needsComma {
+		b.tableBuilder.WriteString(", ")
+	} else {
+		b.needsComma = true
+	}
+	b.tableBuilder.WriteString(tableName)
+	b.tableBuilder.WriteString(" AS (")
+	b.tableBuilder.WriteString(
+		"SELECT key FROM entities WHERE owner_address = ?",
 	)
+	b.tableBuilder.WriteString(")")
 
+	b.args = append(b.args, address.Hex())
+
+	return tableName
 }
 
 // Equality represents a simple equality (e.g. name = 123).
@@ -189,17 +344,31 @@ type Equality struct {
 	Value *Value `parser:"@@"`
 }
 
-func (e *Equality) Evaluate(ds DataSource) ([]common.Hash, error) {
+func (e *Equality) Evaluate(b *QueryBuilder) string {
+	tableName := b.nextTableName()
+	if b.needsComma {
+		b.tableBuilder.WriteString(", ")
+	} else {
+		b.needsComma = true
+	}
+	b.tableBuilder.WriteString(tableName)
+	b.tableBuilder.WriteString(" AS (")
 
 	if e.Value.String != nil {
-		return ds.GetKeysForStringAnnotation(e.Var, *e.Value.String)
+		b.tableBuilder.WriteString(
+			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?",
+		)
+		b.args = append(b.args, e.Var, *e.Value.String)
+	} else {
+		b.tableBuilder.WriteString(
+			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?",
+		)
+		b.args = append(b.args, e.Var, *e.Value.Number)
 	}
 
-	if e.Value.Number != nil {
-		return ds.GetKeysForNumericAnnotation(e.Var, *e.Value.Number)
-	}
+	b.tableBuilder.WriteString(")")
 
-	return nil, errors.New("unsupported value type")
+	return tableName
 }
 
 // Value is a literal value (a number or a string).

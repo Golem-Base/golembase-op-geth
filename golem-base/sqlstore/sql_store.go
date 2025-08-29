@@ -598,3 +598,30 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 	return tx.Commit()
 }
+
+func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any) ([]common.Hash, error) {
+
+	log.Info(fmt.Sprintf("Query engine, executing query: %s\n", query))
+	log.Info(fmt.Sprintf("Query engine, number of args: %d\n", len(args)))
+	log.Info(fmt.Sprintf("Query engine, args: %v\n", args))
+
+	rows, err := e.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+	defer rows.Close()
+
+	keys := []common.Hash{}
+	var key string
+	for rows.Next() {
+		if err := rows.Scan(&key); err != nil {
+			return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+		}
+		keys = append(keys, common.HexToHash(key))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+
+	return keys, nil
+}

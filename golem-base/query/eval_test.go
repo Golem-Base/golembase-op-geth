@@ -9,67 +9,62 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// var _ query.Evaluator = &query.EqualExpr{}
-
-type fakeDataSource struct {
-	stringAnnotations  map[string]map[string][]common.Hash
-	numericAnnotations map[string]map[uint64][]common.Hash
-	ownerAddresses     map[common.Address][]common.Hash
-}
-
-func (f *fakeDataSource) GetKeysForStringAnnotation(key, value string) ([]common.Hash, error) {
-	return f.stringAnnotations[key][value], nil
-}
-
-func (f *fakeDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
-	return f.numericAnnotations[key][value], nil
-}
-
-func (f *fakeDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {
-	return f.ownerAddresses[owner], nil
-}
-
 func TestEqualExpr(t *testing.T) {
-	ds := &fakeDataSource{
-		stringAnnotations: map[string]map[string][]common.Hash{
-			"name": {
-				"test":  []common.Hash{common.HexToHash("0x1")},
-				"test2": []common.Hash{common.HexToHash("0x2")},
-			},
-			"déçevant": {
-				"non": []common.Hash{common.HexToHash("0x3")},
-			},
-			"بروح": {
-				"ايوة": []common.Hash{common.HexToHash("0x3")},
-			},
-		},
-		numericAnnotations: map[string]map[uint64][]common.Hash{},
-	}
-
 	expr, err := query.Parse("name = \"test\"")
 	require.NoError(t, err)
 
-	res, err := expr.Evaluate(ds)
-	require.NoError(t, err)
+	res := expr.Evaluate()
 
-	require.Equal(t, []common.Hash{common.HexToHash("0x1")}, res)
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"name",
+			"test",
+		},
+		res.Args,
+	)
 
 	// Query for a key with special characters
 	expr, err = query.Parse("déçevant = \"non\"")
 	require.NoError(t, err)
 
-	res, err = expr.Evaluate(ds)
-	require.NoError(t, err)
+	res = expr.Evaluate()
 
-	require.Equal(t, []common.Hash{common.HexToHash("0x3")}, res)
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"déçevant",
+			"non",
+		},
+		res.Args,
+	)
 
 	expr, err = query.Parse("بروح = \"ايوة\"")
 	require.NoError(t, err)
 
-	res, err = expr.Evaluate(ds)
+	res = expr.Evaluate()
 	require.NoError(t, err)
 
-	require.Equal(t, []common.Hash{common.HexToHash("0x3")}, res)
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"بروح",
+			"ايوة",
+		},
+		res.Args,
+	)
 
 	// But symbols should fail
 	expr, err = query.Parse("foo@ = \"bar\"")
@@ -77,129 +72,131 @@ func TestEqualExpr(t *testing.T) {
 }
 
 func TestNumericEqualExpr(t *testing.T) {
-	ds := &fakeDataSource{
-		stringAnnotations: map[string]map[string][]common.Hash{},
-		numericAnnotations: map[string]map[uint64][]common.Hash{
-			"age": {
-				123: []common.Hash{common.HexToHash("0x1")},
-				456: []common.Hash{common.HexToHash("0x2")},
-			},
-		},
-	}
-
 	expr, err := query.Parse("age = 123")
 	require.NoError(t, err)
 
-	res, err := expr.Evaluate(ds)
-	require.NoError(t, err)
-	require.Equal(t, []common.Hash{common.HexToHash("0x1")}, res)
+	res := expr.Evaluate()
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"age",
+			uint64(123),
+		},
+		res.Args,
+	)
 }
 
 func TestAndExpr(t *testing.T) {
-	ds := &fakeDataSource{
-		stringAnnotations: map[string]map[string][]common.Hash{
-			"name": {
-				"abc": []common.Hash{common.HexToHash("0x1"), common.HexToHash("0x3")},
-			},
-		},
-		numericAnnotations: map[string]map[uint64][]common.Hash{
-			"age": {
-				123: []common.Hash{common.HexToHash("0x1"), common.HexToHash("0x2")},
-			},
-		},
-	}
-
 	expr, err := query.Parse(`age = 123 && name = "abc"`)
 	require.NoError(t, err)
 
-	res, err := expr.Evaluate(ds)
-	require.NoError(t, err)
-	require.Equal(t, []common.Hash{common.HexToHash("0x1")}, res)
+	res := expr.Evaluate()
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 INTERSECT SELECT * FROM table_2) SELECT * FROM table_3 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"age",
+			uint64(123),
+			"name",
+			"abc",
+		},
+		res.Args,
+	)
 }
 
 func TestOrExpr(t *testing.T) {
-	ds := &fakeDataSource{
-		stringAnnotations: map[string]map[string][]common.Hash{
-			"name": {
-				"abc": []common.Hash{common.HexToHash("0x3")},
-			},
-		},
-		numericAnnotations: map[string]map[uint64][]common.Hash{
-			"age": {
-				123: []common.Hash{common.HexToHash("0x1"), common.HexToHash("0x2")},
-			},
-		},
-	}
-
 	expr, err := query.Parse(`age = 123 || name = "abc"`)
 	require.NoError(t, err)
 
-	res, err := expr.Evaluate(ds)
+	res := expr.Evaluate()
 	require.NoError(t, err)
-	require.ElementsMatch(t, []common.Hash{
-		common.HexToHash("0x1"),
-		common.HexToHash("0x2"),
-		common.HexToHash("0x3"),
-	}, res)
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2) SELECT * FROM table_3 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"age",
+			uint64(123),
+			"name",
+			"abc",
+		},
+		res.Args,
+	)
 }
 
 func TestParenthesesExpr(t *testing.T) {
-	ds := &fakeDataSource{
-		stringAnnotations: map[string]map[string][]common.Hash{
-			"name2": {
-				"abc": []common.Hash{common.HexToHash("0x2"), common.HexToHash("0x3")},
-			},
-			"name3": {
-				"def": []common.Hash{common.HexToHash("0x3"), common.HexToHash("0x4")},
-			},
-		},
-		numericAnnotations: map[string]map[uint64][]common.Hash{
-			"name": {
-				123: []common.Hash{common.HexToHash("0x1"), common.HexToHash("0x2")},
-			},
-			"name4": {
-				456: []common.Hash{common.HexToHash("0x5")},
-			},
-		},
-	}
-
-	expr, err := query.Parse(`(name = 123 || name2 = "abc") && name3 = "def" || name4 = 456`)
+	expr, err := query.Parse(`(name = 123 || name2 = "abc") && name3 = "def" || (name4 = 456 && name5 = 567)`)
 	require.NoError(t, err)
 
-	res, err := expr.Evaluate(ds)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []common.Hash{
-		common.HexToHash("0x3"),
-		common.HexToHash("0x5"),
-	}, res)
+	/*
+		With nicer formatting:
+
+		WITH
+		table_1 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND numeric_value = ?),
+		table_2 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND string_value = ?),
+		table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2),
+		table_4 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND string_value = ?),
+		table_5 AS (SELECT * FROM table_3 INTERSECT SELECT * FROM table_4),
+		table_6 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND numeric_value = ?),
+		table_7 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND numeric_value = ?),
+		table_8 AS (SELECT * FROM table_6 INTERSECT SELECT * FROM table_7),
+		table_9 AS (SELECT * FROM table_5 UNION SELECT * FROM table_8)
+		SELECT * FROM table_9
+	*/
+
+	res := expr.Evaluate()
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2), table_4 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_5 AS (SELECT * FROM table_3 INTERSECT SELECT * FROM table_4), table_6 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_7 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_8 AS (SELECT * FROM table_6 INTERSECT SELECT * FROM table_7), table_9 AS (SELECT * FROM table_5 UNION SELECT * FROM table_8) SELECT * FROM table_9 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"name",
+			uint64(123),
+			"name2",
+			"abc",
+			"name3",
+			"def",
+			"name4",
+			uint64(456),
+			"name5",
+			uint64(567),
+		},
+		res.Args,
+	)
 }
 
 func TestOwner(t *testing.T) {
 	owner := common.HexToAddress("0x1")
 
-	ds := &fakeDataSource{
-		stringAnnotations: map[string]map[string][]common.Hash{
-			"name": {
-				"abc": []common.Hash{common.HexToHash("0x3")},
-			},
-		},
-		numericAnnotations: map[string]map[uint64][]common.Hash{
-			"age": {
-				123: []common.Hash{common.HexToHash("0x1"), common.HexToHash("0x2")},
-			},
-		},
-		ownerAddresses: map[common.Address][]common.Hash{
-			owner: {common.HexToHash("0x1"), common.HexToHash("0x3")},
-		},
-	}
-
 	expr, err := query.Parse(fmt.Sprintf(`(age = 123 || name = "abc") && $owner = "%s"`, owner))
 	require.NoError(t, err)
 
-	res, err := expr.Evaluate(ds)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []common.Hash{
-		common.HexToHash("0x1"),
-		common.HexToHash("0x3"),
-	}, res)
+	res := expr.Evaluate()
+
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2), table_4 AS (SELECT key FROM entities WHERE owner_address = ?), table_5 AS (SELECT * FROM table_3 INTERSECT SELECT * FROM table_4) SELECT * FROM table_5 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"age",
+			uint64(123),
+			"name",
+			"abc",
+			owner.Hex(),
+		},
+		res.Args,
+	)
 }
