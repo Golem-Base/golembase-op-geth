@@ -1,8 +1,10 @@
 package query_test
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/stretchr/testify/require"
 )
@@ -20,12 +22,13 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							Assign: &query.Equality{
-								Var: "name",
-								Value: &query.Value{
+								Var:   "name",
+								IsNot: false,
+								Value: query.Value{
 									String: pointerOf("test\"2"),
 								},
 							},
@@ -45,12 +48,101 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							Assign: &query.Equality{
-								Var: "name",
-								Value: &query.Value{
+								Var:   "name",
+								IsNot: false,
+								Value: query.Value{
+									Number: pointerOf(uint64(123)),
+								},
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("not parentheses", func(t *testing.T) {
+		v, err := query.Parse(`!(name = 123 || name = 456)`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Assign: &query.Equality{
+								Var:   "name",
+								IsNot: true,
+								Value: query.Value{
+									Number: pointerOf(uint64(123)),
+								},
+							},
+						},
+						Right: []*query.AndRHS{
+							{
+								query.EqualExpr{
+									Assign: &query.Equality{
+										Var:   "name",
+										IsNot: true,
+										Value: query.Value{
+											Number: pointerOf(uint64(456)),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("not number", func(t *testing.T) {
+		v, err := query.Parse(`!(name = 123)`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Assign: &query.Equality{
+								Var:   "name",
+								IsNot: true,
+								Value: query.Value{
+									Number: pointerOf(uint64(123)),
+								},
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("not equal", func(t *testing.T) {
+		v, err := query.Parse(`name != 123`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Assign: &query.Equality{
+								Var:   "name",
+								IsNot: true,
+								Value: query.Value{
 									Number: pointerOf(uint64(123)),
 								},
 							},
@@ -69,12 +161,12 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							LessThan: &query.LessThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									Number: pointerOf(uint64(123)),
 								},
 							},
@@ -91,13 +183,35 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							LessThan: &query.LessThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									String: pointerOf("123"),
+								},
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+
+		v, err = query.Parse(`!(name < 123)`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							GreaterOrEqualThan: &query.GreaterOrEqualThan{
+								Var: "name",
+								Value: query.Value{
+									Number: pointerOf(uint64(123)),
 								},
 							},
 						},
@@ -115,12 +229,12 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							LessOrEqualThan: &query.LessOrEqualThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									Number: pointerOf(uint64(123)),
 								},
 							},
@@ -137,12 +251,12 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							LessOrEqualThan: &query.LessOrEqualThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									String: pointerOf("123"),
 								},
 							},
@@ -161,12 +275,12 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							GreaterThan: &query.GreaterThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									Number: pointerOf(uint64(123)),
 								},
 							},
@@ -183,12 +297,12 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							GreaterThan: &query.GreaterThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									String: pointerOf("123"),
 								},
 							},
@@ -207,12 +321,12 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							GreaterOrEqualThan: &query.GreaterOrEqualThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									Number: pointerOf(uint64(123)),
 								},
 							},
@@ -229,12 +343,12 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							GreaterOrEqualThan: &query.GreaterOrEqualThan{
 								Var: "name",
-								Value: &query.Value{
+								Value: query.Value{
 									String: pointerOf("123"),
 								},
 							},
@@ -253,11 +367,104 @@ func TestParse(t *testing.T) {
 		require.Equal(
 			t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							Glob: &query.Glob{
 								Var:   "name",
+								IsNot: false,
+								Value: "foo",
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("owner", func(t *testing.T) {
+		owner := common.HexToAddress("0x1")
+		v, err := query.Parse(fmt.Sprintf(`$owner = "%s"`, owner))
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Owner: &query.Ownership{
+								IsNot: false,
+								Owner: owner.Hex(),
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("not owner", func(t *testing.T) {
+		owner := common.HexToAddress("0x1")
+		v, err := query.Parse(fmt.Sprintf(`$owner != "%s"`, owner))
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Owner: &query.Ownership{
+								IsNot: true,
+								Owner: owner.Hex(),
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("glob", func(t *testing.T) {
+		v, err := query.Parse(`name ~ "foo"`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Glob: &query.Glob{
+								Var:   "name",
+								IsNot: false,
+								Value: "foo",
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("not glob", func(t *testing.T) {
+		v, err := query.Parse(`name !~ "foo"`)
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Glob: &query.Glob{
+								Var:   "name",
+								IsNot: true,
 								Value: "foo",
 							},
 						},
@@ -269,27 +476,29 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("and", func(t *testing.T) {
-		v, err := query.Parse(`name = 123 && name2 = "abc"`)
+		v, err := query.Parse(`(name = 123 && name2 = "abc")`)
 		require.NoError(t, err)
 
 		require.Equal(t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							Assign: &query.Equality{
-								Var: "name",
-								Value: &query.Value{
+								Var:   "name",
+								IsNot: false,
+								Value: query.Value{
 									Number: pointerOf(uint64(123)),
 								},
 							},
 						},
 						Right: []*query.AndRHS{
 							{
-								Expr: &query.EqualExpr{
+								Expr: query.EqualExpr{
 									Assign: &query.Equality{
-										Var: "name2",
-										Value: &query.Value{
+										Var:   "name2",
+										IsNot: false,
+										Value: query.Value{
 											String: pointerOf("abc"),
 										},
 									},
@@ -309,12 +518,13 @@ func TestParse(t *testing.T) {
 
 		require.Equal(t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
 							Assign: &query.Equality{
-								Var: "name",
-								Value: &query.Value{
+								Var:   "name",
+								IsNot: false,
+								Value: query.Value{
 									Number: pointerOf(uint64(123)),
 								},
 							},
@@ -322,11 +532,12 @@ func TestParse(t *testing.T) {
 					},
 					Right: []*query.OrRHS{
 						{
-							Expr: &query.AndExpression{
-								Left: &query.EqualExpr{
+							Expr: query.AndExpression{
+								Left: query.EqualExpr{
 									Assign: &query.Equality{
-										Var: "name2",
-										Value: &query.Value{
+										Var:   "name2",
+										IsNot: false,
+										Value: query.Value{
 											String: pointerOf("abc"),
 										},
 									},
@@ -341,34 +552,38 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("parentheses", func(t *testing.T) {
-		v, err := query.Parse(`(name = 123 || name2 = "abc") && name3 = "def" || name4 = 456`)
+		v, err := query.Parse(`(name = 123 || name2 = "abc") && (name3 = "def") || name4 = 456`)
 		require.NoError(t, err)
 
 		require.Equal(t,
 			&query.Expression{
-				Or: &query.OrExpression{
-					Left: &query.AndExpression{
-						Left: &query.EqualExpr{
-							Paren: &query.Expression{
-								Or: &query.OrExpression{
-									Left: &query.AndExpression{
-										Left: &query.EqualExpr{
-											Assign: &query.Equality{
-												Var: "name",
-												Value: &query.Value{
-													Number: pointerOf(uint64(123)),
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Paren: &query.Paren{
+								Nested: query.Expression{
+									Or: query.OrExpression{
+										Left: query.AndExpression{
+											Left: query.EqualExpr{
+												Assign: &query.Equality{
+													Var:   "name",
+													IsNot: false,
+													Value: query.Value{
+														Number: pointerOf(uint64(123)),
+													},
 												},
 											},
 										},
-									},
-									Right: []*query.OrRHS{
-										{
-											Expr: &query.AndExpression{
-												Left: &query.EqualExpr{
-													Assign: &query.Equality{
-														Var: "name2",
-														Value: &query.Value{
-															String: pointerOf("abc"),
+										Right: []*query.OrRHS{
+											{
+												Expr: query.AndExpression{
+													Left: query.EqualExpr{
+														Assign: &query.Equality{
+															Var:   "name2",
+															IsNot: false,
+															Value: query.Value{
+																String: pointerOf("abc"),
+															},
 														},
 													},
 												},
@@ -380,10 +595,11 @@ func TestParse(t *testing.T) {
 						},
 						Right: []*query.AndRHS{
 							{
-								Expr: &query.EqualExpr{
+								Expr: query.EqualExpr{
 									Assign: &query.Equality{
-										Var: "name3",
-										Value: &query.Value{
+										Var:   "name3",
+										IsNot: false,
+										Value: query.Value{
 											String: pointerOf("def"),
 										},
 									},
@@ -393,11 +609,12 @@ func TestParse(t *testing.T) {
 					},
 					Right: []*query.OrRHS{
 						{
-							Expr: &query.AndExpression{
-								Left: &query.EqualExpr{
+							Expr: query.AndExpression{
+								Left: query.EqualExpr{
 									Assign: &query.Equality{
-										Var: "name4",
-										Value: &query.Value{
+										Var:   "name4",
+										IsNot: false,
+										Value: query.Value{
 											Number: pointerOf(uint64(456)),
 										},
 									},
@@ -409,6 +626,11 @@ func TestParse(t *testing.T) {
 			},
 			v,
 		)
+	})
+
+	t.Run("invalid expression", func(t *testing.T) {
+		_, err := query.Parse(`key = 8e`)
+		require.Error(t, err, `1:8: unexpected token "e"`)
 	})
 
 	t.Run("invalid expression", func(t *testing.T) {
