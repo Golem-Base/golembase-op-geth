@@ -59,6 +59,19 @@
               mainProgram = "geth";
             };
           };
+
+          golembase-cli = pkgs.buildGoModule {
+            name = "golembase";
+            src = ./.;
+            subPackages = ["cmd/golembase"];
+            vendorHash = "sha256-IXTBaFWcb8MECZ1zLLMlWTPOWWZVXghRvsLGAx3N/KY=";
+            meta = with lib; {
+              description = "golembase CLI - Golem Base";
+              homepage = "http://github.com/Golem-Base/golembase-op-geth";
+              license = licenses.gpl3Only;
+              mainProgram = "golembase";
+            };
+          };
         }
       );
 
