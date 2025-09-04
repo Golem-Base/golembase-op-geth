@@ -50,6 +50,91 @@ type StorageTransaction struct {
 	Extend []ExtendBTL   `json:"extend"`
 }
 
+func (tx *StorageTransaction) Validate() error {
+
+	for i, create := range tx.Create {
+		if create.BTL == 0 {
+			return fmt.Errorf("create BTL is 0")
+		}
+
+		seenStringAnnotations := make(map[string]bool)
+		seenNumericAnnotations := make(map[string]bool)
+
+		// Validate the annotation identifiers
+		for _, annotation := range create.StringAnnotations {
+			if !entity.AnnotationIdentRegexCompiled.MatchString(annotation.Key) {
+				return fmt.Errorf("Invalid annotation identifier (must match `%s`): %s",
+					entity.AnnotationIdentRegexCompiled.String(),
+					annotation.Key,
+				)
+			}
+			if seenStringAnnotations[annotation.Key] {
+				return fmt.Errorf("create[%d] string annotation key %s is duplicated", i, annotation.Key)
+			}
+
+			seenStringAnnotations[annotation.Key] = true
+
+		}
+		for _, annotation := range create.NumericAnnotations {
+			if !entity.AnnotationIdentRegexCompiled.MatchString(annotation.Key) {
+				return fmt.Errorf("Invalid annotation identifier (must match `%s`): %s",
+					entity.AnnotationIdentRegexCompiled.String(),
+					annotation.Key,
+				)
+			}
+			if seenNumericAnnotations[annotation.Key] {
+				return fmt.Errorf("create[%d] numeric annotation key %s is duplicated", i, annotation.Key)
+			}
+			seenNumericAnnotations[annotation.Key] = true
+		}
+
+	}
+
+	for i, update := range tx.Update {
+		if update.BTL == 0 {
+			return fmt.Errorf("update[%d] BTL is 0", i)
+		}
+
+		seenStringAnnotations := make(map[string]bool)
+		seenNumericAnnotations := make(map[string]bool)
+
+		for _, annotation := range update.StringAnnotations {
+			if !entity.AnnotationIdentRegexCompiled.MatchString(annotation.Key) {
+				return fmt.Errorf("Invalid annotation identifier (must match `%s`): %s",
+					entity.AnnotationIdentRegexCompiled.String(),
+					annotation.Key,
+				)
+			}
+			if seenStringAnnotations[annotation.Key] {
+				return fmt.Errorf("update[%d] string annotation key %s is duplicated", i, annotation.Key)
+			}
+			seenStringAnnotations[annotation.Key] = true
+		}
+		for _, annotation := range update.NumericAnnotations {
+			if !entity.AnnotationIdentRegexCompiled.MatchString(annotation.Key) {
+				return fmt.Errorf("Invalid annotation identifier (must match `%s`): %s",
+					entity.AnnotationIdentRegexCompiled.String(),
+					annotation.Key,
+				)
+			}
+			if seenNumericAnnotations[annotation.Key] {
+				return fmt.Errorf("update[%d] numeric annotation key %s is duplicated", i, annotation.Key)
+			}
+			seenNumericAnnotations[annotation.Key] = true
+		}
+
+	}
+
+	for i, extend := range tx.Extend {
+		if extend.NumberOfBlocks == 0 {
+			return fmt.Errorf("extend[%d] number of blocks is 0", i)
+		}
+	}
+
+	return nil
+
+}
+
 type Create struct {
 	BTL                uint64                     `json:"btl"`
 	Payload            []byte                     `json:"payload"`
@@ -77,6 +162,11 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 			log.Error("failed to run storage transaction", "error", err)
 		}
 	}()
+
+	err = tx.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate storage transaction: %w", err)
+	}
 
 	logs := []*types.Log{}
 
