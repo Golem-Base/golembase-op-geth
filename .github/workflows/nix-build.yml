@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v17
+        uses: DeterminateSystems/nix-installer-action@v19
         env:
           DOCKER_HOST: "unix:///var/run/docker.sock.disabled"
         with:
