@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
+	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -172,6 +173,38 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I update the entity$`, iUpdateTheEntity)
 	ctx.Step(`^I trace the transaction that created the entity$`, iTraceTheTransactionThatCreatedTheEntity)
 	ctx.Step(`^the trace should be empty$`, theTraceShouldBeEmpty)
+
+	// Storage Transaction Validation Steps
+	ctx.Step(`^I have a storage transaction with create, update, delete, and extend operations$`, iHaveAStorageTransactionWithCreateUpdateDeleteAndExtendOperations)
+	ctx.Step(`^all BTL values are greater than (\d+)$`, allBTLValuesAreGreaterThan)
+	ctx.Step(`^all annotation keys follow the valid pattern$`, allAnnotationKeysFollowTheValidPattern)
+	ctx.Step(`^there are no duplicate annotation keys$`, thereAreNoDuplicateAnnotationKeys)
+	ctx.Step(`^I validate the transaction$`, iValidateTheTransaction)
+	ctx.Step(`^the validation should succeed$`, theValidationShouldSucceed)
+	ctx.Step(`^the validation should fail$`, theValidationShouldFail)
+	ctx.Step(`^I have a storage transaction with a create operation$`, iHaveAStorageTransactionWithACreateOperation)
+	ctx.Step(`^the create operation has BTL set to (\d+)$`, theCreateOperationHasBTLSetTo)
+	ctx.Step(`^the error should mention "([^"]*)"$`, theErrorShouldMention)
+	ctx.Step(`^I have a storage transaction with an update operation$`, iHaveAStorageTransactionWithAnUpdateOperation)
+	ctx.Step(`^the update operation has BTL set to (\d+)$`, theUpdateOperationHasBTLSetTo)
+	ctx.Step(`^I have a storage transaction with an extend operation$`, iHaveAStorageTransactionWithAnExtendOperation)
+	ctx.Step(`^the extend operation has NumberOfBlocks set to (\d+)$`, theExtendOperationHasNumberOfBlocksSetTo)
+	ctx.Step(`^the create operation has a string annotation with key starting with "([^"]*)"$`, theCreateOperationHasAStringAnnotationWithKeyStartingWith)
+	ctx.Step(`^the create operation has duplicate string annotation keys$`, theCreateOperationHasDuplicateStringAnnotationKeys)
+	ctx.Step(`^the create operation has duplicate numeric annotation keys$`, theCreateOperationHasDuplicateNumericAnnotationKeys)
+	ctx.Step(`^the update operation has duplicate string annotation keys$`, theUpdateOperationHasDuplicateStringAnnotationKeys)
+	ctx.Step(`^the update operation has duplicate numeric annotation keys$`, theUpdateOperationHasDuplicateNumericAnnotationKeys)
+	ctx.Step(`^the create operation has string annotations with keys "([^"]*)", "([^"]*)", "([^"]*)"$`, theCreateOperationHasStringAnnotationsWithKeys)
+	ctx.Step(`^the create operation has numeric annotations with keys "([^"]*)", "([^"]*)"$`, theCreateOperationHasNumericAnnotationsWithKeys)
+	ctx.Step(`^the create operation has a string annotation with Unicode key "([^"]*)"$`, theCreateOperationHasAStringAnnotationWithUnicodeKey)
+	ctx.Step(`^the create operation has a string annotation with key containing special characters like "([^"]*)" or "([^"]*)"$`, theCreateOperationHasAStringAnnotationWithKeyContainingSpecialCharactersLikeOr)
+	ctx.Step(`^the create operation has a string annotation with key starting with a number$`, theCreateOperationHasAStringAnnotationWithKeyStartingWithANumber)
+	ctx.Step(`^I have an empty storage transaction$`, iHaveAnEmptyStorageTransaction)
+	ctx.Step(`^I have a storage transaction with multiple create operations$`, iHaveAStorageTransactionWithMultipleCreateOperations)
+	ctx.Step(`^one create operation has BTL set to (\d+)$`, oneCreateOperationHasBTLSetTo)
+	ctx.Step(`^another create operation has valid BTL and annotations$`, anotherCreateOperationHasValidBTLAndAnnotations)
+	ctx.Step(`^the error should mention "([^"]*)" and "([^"]*)"$`, theErrorShouldMentionAnd)
+	ctx.Step(`^the error should mention the first validation error encountered$`, theErrorShouldMentionTheFirstValidationErrorEncountered)
 
 }
 
@@ -1394,5 +1427,357 @@ func theTraceShouldBeEmpty(ctx context.Context) error {
 		return fmt.Errorf("expected trace to be empty, but got %s", string(t.Calls))
 	}
 
+	return nil
+}
+
+// Storage Transaction Validation Step Definitions
+
+func iHaveAStorageTransactionWithCreateUpdateDeleteAndExtendOperations(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
+		Create: []storagetx.Create{
+			{
+				BTL:     100,
+				Payload: []byte("test payload"),
+				StringAnnotations: []entity.StringAnnotation{
+					{Key: "type", Value: "test"},
+				},
+				NumericAnnotations: []entity.NumericAnnotation{
+					{Key: "version", Value: 1},
+				},
+			},
+		},
+		Update: []storagetx.Update{
+			{
+				EntityKey: common.HexToHash("0x1234567890"),
+				BTL:       200,
+				Payload:   []byte("updated payload"),
+				StringAnnotations: []entity.StringAnnotation{
+					{Key: "status", Value: "updated"},
+				},
+				NumericAnnotations: []entity.NumericAnnotation{
+					{Key: "timestamp", Value: 1678901234},
+				},
+			},
+		},
+		Delete: []common.Hash{
+			common.HexToHash("0xdeadbeef"),
+		},
+		Extend: []storagetx.ExtendBTL{
+			{
+				EntityKey:      common.HexToHash("0xabcdef"),
+				NumberOfBlocks: 500,
+			},
+		},
+	}
+	return nil
+}
+
+func allBTLValuesAreGreaterThan(arg1 int) error {
+	// This is already satisfied by the transaction creation above
+	return nil
+}
+
+func allAnnotationKeysFollowTheValidPattern() error {
+	// This is already satisfied by the transaction creation above
+	return nil
+}
+
+func thereAreNoDuplicateAnnotationKeys() error {
+	// This is already satisfied by the transaction creation above
+	return nil
+}
+
+func iValidateTheTransaction(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil {
+		return fmt.Errorf("no current storage transaction set")
+	}
+	w.ValidationError = w.CurrentStorageTransaction.Validate()
+	return nil
+}
+
+func theValidationShouldSucceed(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.ValidationError != nil {
+		return fmt.Errorf("expected validation to succeed, but got error: %v", w.ValidationError)
+	}
+	return nil
+}
+
+func theValidationShouldFail(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.ValidationError == nil {
+		return fmt.Errorf("expected validation to fail, but it succeeded")
+	}
+	return nil
+}
+
+func iHaveAStorageTransactionWithACreateOperation(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
+		Create: []storagetx.Create{
+			{
+				BTL:     100,
+				Payload: []byte("test payload"),
+			},
+		},
+	}
+	return nil
+}
+
+func theCreateOperationHasBTLSetTo(ctx context.Context, btl int) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].BTL = uint64(btl)
+	return nil
+}
+
+func theErrorShouldMention(ctx context.Context, expectedText string) error {
+	w := testutil.GetWorld(ctx)
+	if w.ValidationError == nil {
+		return fmt.Errorf("no validation error found")
+	}
+	if !strings.Contains(w.ValidationError.Error(), expectedText) {
+		return fmt.Errorf("expected error to contain '%s', but got: %v", expectedText, w.ValidationError)
+	}
+	return nil
+}
+
+func iHaveAStorageTransactionWithAnUpdateOperation(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
+		Update: []storagetx.Update{
+			{
+				EntityKey: common.HexToHash("0x1234567890"),
+				BTL:       200,
+				Payload:   []byte("updated payload"),
+			},
+		},
+	}
+	return nil
+}
+
+func theUpdateOperationHasBTLSetTo(ctx context.Context, btl int) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Update) == 0 {
+		return fmt.Errorf("no update operation found")
+	}
+	w.CurrentStorageTransaction.Update[0].BTL = uint64(btl)
+	return nil
+}
+
+func iHaveAStorageTransactionWithAnExtendOperation(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
+		Extend: []storagetx.ExtendBTL{
+			{
+				EntityKey:      common.HexToHash("0x1234567890"),
+				NumberOfBlocks: 500,
+			},
+		},
+	}
+	return nil
+}
+
+func theExtendOperationHasNumberOfBlocksSetTo(ctx context.Context, blocks int) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Extend) == 0 {
+		return fmt.Errorf("no extend operation found")
+	}
+	w.CurrentStorageTransaction.Extend[0].NumberOfBlocks = uint64(blocks)
+	return nil
+}
+
+func theCreateOperationHasAStringAnnotationWithKeyStartingWith(ctx context.Context, keyPrefix string) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].StringAnnotations = []entity.StringAnnotation{
+		{Key: keyPrefix + "invalid", Value: "test"},
+	}
+	return nil
+}
+
+func theCreateOperationHasDuplicateStringAnnotationKeys(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].StringAnnotations = []entity.StringAnnotation{
+		{Key: "type", Value: "test1"},
+		{Key: "type", Value: "test2"},
+	}
+	return nil
+}
+
+func theCreateOperationHasDuplicateNumericAnnotationKeys(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].NumericAnnotations = []entity.NumericAnnotation{
+		{Key: "version", Value: 1},
+		{Key: "version", Value: 2},
+	}
+	return nil
+}
+
+func theUpdateOperationHasDuplicateStringAnnotationKeys(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Update) == 0 {
+		return fmt.Errorf("no update operation found")
+	}
+	w.CurrentStorageTransaction.Update[0].StringAnnotations = []entity.StringAnnotation{
+		{Key: "status", Value: "active"},
+		{Key: "status", Value: "inactive"},
+	}
+	return nil
+}
+
+func theUpdateOperationHasDuplicateNumericAnnotationKeys(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Update) == 0 {
+		return fmt.Errorf("no update operation found")
+	}
+	w.CurrentStorageTransaction.Update[0].NumericAnnotations = []entity.NumericAnnotation{
+		{Key: "timestamp", Value: 1},
+		{Key: "timestamp", Value: 2},
+	}
+	return nil
+}
+
+func theCreateOperationHasStringAnnotationsWithKeys(ctx context.Context, key1, key2, key3 string) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].StringAnnotations = []entity.StringAnnotation{
+		{Key: key1, Value: "value1"},
+		{Key: key2, Value: "value2"},
+		{Key: key3, Value: "value3"},
+	}
+	return nil
+}
+
+func theCreateOperationHasNumericAnnotationsWithKeys(ctx context.Context, key1, key2 string) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].NumericAnnotations = []entity.NumericAnnotation{
+		{Key: key1, Value: 1},
+		{Key: key2, Value: 2},
+	}
+	return nil
+}
+
+func theCreateOperationHasAStringAnnotationWithUnicodeKey(ctx context.Context, key string) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].StringAnnotations = []entity.StringAnnotation{
+		{Key: key, Value: "unicode value"},
+	}
+	return nil
+}
+
+func theCreateOperationHasAStringAnnotationWithKeyContainingSpecialCharactersLikeOr(ctx context.Context, char1, char2 string) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	// Use the first special character
+	invalidKey := "invalid" + char1 + "key"
+	w.CurrentStorageTransaction.Create[0].StringAnnotations = []entity.StringAnnotation{
+		{Key: invalidKey, Value: "test"},
+	}
+	return nil
+}
+
+func theCreateOperationHasAStringAnnotationWithKeyStartingWithANumber(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operation found")
+	}
+	w.CurrentStorageTransaction.Create[0].StringAnnotations = []entity.StringAnnotation{
+		{Key: "123invalid", Value: "test"},
+	}
+	return nil
+}
+
+func iHaveAnEmptyStorageTransaction(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	w.CurrentStorageTransaction = &storagetx.StorageTransaction{}
+	return nil
+}
+
+func iHaveAStorageTransactionWithMultipleCreateOperations(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
+		Create: []storagetx.Create{
+			{
+				BTL:     100,
+				Payload: []byte("valid payload"),
+			},
+			{
+				BTL:     200,
+				Payload: []byte("another valid payload"),
+			},
+		},
+	}
+	return nil
+}
+
+func oneCreateOperationHasBTLSetTo(ctx context.Context, btl int) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) == 0 {
+		return fmt.Errorf("no create operations found")
+	}
+	// Set the first operation's BTL to the specified value (likely 0 for error case)
+	w.CurrentStorageTransaction.Create[0].BTL = uint64(btl)
+	return nil
+}
+
+func anotherCreateOperationHasValidBTLAndAnnotations(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.CurrentStorageTransaction == nil || len(w.CurrentStorageTransaction.Create) < 2 {
+		return fmt.Errorf("need at least 2 create operations")
+	}
+	// The second operation should remain valid
+	w.CurrentStorageTransaction.Create[1].StringAnnotations = []entity.StringAnnotation{
+		{Key: "valid_key", Value: "valid_value"},
+	}
+	return nil
+}
+
+func theErrorShouldMentionAnd(ctx context.Context, text1, text2 string) error {
+	w := testutil.GetWorld(ctx)
+	if w.ValidationError == nil {
+		return fmt.Errorf("no validation error found")
+	}
+	errorMsg := w.ValidationError.Error()
+	if !strings.Contains(errorMsg, text1) {
+		return fmt.Errorf("expected error to contain '%s', but got: %v", text1, w.ValidationError)
+	}
+	if !strings.Contains(errorMsg, text2) {
+		return fmt.Errorf("expected error to contain '%s', but got: %v", text2, w.ValidationError)
+	}
+	return nil
+}
+
+func theErrorShouldMentionTheFirstValidationErrorEncountered(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.ValidationError == nil {
+		return fmt.Errorf("no validation error found")
+	}
+	// The first validation error should be about BTL being 0
+	if !strings.Contains(w.ValidationError.Error(), "BTL is 0") {
+		return fmt.Errorf("expected first error to be about BTL, but got: %v", w.ValidationError)
+	}
 	return nil
 }

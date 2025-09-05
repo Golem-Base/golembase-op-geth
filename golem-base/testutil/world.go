@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
+	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 )
 
 // World is the test world - it holds all the state that is shared between steps
@@ -22,6 +23,10 @@ type World struct {
 	SecondCreatedEntityKey common.Hash
 	LastError              error
 	LastTrace              json.RawMessage
+
+	// Storage transaction validation fields
+	CurrentStorageTransaction *storagetx.StorageTransaction
+	ValidationError           error
 
 	tempDir string
 }
