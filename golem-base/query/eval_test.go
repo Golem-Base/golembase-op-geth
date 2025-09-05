@@ -16,7 +16,7 @@ func TestEqualExpr(t *testing.T) {
 	res := expr.Evaluate()
 
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT entity_key FROM table_1 ORDER BY 1",
 		res.Query,
 	)
 
@@ -35,7 +35,7 @@ func TestEqualExpr(t *testing.T) {
 	res = expr.Evaluate()
 
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT entity_key FROM table_1 ORDER BY 1",
 		res.Query,
 	)
 
@@ -54,7 +54,7 @@ func TestEqualExpr(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT entity_key FROM table_1 ORDER BY 1",
 		res.Query,
 	)
 
@@ -77,7 +77,7 @@ func TestNumericEqualExpr(t *testing.T) {
 
 	res := expr.Evaluate()
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?) SELECT * FROM table_1 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?) SELECT entity_key FROM table_1 ORDER BY 1",
 		res.Query,
 	)
 
@@ -96,7 +96,7 @@ func TestAndExpr(t *testing.T) {
 
 	res := expr.Evaluate()
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 INTERSECT SELECT * FROM table_2) SELECT * FROM table_3 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT entity_key FROM table_1 INTERSECT SELECT entity_key FROM table_2) SELECT entity_key FROM table_3 ORDER BY 1",
 		res.Query,
 	)
 
@@ -118,7 +118,7 @@ func TestOrExpr(t *testing.T) {
 	res := expr.Evaluate()
 	require.NoError(t, err)
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2) SELECT * FROM table_3 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT entity_key FROM table_1 UNION SELECT entity_key FROM table_2) SELECT entity_key FROM table_3 ORDER BY 1",
 		res.Query,
 	)
 
@@ -156,7 +156,7 @@ func TestParenthesesExpr(t *testing.T) {
 
 	res := expr.Evaluate()
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2), table_4 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_5 AS (SELECT * FROM table_3 INTERSECT SELECT * FROM table_4), table_6 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_7 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_8 AS (SELECT * FROM table_6 INTERSECT SELECT * FROM table_7), table_9 AS (SELECT * FROM table_5 UNION SELECT * FROM table_8) SELECT * FROM table_9 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT entity_key FROM table_1 UNION SELECT entity_key FROM table_2), table_4 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_5 AS (SELECT entity_key FROM table_3 INTERSECT SELECT entity_key FROM table_4), table_6 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_7 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_8 AS (SELECT entity_key FROM table_6 INTERSECT SELECT entity_key FROM table_7), table_9 AS (SELECT entity_key FROM table_5 UNION SELECT entity_key FROM table_8) SELECT entity_key FROM table_9 ORDER BY 1",
 		res.Query,
 	)
 
@@ -186,7 +186,7 @@ func TestOwner(t *testing.T) {
 	res := expr.Evaluate()
 
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2), table_4 AS (SELECT key FROM entities WHERE owner_address = ?), table_5 AS (SELECT * FROM table_3 INTERSECT SELECT * FROM table_4) SELECT * FROM table_5 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?), table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?), table_3 AS (SELECT entity_key FROM table_1 UNION SELECT entity_key FROM table_2), table_4 AS (SELECT key AS entity_key FROM entities WHERE owner_address = ?), table_5 AS (SELECT entity_key FROM table_3 INTERSECT SELECT entity_key FROM table_4) SELECT entity_key FROM table_5 ORDER BY 1",
 		res.Query,
 	)
 
@@ -209,7 +209,7 @@ func TestGlob(t *testing.T) {
 	res := expr.Evaluate()
 
 	require.Equal(t,
-		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value GLOB ?) SELECT * FROM table_1 ORDER BY 1",
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value GLOB ?) SELECT entity_key FROM table_1 ORDER BY 1",
 		res.Query,
 	)
 
