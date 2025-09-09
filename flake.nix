@@ -54,7 +54,7 @@
 
               meta = with lib; {
                 description = "";
-                homepage = "https://github.com/Golem-Base/op-geth";
+                homepage = "https://github.com/Golem-Base/golembase-op-geth";
                 license = licenses.gpl3Only;
                 mainProgram = "geth";
               };
@@ -67,7 +67,7 @@
               vendorHash = "sha256-n5JidCrpnqisDRnnT+eAAG7Nof1P3vcDaEs3/WbeqH0=";
               meta = with lib; {
                 description = "golembase CLI - Golem Base";
-                homepage = "http://github.com/Golem-Base/golembase-op-geth";
+                homepage = "https://github.com/Golem-Base/golembase-op-geth";
                 license = licenses.gpl3Only;
                 mainProgram = "golembase";
               };
