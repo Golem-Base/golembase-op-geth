@@ -26,6 +26,10 @@ func (obj *EntityMetaData) EncodeRLP(_w io.Writer) error {
 	}
 	w.ListEnd(_tmp4)
 	w.WriteBytes(obj.Owner[:])
+	w.WriteUint64(obj.CreatedAtBlock)
+	w.WriteUint64(obj.LastModifiedAtBlock)
+	w.WriteUint64(obj.TransactionIndex)
+	w.WriteUint64(obj.OperationIndex)
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

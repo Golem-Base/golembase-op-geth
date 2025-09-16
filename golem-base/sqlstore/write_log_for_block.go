@@ -154,8 +154,8 @@ func WriteLogForBlockSqlite(
 			Operations: []Operation{},
 		}
 
-		for i, tx := range txns {
-			receipt := receipts[i]
+		for txIx, tx := range txns {
+			receipt := receipts[txIx]
 			if receipt.Status == types.ReceiptStatusFailed {
 				continue
 			}
@@ -220,9 +220,9 @@ func WriteLogForBlockSqlite(
 
 				}
 
-				for i, create := range stx.Create {
+				for opIx, create := range stx.Create {
 
-					l := createdLogs[i]
+					l := createdLogs[opIx]
 					key := l.Topics[1]
 					expiresAtBlockU256 := uint256.NewInt(0).SetBytes(l.Data)
 					expiresAtBlock := expiresAtBlockU256.Uint64()
@@ -239,6 +239,8 @@ func WriteLogForBlockSqlite(
 						StringAnnotations:  create.StringAnnotations,
 						NumericAnnotations: create.NumericAnnotations,
 						Owner:              from,
+						TransactionIndex:   uint64(txIx),
+						OperationIndex:     uint64(opIx),
 					}
 
 					wal.Operations = append(wal.Operations, Operation{
@@ -253,9 +255,9 @@ func WriteLogForBlockSqlite(
 					})
 				}
 
-				for i, update := range stx.Update {
+				for opIx, update := range stx.Update {
 
-					log := updatedLogs[i]
+					log := updatedLogs[opIx]
 					key := log.Topics[1]
 					expiresAtBlockU256 := uint256.NewInt(0).SetBytes(log.Data)
 					expiresAtBlock := expiresAtBlockU256.Uint64()
@@ -266,6 +268,8 @@ func WriteLogForBlockSqlite(
 						Payload:            update.Payload,
 						StringAnnotations:  update.StringAnnotations,
 						NumericAnnotations: update.NumericAnnotations,
+						TransactionIndex:   uint64(txIx),
+						OperationIndex:     uint64(opIx),
 					}
 
 					wal.Operations = append(wal.Operations, Operation{
@@ -273,9 +277,9 @@ func WriteLogForBlockSqlite(
 					})
 				}
 
-				for i, extend := range stx.Extend {
+				for opIx, extend := range stx.Extend {
 
-					log := extendedLogs[i]
+					log := extendedLogs[opIx]
 
 					oldExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[:32])
 					oldExpiresAt := oldExpiresAtU256.Uint64()
@@ -284,9 +288,11 @@ func WriteLogForBlockSqlite(
 					newExpiresAt := newExpiresAtU256.Uint64()
 
 					ex := ExtendBTL{
-						EntityKey:    extend.EntityKey,
-						OldExpiresAt: oldExpiresAt,
-						NewExpiresAt: newExpiresAt,
+						EntityKey:        extend.EntityKey,
+						OldExpiresAt:     oldExpiresAt,
+						NewExpiresAt:     newExpiresAt,
+						TransactionIndex: uint64(txIx),
+						OperationIndex:   uint64(opIx),
 					}
 
 					wal.Operations = append(wal.Operations, Operation{
