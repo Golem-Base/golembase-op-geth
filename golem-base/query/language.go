@@ -126,8 +126,9 @@ func (e *Expression) Evaluate() *SelectQuery {
 
 	tableName := e.Or.Evaluate(&builder)
 
-	tableBuilder.WriteString(" SELECT * FROM ")
+	tableBuilder.WriteString(" SELECT entity_key FROM ")
 	tableBuilder.WriteString(tableName)
+	// tableBuilder.WriteString(", entities LEFT JOIN ")
 	tableBuilder.WriteString(" ORDER BY 1")
 
 	return &SelectQuery{
@@ -195,10 +196,10 @@ func (e *OrExpression) Evaluate(b *QueryBuilder) string {
 
 		b.tableBuilder.WriteString(tableName)
 		b.tableBuilder.WriteString(" AS (")
-		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString("SELECT entity_key FROM ")
 		b.tableBuilder.WriteString(leftTable)
 		b.tableBuilder.WriteString(" UNION ")
-		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString("SELECT entity_key FROM ")
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
@@ -291,10 +292,10 @@ func (e *AndExpression) Evaluate(b *QueryBuilder) string {
 
 		b.tableBuilder.WriteString(tableName)
 		b.tableBuilder.WriteString(" AS (")
-		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString("SELECT entity_key FROM ")
 		b.tableBuilder.WriteString(leftTable)
 		b.tableBuilder.WriteString(" INTERSECT ")
-		b.tableBuilder.WriteString("SELECT * FROM ")
+		b.tableBuilder.WriteString("SELECT entity_key FROM ")
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
@@ -622,12 +623,12 @@ func (e *Ownership) Evaluate(b *QueryBuilder) string {
 	}
 	if !e.IsNot {
 		return b.createLeafQuery(
-			"SELECT key FROM entities WHERE owner_address = ?",
+			"SELECT key AS entity_key FROM entities WHERE owner_address = ?",
 			address.Hex(),
 		)
 	} else {
 		return b.createLeafQuery(
-			"SELECT key FROM entities WHERE owner_address != ?",
+			"SELECT key AS entity_key FROM entities WHERE owner_address != ?",
 			address.Hex(),
 		)
 	}
