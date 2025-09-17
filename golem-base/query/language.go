@@ -202,7 +202,8 @@ func (e *OrExpression) Evaluate(b *QueryBuilder) string {
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
-		leftTable = rightTable
+		// Carry forward the cumulative result of the UNION
+		leftTable = tableName
 	}
 
 	return tableName
@@ -297,7 +298,8 @@ func (e *AndExpression) Evaluate(b *QueryBuilder) string {
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
-		leftTable = rightTable
+		// Carry forward the cumulative result of the INTERSECT
+		leftTable = tableName
 	}
 
 	return tableName
