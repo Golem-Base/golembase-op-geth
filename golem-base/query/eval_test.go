@@ -395,3 +395,34 @@ func TestOrExpr_MultipleTerms(t *testing.T) {
 	)
 }
 
+func TestMixedAndOr_NoParens(t *testing.T) {
+	expr, err := query.Parse(`a = 1 && b = "x" || c = 2 && d = "y"`)
+	require.NoError(t, err)
+
+	res := expr.Evaluate()
+	require.Equal(t,
+		strings.Join([]string{
+			"WITH",
+			"table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?),",
+			"table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?),",
+			"table_3 AS (SELECT * FROM table_1 INTERSECT SELECT * FROM table_2),",
+			"table_4 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?),",
+			"table_5 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?),",
+			"table_6 AS (SELECT * FROM table_4 INTERSECT SELECT * FROM table_5),",
+			"table_7 AS (SELECT * FROM table_3 UNION SELECT * FROM table_6)",
+			"SELECT * FROM table_7",
+			"ORDER BY 1",
+		}, " "),
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"a", uint64(1),
+			"b", "x",
+			"c", uint64(2),
+			"d", "y",
+		},
+		res.Args,
+	)
+}
