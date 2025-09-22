@@ -172,6 +172,7 @@ func WriteLogForBlockSqlite(
 
 			switch {
 			case tx.Type() == types.DepositTxType:
+				delIx := uint64(0)
 				for _, l := range receipt.Logs {
 					if len(l.Topics) != 2 {
 						continue
@@ -184,8 +185,13 @@ func WriteLogForBlockSqlite(
 					key := l.Topics[1]
 
 					wal.Operations = append(wal.Operations, Operation{
-						Delete: &key,
+						Delete: &Delete{
+							EntityKey:        key,
+							TransactionIndex: uint64(txIx),
+							OperationIndex:   delIx,
+						},
 					})
+					delIx += 1
 
 				}
 				// create
@@ -249,9 +255,13 @@ func WriteLogForBlockSqlite(
 
 				}
 
-				for _, del := range stx.Delete {
+				for opIx, del := range stx.Delete {
 					wal.Operations = append(wal.Operations, Operation{
-						Delete: &del,
+						Delete: &Delete{
+							EntityKey:        del,
+							TransactionIndex: uint64(txIx),
+							OperationIndex:   uint64(opIx),
+						},
 					})
 				}
 

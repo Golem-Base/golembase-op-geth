@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -112,7 +113,7 @@ func TestMain(m *testing.M) {
 
 	// // Optional: Run `testing` package's logic besides godog.
 	// if st := m.Run(); st > status {
-	// 	status = st
+	//	status = st
 	// }
 
 	cleanupCompiled()
@@ -1037,13 +1038,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 		return fmt.Errorf("failed to get all entity keys: %w", err)
 	}
 
-	found := false
-	for _, key := range entityKeys {
-		if key == w.CreatedEntityKey {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(entityKeys, w.CreatedEntityKey)
 
 	if !found {
 		return fmt.Errorf("entity with key %s not found in the list of all entities", w.CreatedEntityKey.Hex())
@@ -1077,13 +1072,7 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
-	found := false
-	for _, key := range entityKeys {
-		if key == w.CreatedEntityKey {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(entityKeys, w.CreatedEntityKey)
 
 	if !found {
 		return fmt.Errorf("entity with key %s not found in the list of entities of the owner", w.CreatedEntityKey.Hex())
@@ -1395,9 +1384,9 @@ func iTraceTheTransactionThatCreatedTheEntity(ctx context.Context) error {
 
 	trace := json.RawMessage{}
 
-	tracerOptions := map[string]interface{}{
+	tracerOptions := map[string]any{
 		"tracer":       "callTracer",
-		"tracerConfig": map[string]interface{}{"withLog": true},
+		"tracerConfig": map[string]any{"withLog": true},
 	}
 
 	err := w.GethInstance.RPCClient.CallContext(ctx, &trace, "debug_traceTransaction", txHash.Hex(), tracerOptions)
