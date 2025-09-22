@@ -30,10 +30,10 @@ type BlockInfo struct {
 }
 
 type Operation struct {
-	Create *Create      `json:"create,omitempty"`
-	Update *Update      `json:"update,omitempty"`
-	Delete *common.Hash `json:"delete,omitempty"`
-	Extend *ExtendBTL   `json:"extend,omitempty"`
+	Create *Create    `json:"create,omitempty"`
+	Update *Update    `json:"update,omitempty"`
+	Delete *Delete    `json:"delete,omitempty"`
+	Extend *ExtendBTL `json:"extend,omitempty"`
 }
 
 type Create struct {
@@ -61,6 +61,12 @@ type ExtendBTL struct {
 	EntityKey        common.Hash `json:"entityKey"`
 	OldExpiresAt     uint64      `json:"oldExpiresAt"`
 	NewExpiresAt     uint64      `json:"newExpiresAt"`
+	TransactionIndex uint64      `json:"txIndex"`
+	OperationIndex   uint64      `json:"opIndex"`
+}
+
+type Delete struct {
+	EntityKey        common.Hash `json:"entityKey"`
 	TransactionIndex uint64      `json:"txIndex"`
 	OperationIndex   uint64      `json:"opIndex"`
 }
@@ -210,10 +216,10 @@ func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*
 }
 
 // GetEntitiesToExpireAtBlock retrieves all entity keys that expire at the specified block
-func (e *SQLStore) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntitiesToExpireAtBlock(ctx, int64(blockNumber))
+func (e *SQLStore) GetEntitiesToExpireAtBlock(ctx context.Context, params sqlitegolem.GetEntitiesToExpireAtBlockParams) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesToExpireAtBlock(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get entities expiring at block %d: %w", blockNumber, err)
+		return nil, fmt.Errorf("failed to get entities expiring at block %d: %w", params.ExpirationBlock, err)
 	}
 
 	// Convert string keys to common.Hash
@@ -226,13 +232,10 @@ func (e *SQLStore) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber u
 }
 
 // GetEntitiesForStringAnnotationValue retrieves all entity keys that have a specific string annotation with the given value
-func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, annotationKey, value string) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntitiesForStringAnnotation(ctx, sqlitegolem.GetEntitiesForStringAnnotationParams{
-		AnnotationKey: annotationKey,
-		Value:         value,
-	})
+func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, params sqlitegolem.GetEntitiesForStringAnnotationParams) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesForStringAnnotation(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for string annotation %s=%s: %w", annotationKey, value, err)
+		return nil, fmt.Errorf("failed to get entities for string annotation %s=%s: %w", params.AnnotationKey, params.AnnotationValue, err)
 	}
 
 	// Convert string keys to common.Hash
@@ -245,13 +248,10 @@ func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, anno
 }
 
 // GetEntitiesForNumericAnnotationValue retrieves all entity keys that have a specific numeric annotation with the given value
-func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, annotationKey string, value uint64) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntitiesForNumericAnnotation(ctx, sqlitegolem.GetEntitiesForNumericAnnotationParams{
-		AnnotationKey: annotationKey,
-		Value:         int64(value),
-	})
+func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, params sqlitegolem.GetEntitiesForNumericAnnotationParams) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesForNumericAnnotation(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for numeric annotation %s=%d: %w", annotationKey, value, err)
+		return nil, fmt.Errorf("failed to get entities for numeric annotation %s=%d: %w", params.AnnotationKey, params.AnnotationValue, err)
 	}
 
 	// Convert string keys to common.Hash
@@ -264,10 +264,10 @@ func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, ann
 }
 
 // GetEntitiesOfOwner retrieves all entity keys owned by the specified address
-func (e *SQLStore) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntityKeysByOwner(ctx, owner.Hex())
+func (e *SQLStore) GetEntitiesOfOwner(ctx context.Context, params sqlitegolem.GetEntityKeysByOwnerParams) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntityKeysByOwner(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for owner %s: %w", owner.Hex(), err)
+		return nil, fmt.Errorf("failed to get entities for owner %s: %w", params.Owner, err)
 	}
 
 	// Convert string keys to common.Hash
@@ -280,8 +280,8 @@ func (e *SQLStore) GetEntitiesOfOwner(ctx context.Context, owner common.Address)
 }
 
 // GetAllEntityKeys retrieves all entity keys from the database
-func (e *SQLStore) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetAllEntityKeys(ctx)
+func (e *SQLStore) GetAllEntityKeys(ctx context.Context, block uint64) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetAllEntityKeys(ctx, int64(block))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all entity keys: %w", err)
 	}
@@ -296,8 +296,8 @@ func (e *SQLStore) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) 
 }
 
 // GetEntityCount retrieves the total number of entities in the database
-func (e *SQLStore) GetEntityCount(ctx context.Context) (uint64, error) {
-	count, err := e.GetQueries().GetEntityCount(ctx)
+func (e *SQLStore) GetEntityCount(ctx context.Context, block uint64) (uint64, error) {
+	count, err := e.GetQueries().GetEntityCount(ctx, int64(block))
 	if err != nil {
 		return 0, fmt.Errorf("failed to get entity count: %w", err)
 	}
@@ -306,7 +306,7 @@ func (e *SQLStore) GetEntityCount(ctx context.Context) (uint64, error) {
 }
 
 // GetEntityMetaData retrieves entity metadata from the database using a transaction
-func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
+func (e *SQLStore) GetEntityMetaData(ctx context.Context, params sqlitegolem.GetEntityMetadataParams) (*entity.EntityMetaData, error) {
 	// Begin a read-only transaction for consistency
 	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -315,10 +315,10 @@ func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*ent
 	defer tx.Rollback() // Safe to call even after commit
 
 	txDB := sqlitegolem.New(tx)
-	keyHex := key.Hex()
+	keyHex := params.Key
 
 	// Get main entity data
-	entityData, err := txDB.GetEntityMetadata(ctx, keyHex)
+	entityData, err := txDB.GetEntityMetadata(ctx, params)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("entity %s not found", keyHex)
@@ -327,23 +327,33 @@ func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*ent
 	}
 
 	// Get string annotations
-	stringAnnotRows, err := txDB.GetEntityStringAnnotations(ctx, keyHex)
+	stringAnnotRows, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
+		EntityKey: params.Key,
+		Block:     params.Block,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get string annotations: %w", err)
 	}
 
 	// Get numeric annotations
-	numericAnnotRows, err := txDB.GetEntityNumericAnnotations(ctx, keyHex)
+	numericAnnotRows, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
+		EntityKey: params.Key,
+		Block:     params.Block,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get numeric annotations: %w", err)
 	}
 
 	// Convert to entity.EntityMetaData structure
 	metadata := &entity.EntityMetaData{
-		ExpiresAtBlock:     uint64(entityData.ExpiresAt),
-		StringAnnotations:  make([]entity.StringAnnotation, len(stringAnnotRows)),
-		NumericAnnotations: make([]entity.NumericAnnotation, len(numericAnnotRows)),
-		Owner:              common.HexToAddress(entityData.OwnerAddress),
+		ExpiresAtBlock:      uint64(entityData.ExpiresAt),
+		StringAnnotations:   make([]entity.StringAnnotation, len(stringAnnotRows)),
+		NumericAnnotations:  make([]entity.NumericAnnotation, len(numericAnnotRows)),
+		Owner:               common.HexToAddress(entityData.OwnerAddress),
+		CreatedAtBlock:      uint64(entityData.CreatedAtBlock),
+		LastModifiedAtBlock: uint64(entityData.LastModifiedAtBlock),
+		TransactionIndex:    uint64(entityData.TransactionIndex),
+		OperationIndex:      uint64(entityData.OperationIndex),
 	}
 
 	// Convert string annotations
@@ -592,9 +602,10 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			for _, annotation := range op.Create.NumericAnnotations {
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
-					EntityKey:     op.Create.EntityKey.Hex(),
-					AnnotationKey: annotation.Key,
-					Value:         int64(annotation.Value),
+					EntityKey:                 op.Create.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.Key,
+					Value:                     int64(annotation.Value),
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert numeric annotation: %w", err)
@@ -603,23 +614,23 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			for _, annotation := range op.Create.StringAnnotations {
 				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
-					EntityKey:     op.Create.EntityKey.Hex(),
-					AnnotationKey: annotation.Key,
-					Value:         annotation.Value,
+					EntityKey:                 op.Create.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.Key,
+					Value:                     annotation.Value,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert string annotation: %w", err)
 				}
 			}
 		case op.Update != nil:
-			existingEntity, err := txDB.GetEntity(ctx, op.Update.EntityKey.Hex())
+			existingEntity, err := txDB.GetEntity(ctx, sqlitegolem.GetEntityParams{
+				Key:   op.Update.EntityKey.Hex(),
+				Block: int64(blockWal.BlockInfo.Number - 1),
+			})
 			if err != nil {
 				return fmt.Errorf("failed to get existing entity: %w", err)
 			}
-
-			txDB.DeleteEntity(ctx, op.Update.EntityKey.Hex())
-			txDB.DeleteNumericAnnotations(ctx, op.Update.EntityKey.Hex())
-			txDB.DeleteStringAnnotations(ctx, op.Update.EntityKey.Hex())
 
 			txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
 				Key:                         op.Update.EntityKey.Hex(),
@@ -628,15 +639,17 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				OwnerAddress:                existingEntity.OwnerAddress,
 				CreatedAtBlock:              existingEntity.CreatedAtBlock,
 				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
+				Deleted:                     false,
 				TransactionIndexInBlock:     int64(op.Update.TransactionIndex),
 				OperationIndexInTransaction: int64(op.Update.OperationIndex),
 			})
 
 			for _, annotation := range op.Update.NumericAnnotations {
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
-					EntityKey:     op.Update.EntityKey.Hex(),
-					AnnotationKey: annotation.Key,
-					Value:         int64(annotation.Value),
+					EntityKey:                 op.Update.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.Key,
+					Value:                     int64(annotation.Value),
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert numeric annotation: %w", err)
@@ -645,41 +658,43 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			for _, annotation := range op.Update.StringAnnotations {
 				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
-					EntityKey:     op.Update.EntityKey.Hex(),
-					AnnotationKey: annotation.Key,
-					Value:         annotation.Value,
+					EntityKey:                 op.Update.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.Key,
+					Value:                     annotation.Value,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert string annotation: %w", err)
 				}
 			}
 		case op.Delete != nil:
-			err = txDB.DeleteEntity(ctx, op.Delete.Hex())
+			params := sqlitegolem.DeleteEntityParams{
+				Key:                         op.Delete.EntityKey.Hex(),
+				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
+				TransactionIndexInBlock:     int64(op.Delete.TransactionIndex),
+				OperationIndexInTransaction: int64(op.Delete.OperationIndex),
+			}
+
+			log.Info("delete entity", "params", params)
+
+			err = txDB.DeleteEntity(ctx, params)
 			if err != nil {
 				return fmt.Errorf("failed to delete entity: %w", err)
 			}
 
-			err = txDB.DeleteNumericAnnotations(ctx, op.Delete.Hex())
-			if err != nil {
-				return fmt.Errorf("failed to delete numeric annotations: %w", err)
-			}
-
-			err = txDB.DeleteStringAnnotations(ctx, op.Delete.Hex())
-			if err != nil {
-				return fmt.Errorf("failed to delete string annotations: %w", err)
-			}
-
 		case op.Extend != nil:
-			log.Info("extend BTL", "entity", op.Extend.EntityKey.Hex())
-
-			// Update the entity with the new expiry time
-			err = txDB.UpdateEntityExpiresAt(ctx, sqlitegolem.UpdateEntityExpiresAtParams{
-				ExpiresAt:                   int64(op.Extend.NewExpiresAt),
+			extendParams := sqlitegolem.UpdateEntityExpiresAtParams{
+				Key:                         op.Extend.EntityKey.Hex(),
 				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
 				TransactionIndexInBlock:     int64(op.Extend.TransactionIndex),
 				OperationIndexInTransaction: int64(op.Extend.OperationIndex),
-				Key:                         op.Extend.EntityKey.Hex(),
-			})
+				ExpiresAt:                   int64(op.Extend.NewExpiresAt),
+			}
+
+			log.Info("extend BTL", "params", extendParams)
+
+			// Update the entity with the new expiry time
+			err = txDB.UpdateEntityExpiresAt(ctx, extendParams)
 			if err != nil {
 				return fmt.Errorf("failed to extend entity BTL: %w", err)
 			}

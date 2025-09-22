@@ -14,7 +14,7 @@ func TestEqualExpr(t *testing.T) {
 	expr, err := query.Parse("name = \"test\"")
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 
 	require.Equal(t,
 		strings.Join([]string{
@@ -40,7 +40,7 @@ func TestEqualExpr(t *testing.T) {
 	expr, err = query.Parse("déçevant = \"non\"")
 	require.NoError(t, err)
 
-	res = expr.Evaluate()
+	res = expr.Evaluate(0)
 
 	require.Equal(t,
 		strings.Join([]string{
@@ -65,7 +65,7 @@ func TestEqualExpr(t *testing.T) {
 	expr, err = query.Parse("بروح = \"ايوة\"")
 	require.NoError(t, err)
 
-	res = expr.Evaluate()
+	res = expr.Evaluate(0)
 	require.NoError(t, err)
 
 	require.Equal(t,
@@ -97,7 +97,7 @@ func TestNumericEqualExpr(t *testing.T) {
 	expr, err := query.Parse("age = 123")
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 	require.Equal(t,
 		strings.Join([]string{
 			"WITH",
@@ -123,7 +123,7 @@ func TestAndExpr(t *testing.T) {
 	expr, err := query.Parse(`age = 123 && name = "abc"`)
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 	require.Equal(t,
 		strings.Join([]string{
 			"WITH",
@@ -153,7 +153,7 @@ func TestOrExpr(t *testing.T) {
 	expr, err := query.Parse(`age = 123 || name = "abc"`)
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 	require.NoError(t, err)
 	require.Equal(t,
 		strings.Join([]string{
@@ -184,7 +184,7 @@ func TestParenthesesExpr(t *testing.T) {
 	expr, err := query.Parse(`(name = 123 || name2 = "abc") && name3 = "def" || (name4 = 456 && name5 = 567)`)
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 	require.Equal(t,
 		strings.Join([]string{
 			"WITH",
@@ -228,7 +228,7 @@ func TestOwner(t *testing.T) {
 	expr, err := query.Parse(fmt.Sprintf(`(age = 123 || name = "abc") && $owner = "%s"`, owner))
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 
 	require.Equal(t,
 		strings.Join([]string{
@@ -262,7 +262,7 @@ func TestGlob(t *testing.T) {
 	expr, err := query.Parse(`age ~ "abc"`)
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 
 	require.Equal(t,
 		strings.Join([]string{
@@ -292,7 +292,7 @@ func TestNegation(t *testing.T) {
 
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 
 	require.Equal(t,
 		strings.Join([]string{
@@ -335,7 +335,7 @@ func TestAndExpr_MultipleTerms(t *testing.T) {
 	expr, err := query.Parse(`a = 1 && b = "x" && c = 2 && d = "y"`)
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 	require.Equal(t,
 		strings.Join([]string{
 			"WITH",
@@ -367,7 +367,7 @@ func TestOrExpr_MultipleTerms(t *testing.T) {
 	expr, err := query.Parse(`a = 1 || b = "x" || c = 2 || d = "y"`)
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 	require.Equal(t,
 		strings.Join([]string{
 			"WITH",
@@ -399,7 +399,7 @@ func TestMixedAndOr_NoParens(t *testing.T) {
 	expr, err := query.Parse(`a = 1 && b = "x" || c = 2 && d = "y"`)
 	require.NoError(t, err)
 
-	res := expr.Evaluate()
+	res := expr.Evaluate(0)
 	require.Equal(t,
 		strings.Join([]string{
 			"WITH",

@@ -112,7 +112,7 @@ func (e *Expression) invert() *Expression {
 	}
 }
 
-func (e *Expression) Evaluate() *SelectQuery {
+func (e *Expression) Evaluate(blockNumber uint64) *SelectQuery {
 	tableBuilder := strings.Builder{}
 	args := []any{}
 
@@ -124,9 +124,9 @@ func (e *Expression) Evaluate() *SelectQuery {
 		needsComma:   false,
 	}
 
-	tableName := e.Or.Evaluate(&builder)
+	tableName := e.Or.Evaluate(&builder, blockNumber)
 
-	tableBuilder.WriteString(" SELECT entity_key FROM ")
+	tableBuilder.WriteString(" SELECT DISTINCT entity_key FROM ")
 	tableBuilder.WriteString(tableName)
 	// tableBuilder.WriteString(", entities LEFT JOIN ")
 	tableBuilder.WriteString(" ORDER BY 1")
@@ -184,12 +184,12 @@ func (e *OrExpression) invert() *AndExpression {
 	}
 }
 
-func (e *OrExpression) Evaluate(b *QueryBuilder) string {
-	leftTable := e.Left.Evaluate(b)
+func (e *OrExpression) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+	leftTable := e.Left.Evaluate(b, blockNumber)
 	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b)
+		rightTable := rhs.Evaluate(b, blockNumber)
 		tableName = b.nextTableName()
 
 		b.writeComma()
@@ -234,8 +234,8 @@ func (e *OrRHS) invert() *AndRHS {
 	}
 }
 
-func (e *OrRHS) Evaluate(b *QueryBuilder) string {
-	return e.Expr.Evaluate(b)
+func (e *OrRHS) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+	return e.Expr.Evaluate(b, blockNumber)
 }
 
 // AndExpression handles expressions connected with &&.
@@ -280,12 +280,12 @@ func (e *AndExpression) invert() *OrExpression {
 	}
 }
 
-func (e *AndExpression) Evaluate(b *QueryBuilder) string {
-	leftTable := e.Left.Evaluate(b)
+func (e *AndExpression) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+	leftTable := e.Left.Evaluate(b, blockNumber)
 	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b)
+		rightTable := rhs.Evaluate(b, blockNumber)
 		tableName = b.nextTableName()
 
 		b.writeComma()
@@ -325,8 +325,8 @@ func (e *AndRHS) invert() *OrRHS {
 	}
 }
 
-func (e *AndRHS) Evaluate(b *QueryBuilder) string {
-	return e.Expr.Evaluate(b)
+func (e *AndRHS) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+	return e.Expr.Evaluate(b, blockNumber)
 }
 
 // EqualExpr can be either an equality or a parenthesized expression.
@@ -399,37 +399,37 @@ func (e *EqualExpr) invert() *EqualExpr {
 	panic("This should not happen!")
 }
 
-func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
+func (e *EqualExpr) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Paren != nil {
-		return e.Paren.Evaluate(b)
+		return e.Paren.Evaluate(b, blockNumber)
 	}
 
 	if e.Owner != nil {
-		return e.Owner.Evaluate(b)
+		return e.Owner.Evaluate(b, blockNumber)
 	}
 
 	if e.LessThan != nil {
-		return e.LessThan.Evaluate(b)
+		return e.LessThan.Evaluate(b, blockNumber)
 	}
 
 	if e.LessOrEqualThan != nil {
-		return e.LessOrEqualThan.Evaluate(b)
+		return e.LessOrEqualThan.Evaluate(b, blockNumber)
 	}
 
 	if e.GreaterThan != nil {
-		return e.GreaterThan.Evaluate(b)
+		return e.GreaterThan.Evaluate(b, blockNumber)
 	}
 
 	if e.GreaterOrEqualThan != nil {
-		return e.GreaterOrEqualThan.Evaluate(b)
+		return e.GreaterOrEqualThan.Evaluate(b, blockNumber)
 	}
 
 	if e.Glob != nil {
-		return e.Glob.Evaluate(b)
+		return e.Glob.Evaluate(b, blockNumber)
 	}
 
 	if e.Assign != nil {
-		return e.Assign.Evaluate(b)
+		return e.Assign.Evaluate(b, blockNumber)
 	}
 
 	panic("This should not happen!")
@@ -460,7 +460,7 @@ func (e *Paren) invert() *Paren {
 	}
 }
 
-func (e *Paren) Evaluate(b *QueryBuilder) string {
+func (e *Paren) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	expr := e.Nested
 	// If we have a negation, we will push it down into the expression
 	if e.IsNot {
@@ -468,7 +468,7 @@ func (e *Paren) Evaluate(b *QueryBuilder) string {
 	}
 	// We don't have to do anything here regarding precedence, the parsing order
 	// is already taking care of precedence since the nested OR node will create a subquery
-	return expr.Or.Evaluate(b)
+	return expr.Or.Evaluate(b, blockNumber)
 }
 
 type Glob struct {
@@ -485,16 +485,58 @@ func (e *Glob) invert() *Glob {
 	}
 }
 
-func (e *Glob) Evaluate(b *QueryBuilder) string {
+func (e *Glob) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if !e.IsNot {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value GLOB ?",
-			e.Var, e.Value,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM string_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value GLOB ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			e.Value,
 		)
 	} else {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value NOT GLOB ?",
-			e.Var, e.Value,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM string_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value NOT GLOB ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			e.Value,
 		)
 	}
 }
@@ -511,16 +553,58 @@ func (e *LessThan) invert() *GreaterOrEqualThan {
 	}
 }
 
-func (e *LessThan) Evaluate(b *QueryBuilder) string {
+func (e *LessThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value < ?",
-			e.Var, *e.Value.String,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM string_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value < ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value < ?",
-			e.Var, *e.Value.Number,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM numeric_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value < ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.Number,
 		)
 	}
 }
@@ -537,16 +621,58 @@ func (e *LessOrEqualThan) invert() *GreaterThan {
 	}
 }
 
-func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
+func (e *LessOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value <= ?",
-			e.Var, *e.Value.String,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM string_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value <= ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value <= ?",
-			e.Var, *e.Value.Number,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM numeric_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value <= ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.Number,
 		)
 	}
 }
@@ -563,16 +689,58 @@ func (e *GreaterThan) invert() *LessOrEqualThan {
 	}
 }
 
-func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
+func (e *GreaterThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value > ?",
-			e.Var, *e.Value.String,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM string_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value > ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value > ?",
-			e.Var, *e.Value.Number,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM numeric_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value > ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.Number,
 		)
 	}
 }
@@ -589,16 +757,58 @@ func (e *GreaterOrEqualThan) invert() *LessThan {
 	}
 }
 
-func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
+func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value >= ?",
-			e.Var, *e.Value.String,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM string_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value >= ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
 		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value >= ?",
-			e.Var, *e.Value.Number,
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT a.entity_key",
+					"FROM numeric_annotations AS a INNER JOIN entities AS e",
+					"ON a.entity_key = e.key",
+					"AND e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"WHERE annotation_key = ?",
+					"AND value >= ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
+			e.Var,
+			*e.Value.Number,
 		)
 	}
 }
@@ -616,19 +826,55 @@ func (e *Ownership) invert() *Ownership {
 	}
 }
 
-func (e *Ownership) Evaluate(b *QueryBuilder) string {
+func (e *Ownership) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	var address = common.Address{}
 	if common.IsHexAddress(e.Owner) {
 		address = common.HexToAddress(e.Owner)
 	}
 	if !e.IsNot {
 		return b.createLeafQuery(
-			"SELECT key AS entity_key FROM entities WHERE owner_address = ?",
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT e.key AS entity_key",
+					"FROM entities AS e",
+					"WHERE e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"AND e.owner_address = ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
 			address.Hex(),
 		)
 	} else {
 		return b.createLeafQuery(
-			"SELECT key AS entity_key FROM entities WHERE owner_address != ?",
+			strings.Join(
+				[]string{
+					"SELECT DISTINCT e.key AS entity_key",
+					"FROM entities AS e",
+					"WHERE e.deleted = FALSE",
+					"AND e.last_modified_at_block <= ?",
+					"AND NOT EXISTS (",
+					"SELECT 1",
+					"FROM entities AS e2",
+					"WHERE e2.key = e.key",
+					"AND e2.last_modified_at_block > e.last_modified_at_block",
+					"AND e2.last_modified_at_block <= ?",
+					")",
+					"AND e.owner_address != ?",
+				},
+				" ",
+			),
+			blockNumber,
+			blockNumber,
 			address.Hex(),
 		)
 	}
@@ -649,29 +895,113 @@ func (e *Equality) invert() *Equality {
 	}
 }
 
-func (e *Equality) Evaluate(b *QueryBuilder) string {
+func (e *Equality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if !e.IsNot {
 		if e.Value.String != nil {
 			return b.createLeafQuery(
-				"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?",
-				e.Var, *e.Value.String,
+				strings.Join(
+					[]string{
+						"SELECT DISTINCT a.entity_key",
+						"FROM string_annotations AS a INNER JOIN entities AS e",
+						"ON a.entity_key = e.key",
+						"AND e.deleted = FALSE",
+						"AND e.last_modified_at_block <= ?",
+						"AND NOT EXISTS (",
+						"SELECT 1",
+						"FROM entities AS e2",
+						"WHERE e2.key = e.key",
+						"AND e2.last_modified_at_block > e.last_modified_at_block",
+						"AND e2.last_modified_at_block <= ?",
+						")",
+						"WHERE annotation_key = ?",
+						"AND value = ?",
+					},
+					" ",
+				),
+				blockNumber,
+				blockNumber,
+				e.Var,
+				*e.Value.String,
 			)
 		} else {
 			return b.createLeafQuery(
-				"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?",
-				e.Var, *e.Value.Number,
+				strings.Join(
+					[]string{
+						"SELECT DISTINCT a.entity_key",
+						"FROM numeric_annotations AS a INNER JOIN entities AS e",
+						"ON a.entity_key = e.key",
+						"AND e.deleted = FALSE",
+						"AND e.last_modified_at_block <= ?",
+						"AND NOT EXISTS (",
+						"SELECT 1",
+						"FROM entities AS e2",
+						"WHERE e2.key = e.key",
+						"AND e2.last_modified_at_block > e.last_modified_at_block",
+						"AND e2.last_modified_at_block <= ?",
+						")",
+						"WHERE annotation_key = ?",
+						"AND value = ?",
+					},
+					" ",
+				),
+				blockNumber,
+				blockNumber,
+				e.Var,
+				*e.Value.Number,
 			)
 		}
 	} else {
 		if e.Value.String != nil {
 			return b.createLeafQuery(
-				"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value != ?",
-				e.Var, *e.Value.String,
+				strings.Join(
+					[]string{
+						"SELECT DISTINCT a.entity_key",
+						"FROM string_annotations AS a INNER JOIN entities AS e",
+						"ON a.entity_key = e.key",
+						"AND e.deleted = FALSE",
+						"AND e.last_modified_at_block <= ?",
+						"AND NOT EXISTS (",
+						"SELECT 1",
+						"FROM entities AS e2",
+						"WHERE e2.key = e.key",
+						"AND e2.last_modified_at_block > e.last_modified_at_block",
+						"AND e2.last_modified_at_block <= ?",
+						")",
+						"WHERE annotation_key = ?",
+						"AND value != ?",
+					},
+					" ",
+				),
+				blockNumber,
+				blockNumber,
+				e.Var,
+				*e.Value.String,
 			)
 		} else {
 			return b.createLeafQuery(
-				"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value != ?",
-				e.Var, *e.Value.Number,
+				strings.Join(
+					[]string{
+						"SELECT DISTINCT a.entity_key",
+						"FROM numeric_annotations AS a INNER JOIN entities AS e",
+						"ON a.entity_key = e.key",
+						"AND e.deleted = FALSE",
+						"AND e.last_modified_at_block <= ?",
+						"AND NOT EXISTS (",
+						"SELECT 1",
+						"FROM entities AS e2",
+						"WHERE e2.key = e.key",
+						"AND e2.last_modified_at_block > e.last_modified_at_block",
+						"AND e2.last_modified_at_block <= ?",
+						")",
+						"WHERE annotation_key = ?",
+						"AND value != ?",
+					},
+					" ",
+				),
+				blockNumber,
+				blockNumber,
+				e.Var,
+				*e.Value.Number,
 			)
 		}
 	}
