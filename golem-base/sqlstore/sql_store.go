@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/log"
@@ -73,11 +74,12 @@ type Delete struct {
 
 // SQLStore encapsulates the SQLite SQLStore functionality
 type SQLStore struct {
-	db *sql.DB
+	db                  *sql.DB
+	historicBlocksCount uint64
 }
 
 // NewStore creates a new ETL instance with database connection and schema setup
-func NewStore(dbFile string) (*SQLStore, error) {
+func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 	dir := filepath.Dir(dbFile)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
@@ -188,7 +190,10 @@ func NewStore(dbFile string) (*SQLStore, error) {
 	}
 
 	log.Info("arkiv: database ready", "entitySchemaVersion", entitiesSchemaVersion)
-	return &SQLStore{db: db}, nil
+	return &SQLStore{
+		db:                  db,
+		historicBlocksCount: historicBlocksCount,
+	}, nil
 }
 
 // Close closes the database connection
@@ -213,70 +218,6 @@ func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*
 		return nil, err
 	}
 	return &result, nil
-}
-
-// GetEntitiesToExpireAtBlock retrieves all entity keys that expire at the specified block
-func (e *SQLStore) GetEntitiesToExpireAtBlock(ctx context.Context, params sqlitegolem.GetEntitiesToExpireAtBlockParams) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntitiesToExpireAtBlock(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get entities expiring at block %d: %w", params.ExpirationBlock, err)
-	}
-
-	// Convert string keys to common.Hash
-	result := make([]common.Hash, 0, len(keys))
-	for _, keyHex := range keys {
-		result = append(result, common.HexToHash(keyHex))
-	}
-
-	return result, nil
-}
-
-// GetEntitiesForStringAnnotationValue retrieves all entity keys that have a specific string annotation with the given value
-func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, params sqlitegolem.GetEntitiesForStringAnnotationParams) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntitiesForStringAnnotation(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for string annotation %s=%s: %w", params.AnnotationKey, params.AnnotationValue, err)
-	}
-
-	// Convert string keys to common.Hash
-	result := make([]common.Hash, 0, len(keys))
-	for _, keyHex := range keys {
-		result = append(result, common.HexToHash(keyHex))
-	}
-
-	return result, nil
-}
-
-// GetEntitiesForNumericAnnotationValue retrieves all entity keys that have a specific numeric annotation with the given value
-func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, params sqlitegolem.GetEntitiesForNumericAnnotationParams) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntitiesForNumericAnnotation(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for numeric annotation %s=%d: %w", params.AnnotationKey, params.AnnotationValue, err)
-	}
-
-	// Convert string keys to common.Hash
-	result := make([]common.Hash, 0, len(keys))
-	for _, keyHex := range keys {
-		result = append(result, common.HexToHash(keyHex))
-	}
-
-	return result, nil
-}
-
-// GetEntitiesOfOwner retrieves all entity keys owned by the specified address
-func (e *SQLStore) GetEntitiesOfOwner(ctx context.Context, params sqlitegolem.GetEntityKeysByOwnerParams) ([]common.Hash, error) {
-	keys, err := e.GetQueries().GetEntityKeysByOwner(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for owner %s: %w", params.Owner, err)
-	}
-
-	// Convert string keys to common.Hash
-	result := make([]common.Hash, 0, len(keys))
-	for _, keyHex := range keys {
-		result = append(result, common.HexToHash(keyHex))
-	}
-
-	return result, nil
 }
 
 // GetAllEntityKeys retrieves all entity keys from the database
@@ -712,10 +653,18 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 		return fmt.Errorf("failed to insert processing status: %w", err)
 	}
 
+	// Delete blocks that are older than the historicBlocksCount
+	if e.historicBlocksCount > 0 && blockWal.BlockInfo.Number > e.historicBlocksCount {
+		deleteUntilBlock := int64(blockWal.BlockInfo.Number) - int64(e.historicBlocksCount)
+		txDB.DeleteStringAnnotationsUntilBlock(ctx, deleteUntilBlock)
+		txDB.DeleteNumericAnnotationsUntilBlock(ctx, deleteUntilBlock)
+		txDB.DeleteEntitiesUntilBlock(ctx, deleteUntilBlock)
+	}
+
 	return tx.Commit()
 }
 
-func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any) ([]common.Hash, error) {
+func (e *SQLStore) QueryEntityKeys(ctx context.Context, query string, args ...any) ([]common.Hash, error) {
 	log.Info("Executing query", "query", query, "args", args)
 
 	rows, err := e.db.QueryContext(ctx, query, args...)
@@ -726,11 +675,46 @@ func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any)
 
 	keys := []common.Hash{}
 	var key string
+	var payload []byte
+	var expiresAt uint64
+	var ownerAddress string
 	for rows.Next() {
-		if err := rows.Scan(&key); err != nil {
+		if err := rows.Scan(&key, &payload, &expiresAt, &ownerAddress); err != nil {
 			return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
 		}
 		keys = append(keys, common.HexToHash(key))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+
+	return keys, nil
+}
+
+func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any) ([]arkivtype.SearchResult, error) {
+	log.Info("Executing query", "query", query, "args", args)
+
+	rows, err := e.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+	defer rows.Close()
+
+	keys := []arkivtype.SearchResult{}
+	var key string
+	var payload []byte
+	var expiresAt uint64
+	var ownerAddress string
+	for rows.Next() {
+		if err := rows.Scan(&key, &payload, &expiresAt, &ownerAddress); err != nil {
+			return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+		}
+		keys = append(keys, arkivtype.SearchResult{
+			Key:       common.HexToHash(key),
+			Value:     payload,
+			ExpiresAt: expiresAt,
+			Owner:     common.HexToAddress(ownerAddress),
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)

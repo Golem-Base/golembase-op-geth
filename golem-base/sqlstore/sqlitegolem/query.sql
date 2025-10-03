@@ -41,49 +41,6 @@ AND NOT EXISTS (
   AND e2.last_modified_at_block <= ?2
 );
 
--- name: GetEntityPayload :one
-SELECT e1.payload
-FROM entities AS e1
-WHERE key = sqlc.arg(key)
-AND deleted = FALSE
-AND last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e1.key
-  AND e2.last_modified_at_block > e1.last_modified_at_block
-  AND e2.last_modified_at_block <= ?2
-);
-
--- name: GetEntitiesByOwner :many
-SELECT e1.key, e1.expires_at, e1.payload, e1.created_at_block, e1.last_modified_at_block
-FROM entities AS e1
-WHERE e1.owner_address = sqlc.arg(owner)
-AND e1.deleted = FALSE
-AND e1.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e1.key
-  AND e2.last_modified_at_block > e1.last_modified_at_block
-  AND e2.last_modified_at_block <= ?2
-);
-
--- name: GetEntityKeysByOwner :many
-SELECT e1.key
-FROM entities AS e1
-WHERE owner_address = sqlc.arg(owner)
-AND deleted = FALSE
-AND last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e1.key
-  AND e2.last_modified_at_block > e1.last_modified_at_block
-  AND e2.last_modified_at_block <= ?2
-)
-ORDER BY e1.key;
-
 -- name: GetStringAnnotations :many
 SELECT a.annotation_key, a.value
 FROM string_annotations AS a INNER JOIN entities AS e
@@ -226,55 +183,6 @@ AND NOT EXISTS (
   AND e2.last_modified_at_block <= ?2
 );
 
--- name: GetEntitiesToExpireAtBlock :many
-SELECT key
-FROM entities AS e
-WHERE e.deleted = FALSE
-AND e.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?1
-)
-AND expires_at = sqlc.arg(expiration_block)
-ORDER BY key;
-
--- name: GetEntitiesForStringAnnotation :many
-SELECT a.entity_key
-FROM string_annotations AS a INNER JOIN entities AS e
-  ON a.entity_key = e.key
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?1
-)
-WHERE annotation_key = sqlc.arg(annotation_key)
-AND value = sqlc.arg(annotation_value)
-ORDER BY entity_key;
-
--- name: GetEntitiesForNumericAnnotation :many
-SELECT a.entity_key
-FROM numeric_annotations AS a INNER JOIN entities AS e
-  ON a.entity_key = e.key
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?1
-)
-WHERE annotation_key = sqlc.arg(annotation_key)
-AND value = sqlc.arg(annotation_value)
-ORDER BY entity_key;
-
 -- name: GetAllEntityKeys :many
 SELECT key
 FROM entities AS e
@@ -300,4 +208,59 @@ AND NOT EXISTS (
   WHERE e2.key = e.key
   AND e2.last_modified_at_block > e.last_modified_at_block
   AND e2.last_modified_at_block <= ?1
+);
+
+-- name: DeleteEntitiesUntilBlock :exec
+DELETE FROM entities AS e
+WHERE e.last_modified_at_block <= sqlc.arg(block)
+AND (
+  EXISTS (
+    SELECT 1
+    FROM entities AS e2
+    WHERE e2.key = e.key
+    AND e2.last_modified_at_block > e.last_modified_at_block
+  )
+  OR e.deleted = TRUE
+);
+
+-- name: DeleteStringAnnotationsUntilBlock :exec
+DELETE FROM string_annotations AS a
+WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
+AND (
+  EXISTS (
+    SELECT 1
+    FROM entities AS e
+    WHERE e.key = a.entity_key
+    AND (
+      -- either there is a more recent version of the entity that this annotation
+      -- belongs to
+      e.last_modified_at_block > a.entity_last_modified_at_block
+      -- or the entity that this annotation belongs to has been deleted
+      OR (
+        e.last_modified_at_block = a.entity_last_modified_at_block
+        AND e.deleted = TRUE
+      )
+    )
+  )
+);
+
+-- name: DeleteNumericAnnotationsUntilBlock :exec
+DELETE FROM numeric_annotations AS a
+WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
+AND (
+  EXISTS (
+    SELECT 1
+    FROM entities AS e
+    WHERE e.key = a.entity_key
+    AND (
+      -- either there is a more recent version of the entity that this annotation
+      -- belongs to
+      e.last_modified_at_block > a.entity_last_modified_at_block
+      -- or the entity that this annotation belongs to has been deleted
+      OR (
+        e.last_modified_at_block = a.entity_last_modified_at_block
+        AND e.deleted = TRUE
+      )
+    )
+  )
 );

@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS string_annotations (
   entity_last_modified_at_block INTEGER NOT NULL,
   annotation_key TEXT NOT NULL,
   value TEXT NOT NULL,
-  PRIMARY KEY (entity_key, entity_last_modified_at_block, annotation_key)
+  PRIMARY KEY (entity_key, entity_last_modified_at_block, annotation_key),
+  FOREIGN KEY (entity_key, entity_last_modified_at_block) REFERENCES entities(key, last_modified_at_block)
 );
 
 CREATE TABLE IF NOT EXISTS numeric_annotations (
@@ -37,5 +38,6 @@ CREATE TABLE IF NOT EXISTS numeric_annotations (
   entity_last_modified_at_block INTEGER NOT NULL,
   annotation_key TEXT NOT NULL,
   value INTEGER NOT NULL,
-  PRIMARY KEY (entity_key, entity_last_modified_at_block, annotation_key)
+  PRIMARY KEY (entity_key, entity_last_modified_at_block, annotation_key),
+  FOREIGN KEY (entity_key, entity_last_modified_at_block) REFERENCES entities(key, last_modified_at_block)
 );
