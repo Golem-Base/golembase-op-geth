@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
@@ -356,18 +357,32 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	if err := rcpClient.CallContext(
 		ctx,
 		&v,
 		"golembase_getStorageValue",
 		key.Hex(),
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
 	if string(v) != "test payload" {
 		return fmt.Errorf("unexpected storage value: %s", string(v))
+	}
+
+	var e []arkivtype.SearchResult
+	if err := rcpClient.CallContext(
+		ctx,
+		&e,
+		"arkiv_queryEntities",
+		fmt.Sprintf(`$key = %s`, key.Hex()),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get storage value: %w", err)
+	}
+
+	if string(e[0].Value) != "test payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(e[0].Value))
 	}
 
 	return nil
@@ -388,17 +403,16 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 
 	blockNumber256 := uint256.NewInt(0).SetBytes(receipt.Logs[0].Data)
 
-	err := rcpClient.CallContext(
+	key := receipt.Logs[0].Topics[1]
+
+	if err := rcpClient.CallContext(
 		ctx,
 		&toExpire,
 		"golembase_getEntitiesToExpireAtBlock",
 		blockNumber256.Uint64(),
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to expire: %w", err)
 	}
-
-	key := receipt.Logs[0].Topics[1]
 
 	if len(toExpire) != 1 {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(toExpire))
@@ -408,36 +422,71 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", toExpire[0].Hex(), key.Hex())
 	}
 
+	var result []arkivtype.SearchResult
+	if err := rcpClient.CallContext(
+		ctx,
+		&result,
+		"arkiv_queryEntities",
+		fmt.Sprintf("$expiration = %d", blockNumber256.Uint64()),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to expire: %w", err)
+	}
+
+	if len(result) != 1 {
+		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(result))
+	}
+
+	if result[0].Key != key {
+		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", result[0].Key.Hex(), key.Hex())
+	}
+
 	return nil
 }
 
 func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
-
-	toExpire := []common.Hash{}
+	key := receipt.Logs[0].Topics[1]
 
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	keys := []common.Hash{}
+	if err := rcpClient.CallContext(
 		ctx,
-		&toExpire,
+		&keys,
 		"golembase_getEntitiesForStringAnnotationValue",
 		"test_key",
 		"test_value",
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities by string anotation: %w", err)
 	}
 
-	key := receipt.Logs[0].Topics[1]
-
-	if len(toExpire) != 1 {
-		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(toExpire))
+	if len(keys) != 1 {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(keys))
 	}
 
-	if toExpire[0] != key {
-		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", toExpire[0].Hex(), key.Hex())
+	if keys[0] != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", keys[0].Hex(), key.Hex())
+	}
+
+	entities := []arkivtype.SearchResult{}
+	if err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		`test_key = "test_value"`,
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities by string anotation: %w", err)
+	}
+
+	if len(entities) != 1 {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities))
+	}
+
+	if entities[0].Key != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", entities[0].Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -446,30 +495,45 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
-
-	toExpire := []common.Hash{}
-
+	key := receipt.Logs[0].Topics[1]
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	keys := []common.Hash{}
+	if err := rcpClient.CallContext(
 		ctx,
-		&toExpire,
+		&keys,
 		"golembase_getEntitiesForNumericAnnotationValue",
 		"test_number",
 		42,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
 	}
 
-	key := receipt.Logs[0].Topics[1]
-
-	if len(toExpire) != 1 {
-		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(toExpire))
+	if len(keys) != 1 {
+		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(keys))
 	}
 
-	if toExpire[0] != key {
-		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", toExpire[0].Hex(), key.Hex())
+	if keys[0] != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", keys[0].Hex(), key.Hex())
+	}
+
+	entities := []arkivtype.SearchResult{}
+	if err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		"test_number = 42",
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	}
+
+	if len(entities) != 1 {
+		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities))
+	}
+
+	if entities[0].Key != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", entities[0].Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -552,25 +616,33 @@ func iHaveAnEntityWithStringAnnotations(ctx context.Context, payload string, ann
 
 func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, value string) error {
 	w := testutil.GetWorld(ctx)
+	rcpClient := w.GethInstance.RPCClient
 
 	res := []golemtype.SearchResult{}
 
-	rcpClient := w.GethInstance.RPCClient
-
-	err := rcpClient.CallContext(
+	if err := rcpClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		fmt.Sprintf(`%s="%s"`, key, value),
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
 	}
-
 	w.SearchResult = res
 
-	return nil
+	res2 := []arkivtype.SearchResult{}
+	if err := rcpClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_queryEntities",
+		fmt.Sprintf(`%s="%s"`, key, value),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	}
+	w.ArkivSearchResult = res2
 
+	return nil
 }
 
 func iShouldFindEntity(ctx context.Context, count int) error {
@@ -578,6 +650,10 @@ func iShouldFindEntity(ctx context.Context, count int) error {
 
 	if len(w.SearchResult) != count {
 		return fmt.Errorf("unexpected number of entities retrieved: %d (expected %d)", len(w.SearchResult), count)
+	}
+
+	if len(w.ArkivSearchResult) != count {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected %d)", len(w.ArkivSearchResult), count)
 	}
 
 	return nil
@@ -616,9 +692,6 @@ func iHaveAnEntityWithNumericAnnotations(ctx context.Context, payload string, an
 
 func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key string, valueString string) error {
 	w := testutil.GetWorld(ctx)
-
-	res := []golemtype.SearchResult{}
-
 	rcpClient := w.GethInstance.RPCClient
 
 	value, err := strconv.ParseUint(valueString, 10, 64)
@@ -626,20 +699,30 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 		return fmt.Errorf("failed to parse numeric value: %w", err)
 	}
 
-	err = rcpClient.CallContext(
+	res := []golemtype.SearchResult{}
+	if err = rcpClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		fmt.Sprintf(`%s=%d`, key, value),
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
 	}
-
 	w.SearchResult = res
 
-	return nil
+	res2 := []arkivtype.SearchResult{}
+	if err = rcpClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_queryEntities",
+		fmt.Sprintf(`%s=%d`, key, value),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	}
+	w.ArkivSearchResult = res2
 
+	return nil
 }
 
 func iHaveCreatedAnEntity(ctx context.Context) error {
@@ -737,18 +820,15 @@ func iSubmitATransactionToUpdateTheEntityChangingThePaylod(ctx context.Context) 
 
 func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-
 	rpcClient := w.GethInstance.RPCClient
 
 	var v []byte
-
-	err := rpcClient.CallContext(
+	if err := rpcClient.CallContext(
 		ctx,
 		&v,
 		"golembase_getStorageValue",
 		w.CreatedEntityKey,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
@@ -756,8 +836,26 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(v))
 	}
 
-	return nil
+	entities := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf("$key = %s", w.CreatedEntityKey),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get storage value: %w", err)
+	}
 
+	if len(entities) != 1 {
+		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities))
+	}
+
+	if string(entities[0].Value) != "new payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(entities[0].Value))
+	}
+
+	return nil
 }
 
 func iSubmitATransactionToUpdateTheEntityChangingTheAnnotations(ctx context.Context) error {
@@ -792,18 +890,15 @@ func iSubmitATransactionToUpdateTheEntityChangingTheAnnotations(ctx context.Cont
 
 func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-
 	rpcClient := w.GethInstance.RPCClient
 
 	res := []golemtype.SearchResult{}
-
-	err := rpcClient.CallContext(
+	if err := rpcClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		`test_key1="test_value1" && test_number1=43`,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
 	}
 
@@ -813,6 +908,25 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	if res[0].Key != w.CreatedEntityKey {
 		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), res[0].Key.Hex())
+	}
+
+	res2 := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_queryEntities",
+		`test_key1="test_value1" && test_number1=43`,
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	}
+
+	if len(res2) == 0 {
+		return fmt.Errorf("could not find any result when searching by new annotations")
+	}
+
+	if res2[0].Key != w.CreatedEntityKey {
+		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), res2[0].Key.Hex())
 	}
 
 	return nil
@@ -850,22 +964,18 @@ func iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity(ctx context.C
 func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
-
-	toExpire := []common.Hash{}
-
+	key := receipt.Logs[0].Topics[1]
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	toExpire := []common.Hash{}
+	if err := rcpClient.CallContext(
 		ctx,
 		&toExpire,
 		"golembase_getEntitiesToExpireAtBlock",
 		receipt.BlockNumber.Uint64()+200,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to expire: %w", err)
 	}
-
-	key := receipt.Logs[0].Topics[1]
 
 	if len(toExpire) != 1 {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(toExpire))
@@ -873,6 +983,25 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	if toExpire[0] != key {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", toExpire[0].Hex(), key.Hex())
+	}
+
+	entities := []arkivtype.SearchResult{}
+	if err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf("$expiration = %d", receipt.BlockNumber.Uint64()+200),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to expire: %w", err)
+	}
+
+	if len(entities) != 1 {
+		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(entities))
+	}
+
+	if entities[0].Key != key {
+		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", entities[0].Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -921,22 +1050,30 @@ func theEntityCreationShouldNotFail(ctx context.Context) error {
 
 func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocString) error {
 	w := testutil.GetWorld(ctx)
-
-	res := []golemtype.SearchResult{}
-
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	res := []golemtype.SearchResult{}
+	if err := rcpClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		queryDoc.Content,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
 	}
-
 	w.SearchResult = res
+
+	res2 := []arkivtype.SearchResult{}
+	if err := rcpClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_queryEntities",
+		queryDoc.Content,
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	}
+	w.ArkivSearchResult = res2
 
 	return nil
 }
@@ -1079,10 +1216,10 @@ func theExpiredEntityShouldBeDeleted(ctx context.Context) error {
 
 func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var count uint64
-	err := w.GethInstance.RPCClient.CallContext(ctx, &count, "golembase_getEntityCount")
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &count, "golembase_getEntityCount"); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
 
@@ -1090,20 +1227,62 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 		return fmt.Errorf("expected %d entities, but got %d", expected, count)
 	}
 
-	return nil
+	entities := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf("$owner = %s || $owner != %s",
+			"0x4200000000000000000000000000000000000015",
+			"0x4200000000000000000000000000000000000015",
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
 
+	if len(entities) != expected {
+		return fmt.Errorf("expected %d entities, but got %d", expected, len(entities))
+	}
+
+	return nil
 }
 
 func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys")
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys"); err != nil {
 		return fmt.Errorf("failed to get all entity keys: %w", err)
 	}
 
 	found := slices.Contains(entityKeys, w.CreatedEntityKey)
+
+	if !found {
+		return fmt.Errorf("entity with key %s not found in the list of all entities", w.CreatedEntityKey.Hex())
+	}
+
+	entities := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf("$owner = %s || $owner != %s",
+			"0x4200000000000000000000000000000000000015",
+			"0x4200000000000000000000000000000000000015",
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	found = false
+	for _, entity := range entities {
+		if entity.Key == w.CreatedEntityKey {
+			found = true
+		}
+	}
 
 	if !found {
 		return fmt.Errorf("entity with key %s not found in the list of all entities", w.CreatedEntityKey.Hex())
@@ -1114,14 +1293,32 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 
 func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys")
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys"); err != nil {
 		return fmt.Errorf("failed to get all entity keys: %w", err)
 	}
 
 	if len(entityKeys) != 0 {
+		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
+	}
+
+	entities := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf("$owner = %s || $owner != %s",
+			"0x4200000000000000000000000000000000000015",
+			"0x4200000000000000000000000000000000000015",
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	if len(entities) != 0 {
 		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
 	}
 
@@ -1130,14 +1327,44 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 
 func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getEntitiesOfOwner", w.FundedAccount.Address)
-	if err != nil {
+	if err := rpcClient.CallContext(
+		ctx,
+		&entityKeys,
+		"golembase_getEntitiesOfOwner",
+		w.FundedAccount.Address,
+	); err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
 	found := slices.Contains(entityKeys, w.CreatedEntityKey)
+
+	if !found {
+		return fmt.Errorf("entity with key %s not found in the list of entities of the owner", w.CreatedEntityKey.Hex())
+	}
+
+	entities := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf(
+			"$owner = %s",
+			w.FundedAccount.Address,
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	found = false
+	for _, entity := range entities {
+		if entity.Key == w.CreatedEntityKey {
+			found = true
+		}
+	}
 
 	if !found {
 		return fmt.Errorf("entity with key %s not found in the list of entities of the owner", w.CreatedEntityKey.Hex())
@@ -1148,11 +1375,10 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 
 func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var ap entity.EntityMetaData
-
-	err := w.GethInstance.RPCClient.CallContext(ctx, &ap, "golembase_getEntityMetaData", w.CreatedEntityKey.Hex())
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &ap, "golembase_getEntityMetaData", w.CreatedEntityKey.Hex()); err != nil {
 		return fmt.Errorf("failed to get entity metadata: %w", err)
 	}
 
@@ -1160,17 +1386,42 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ap.Owner.Hex())
 	}
 
+	entities := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf(
+			"$key = %s",
+			w.CreatedEntityKey.Hex(),
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	if len(entities) != 1 {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities))
+	}
+
+	if entities[0].Owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), entities[0].Owner.Hex())
+	}
+
 	return nil
 }
 
 func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
-
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getEntitiesOfOwner", w.FundedAccount.Address)
-	if err != nil {
+	if err := rpcClient.CallContext(
+		ctx,
+		&entityKeys,
+		"golembase_getEntitiesOfOwner",
+		w.FundedAccount.Address,
+	); err != nil {
 		return fmt.Errorf("failed to get entity metadata: %w", err)
 	}
 
@@ -1178,8 +1429,25 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 		return fmt.Errorf("expected 0 entities, but got %d", len(entityKeys))
 	}
 
-	return nil
+	entities := []arkivtype.SearchResult{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf(
+			"$owner = %s",
+			w.FundedAccount.Address,
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
 
+	if len(entities) != 0 {
+		return fmt.Errorf("expected 0 entities, but got %d", len(entityKeys))
+	}
+
+	return nil
 }
 
 func iSubmitATransactionToExtendBTLOfTheEntityByBlocks(ctx context.Context, blockCount int) error {
@@ -1337,13 +1605,26 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
 		"golembase_getEntitiesOfOwner",
 		w.FundedAccount.Address,
-	)
-	if err != nil {
+	); err != nil {
+		return fmt.Errorf("failed to get entities of owner: %w", err)
+	}
+
+	if len(entities) != 0 {
+		return fmt.Errorf("expected 0 entities, but got %d", len(entities))
+	}
+
+	if err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_queryEntities",
+		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address),
+		struct{}{},
+	); err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
@@ -1359,13 +1640,27 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
 	res := []golemtype.SearchResult{}
-
-	err := w.GethInstance.RPCClient.CallContext(ctx, &res, "golembase_queryEntities", fmt.Sprintf(`$owner="%s"`, w.FundedAccount.Address.Hex()))
-	if err != nil {
+	if err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&res,
+		"golembase_queryEntities",
+		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address.Hex()),
+	); err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
-
 	w.SearchResult = res
+
+	res2 := []arkivtype.SearchResult{}
+	if err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_queryEntities",
+		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address.Hex()),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities of owner: %w", err)
+	}
+	w.ArkivSearchResult = res2
 
 	return nil
 }

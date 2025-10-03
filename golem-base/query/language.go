@@ -12,6 +12,16 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
+var COLUMNS string = strings.Join(
+	[]string{
+		"key",
+		"payload",
+		"expires_at",
+		"owner_address",
+	},
+	", ",
+)
+
 // Define the lexer with distinct tokens for each operator and parentheses.
 var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Whitespace", Pattern: `[ \t\n\r]+`},
@@ -28,11 +38,15 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "NotGlob", Pattern: `!~`},
 	{Name: "Glob", Pattern: `~`},
 	{Name: "Not", Pattern: `!`},
+	{Name: "EntityKey", Pattern: `0x[a-fA-F0-9]{64}`},
+	{Name: "Address", Pattern: `0x[a-fA-F0-9]{40}`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
 	{Name: "Number", Pattern: `[0-9]+`},
 	{Name: "Ident", Pattern: entity.AnnotationIdentRegex},
 	// Meta-annotations, should start with $
 	{Name: "Owner", Pattern: `\$owner`},
+	{Name: "Key", Pattern: `\$key`},
+	{Name: "Expiration", Pattern: `\$expiration`},
 })
 
 type SelectQuery struct {
@@ -126,9 +140,8 @@ func (e *Expression) Evaluate(blockNumber uint64) *SelectQuery {
 
 	tableName := e.Or.Evaluate(&builder, blockNumber)
 
-	tableBuilder.WriteString(" SELECT DISTINCT entity_key FROM ")
+	tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
 	tableBuilder.WriteString(tableName)
-	// tableBuilder.WriteString(", entities LEFT JOIN ")
 	tableBuilder.WriteString(" ORDER BY 1")
 
 	return &SelectQuery{
@@ -196,10 +209,10 @@ func (e *OrExpression) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 
 		b.tableBuilder.WriteString(tableName)
 		b.tableBuilder.WriteString(" AS (")
-		b.tableBuilder.WriteString("SELECT entity_key FROM ")
+		b.tableBuilder.WriteString("SELECT * FROM ")
 		b.tableBuilder.WriteString(leftTable)
 		b.tableBuilder.WriteString(" UNION ")
-		b.tableBuilder.WriteString("SELECT entity_key FROM ")
+		b.tableBuilder.WriteString("SELECT * FROM ")
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
@@ -292,10 +305,10 @@ func (e *AndExpression) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 
 		b.tableBuilder.WriteString(tableName)
 		b.tableBuilder.WriteString(" AS (")
-		b.tableBuilder.WriteString("SELECT entity_key FROM ")
+		b.tableBuilder.WriteString("SELECT * FROM ")
 		b.tableBuilder.WriteString(leftTable)
 		b.tableBuilder.WriteString(" INTERSECT ")
-		b.tableBuilder.WriteString("SELECT entity_key FROM ")
+		b.tableBuilder.WriteString("SELECT * FROM ")
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
@@ -331,9 +344,11 @@ func (e *AndRHS) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 
 // EqualExpr can be either an equality or a parenthesized expression.
 type EqualExpr struct {
-	Paren  *Paren     `parser:"  @@"`
-	Owner  *Ownership `parser:"| @@"`
-	Assign *Equality  `parser:"| @@"`
+	Paren        *Paren              `parser:"  @@"`
+	Owner        *Ownership          `parser:"| @@"`
+	KeyEq        *KeyEquality        `parser:"| @@"`
+	ExpirationEq *ExpirationEquality `parser:"| @@"`
+	Assign       *Equality           `parser:"| @@"`
 
 	LessThan           *LessThan           `parser:"| @@"`
 	LessOrEqualThan    *LessOrEqualThan    `parser:"| @@"`
@@ -372,6 +387,14 @@ func (e *EqualExpr) invert() *EqualExpr {
 		return &EqualExpr{Owner: e.Owner.invert()}
 	}
 
+	if e.KeyEq != nil {
+		return &EqualExpr{KeyEq: e.KeyEq.invert()}
+	}
+
+	if e.ExpirationEq != nil {
+		return &EqualExpr{ExpirationEq: e.ExpirationEq.invert()}
+	}
+
 	if e.LessThan != nil {
 		return &EqualExpr{GreaterOrEqualThan: e.LessThan.invert()}
 	}
@@ -406,6 +429,14 @@ func (e *EqualExpr) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 
 	if e.Owner != nil {
 		return e.Owner.Evaluate(b, blockNumber)
+	}
+
+	if e.KeyEq != nil {
+		return e.KeyEq.Evaluate(b, blockNumber)
+	}
+
+	if e.ExpirationEq != nil {
+		return e.ExpirationEq.Evaluate(b, blockNumber)
 	}
 
 	if e.LessThan != nil {
@@ -471,6 +502,43 @@ func (e *Paren) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	return expr.Or.Evaluate(b, blockNumber)
 }
 
+func (b *QueryBuilder) createAnnotationQuery(
+	tableName string,
+	blockNumber uint64,
+	whereClause string,
+	arguments ...any,
+) string {
+	args := make([]any, 0, len(arguments)+2)
+	args = append(args, blockNumber, blockNumber)
+	args = append(args, arguments...)
+
+	return b.createLeafQuery(
+		strings.Join(
+			[]string{
+				"SELECT DISTINCT ",
+				COLUMNS,
+				"FROM",
+				tableName,
+				"AS a INNER JOIN entities AS e",
+				"ON a.entity_key = e.key",
+				"AND e.deleted = FALSE",
+				"AND e.last_modified_at_block <= ?",
+				"AND NOT EXISTS (",
+				"SELECT 1",
+				"FROM entities AS e2",
+				"WHERE e2.key = e.key",
+				"AND e2.last_modified_at_block > e.last_modified_at_block",
+				"AND e2.last_modified_at_block <= ?",
+				")",
+				"WHERE",
+				whereClause,
+			},
+			" ",
+		),
+		args...,
+	)
+}
+
 type Glob struct {
 	Var   string `parser:"@Ident"`
 	IsNot bool   `parser:"(Glob | @NotGlob)"`
@@ -487,54 +555,30 @@ func (e *Glob) invert() *Glob {
 
 func (e *Glob) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if !e.IsNot {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"string_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM string_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value GLOB ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			e.Value,
 		)
 	} else {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"string_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM string_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value NOT GLOB ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			e.Value,
 		)
@@ -555,54 +599,30 @@ func (e *LessThan) invert() *GreaterOrEqualThan {
 
 func (e *LessThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"string_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM string_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value < ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM numeric_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value < ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.Number,
 		)
@@ -623,54 +643,30 @@ func (e *LessOrEqualThan) invert() *GreaterThan {
 
 func (e *LessOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"string_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM string_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value <= ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM numeric_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value <= ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.Number,
 		)
@@ -691,54 +687,30 @@ func (e *GreaterThan) invert() *LessOrEqualThan {
 
 func (e *GreaterThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"string_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM string_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value > ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM numeric_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value > ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.Number,
 		)
@@ -759,54 +731,30 @@ func (e *GreaterOrEqualThan) invert() *LessThan {
 
 func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"string_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM string_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value >= ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			blockNumber,
 			strings.Join(
 				[]string{
-					"SELECT DISTINCT a.entity_key",
-					"FROM numeric_annotations AS a INNER JOIN entities AS e",
-					"ON a.entity_key = e.key",
-					"AND e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"WHERE annotation_key = ?",
+					"annotation_key = ?",
 					"AND value >= ?",
 				},
 				" ",
 			),
-			blockNumber,
-			blockNumber,
 			e.Var,
 			*e.Value.Number,
 		)
@@ -815,8 +763,19 @@ func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) strin
 
 // Ownership represents an ownership query, $owner = 0x....
 type Ownership struct {
-	IsNot bool   `parser:"Owner (Eq | @Neq)"`
-	Owner string `parser:"@String"`
+	IsNot bool `parser:"Owner (Eq | @Neq)"`
+	//Owner string `parser:"@Address | \"@Address\""`
+	Owner string `parser:"@Address"`
+}
+
+type KeyEquality struct {
+	IsNot bool   `parser:"Key (Eq | @Neq)"`
+	Key   string `parser:"@EntityKey"`
+}
+
+type ExpirationEquality struct {
+	IsNot      bool   `parser:"Expiration (Eq | @Neq)"`
+	Expiration uint64 `parser:"@Number"`
 }
 
 func (e *Ownership) invert() *Ownership {
@@ -826,57 +785,77 @@ func (e *Ownership) invert() *Ownership {
 	}
 }
 
+func (e *KeyEquality) invert() *KeyEquality {
+	return &KeyEquality{
+		IsNot: !e.IsNot,
+		Key:   e.Key,
+	}
+}
+
+func (e *ExpirationEquality) invert() *ExpirationEquality {
+	return &ExpirationEquality{
+		IsNot:      !e.IsNot,
+		Expiration: e.Expiration,
+	}
+}
+func (b *QueryBuilder) createEntityQuery(
+	blockNumber uint64,
+	whereClause string,
+	arguments ...any,
+) string {
+	args := make([]any, 0, len(arguments)+2)
+	args = append(args, blockNumber, blockNumber)
+	args = append(args, arguments...)
+
+	return b.createLeafQuery(
+		strings.Join(
+			[]string{
+				"SELECT DISTINCT ",
+				COLUMNS,
+				"FROM entities AS e",
+				"WHERE e.deleted = FALSE",
+				"AND e.last_modified_at_block <= ?",
+				"AND NOT EXISTS (",
+				"SELECT 1",
+				"FROM entities AS e2",
+				"WHERE e2.key = e.key",
+				"AND e2.last_modified_at_block > e.last_modified_at_block",
+				"AND e2.last_modified_at_block <= ?",
+				")",
+				"AND",
+				whereClause,
+			},
+			" ",
+		),
+		args...,
+	)
+}
+
 func (e *Ownership) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	var address = common.Address{}
 	if common.IsHexAddress(e.Owner) {
 		address = common.HexToAddress(e.Owner)
 	}
 	if !e.IsNot {
-		return b.createLeafQuery(
-			strings.Join(
-				[]string{
-					"SELECT DISTINCT e.key AS entity_key",
-					"FROM entities AS e",
-					"WHERE e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"AND e.owner_address = ?",
-				},
-				" ",
-			),
-			blockNumber,
-			blockNumber,
-			address.Hex(),
-		)
+		return b.createEntityQuery(blockNumber, "e.owner_address = ?", address.Hex())
 	} else {
-		return b.createLeafQuery(
-			strings.Join(
-				[]string{
-					"SELECT DISTINCT e.key AS entity_key",
-					"FROM entities AS e",
-					"WHERE e.deleted = FALSE",
-					"AND e.last_modified_at_block <= ?",
-					"AND NOT EXISTS (",
-					"SELECT 1",
-					"FROM entities AS e2",
-					"WHERE e2.key = e.key",
-					"AND e2.last_modified_at_block > e.last_modified_at_block",
-					"AND e2.last_modified_at_block <= ?",
-					")",
-					"AND e.owner_address != ?",
-				},
-				" ",
-			),
-			blockNumber,
-			blockNumber,
-			address.Hex(),
-		)
+		return b.createEntityQuery(blockNumber, "e.owner_address != ?", address.Hex())
+	}
+}
+func (e *KeyEquality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+	key := common.HexToHash(e.Key)
+	if !e.IsNot {
+		return b.createEntityQuery(blockNumber, "e.key = ?", key.Hex())
+	} else {
+		return b.createEntityQuery(blockNumber, "e.key != ?", key.Hex())
+	}
+}
+
+func (e *ExpirationEquality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+	if !e.IsNot {
+		return b.createEntityQuery(blockNumber, "e.expires_at = ?", e.Expiration)
+	} else {
+		return b.createEntityQuery(blockNumber, "e.expires_at != ?", e.Expiration)
 	}
 }
 
@@ -898,108 +877,60 @@ func (e *Equality) invert() *Equality {
 func (e *Equality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	if !e.IsNot {
 		if e.Value.String != nil {
-			return b.createLeafQuery(
+			return b.createAnnotationQuery(
+				"string_annotations",
+				blockNumber,
 				strings.Join(
 					[]string{
-						"SELECT DISTINCT a.entity_key",
-						"FROM string_annotations AS a INNER JOIN entities AS e",
-						"ON a.entity_key = e.key",
-						"AND e.deleted = FALSE",
-						"AND e.last_modified_at_block <= ?",
-						"AND NOT EXISTS (",
-						"SELECT 1",
-						"FROM entities AS e2",
-						"WHERE e2.key = e.key",
-						"AND e2.last_modified_at_block > e.last_modified_at_block",
-						"AND e2.last_modified_at_block <= ?",
-						")",
-						"WHERE annotation_key = ?",
+						"annotation_key = ?",
 						"AND value = ?",
 					},
 					" ",
 				),
-				blockNumber,
-				blockNumber,
 				e.Var,
 				*e.Value.String,
 			)
 		} else {
-			return b.createLeafQuery(
+			return b.createAnnotationQuery(
+				"numeric_annotations",
+				blockNumber,
 				strings.Join(
 					[]string{
-						"SELECT DISTINCT a.entity_key",
-						"FROM numeric_annotations AS a INNER JOIN entities AS e",
-						"ON a.entity_key = e.key",
-						"AND e.deleted = FALSE",
-						"AND e.last_modified_at_block <= ?",
-						"AND NOT EXISTS (",
-						"SELECT 1",
-						"FROM entities AS e2",
-						"WHERE e2.key = e.key",
-						"AND e2.last_modified_at_block > e.last_modified_at_block",
-						"AND e2.last_modified_at_block <= ?",
-						")",
-						"WHERE annotation_key = ?",
+						"annotation_key = ?",
 						"AND value = ?",
 					},
 					" ",
 				),
-				blockNumber,
-				blockNumber,
 				e.Var,
 				*e.Value.Number,
 			)
 		}
 	} else {
 		if e.Value.String != nil {
-			return b.createLeafQuery(
+			return b.createAnnotationQuery(
+				"string_annotations",
+				blockNumber,
 				strings.Join(
 					[]string{
-						"SELECT DISTINCT a.entity_key",
-						"FROM string_annotations AS a INNER JOIN entities AS e",
-						"ON a.entity_key = e.key",
-						"AND e.deleted = FALSE",
-						"AND e.last_modified_at_block <= ?",
-						"AND NOT EXISTS (",
-						"SELECT 1",
-						"FROM entities AS e2",
-						"WHERE e2.key = e.key",
-						"AND e2.last_modified_at_block > e.last_modified_at_block",
-						"AND e2.last_modified_at_block <= ?",
-						")",
-						"WHERE annotation_key = ?",
+						"annotation_key = ?",
 						"AND value != ?",
 					},
 					" ",
 				),
-				blockNumber,
-				blockNumber,
 				e.Var,
 				*e.Value.String,
 			)
 		} else {
-			return b.createLeafQuery(
+			return b.createAnnotationQuery(
+				"numeric_annotations",
+				blockNumber,
 				strings.Join(
 					[]string{
-						"SELECT DISTINCT a.entity_key",
-						"FROM numeric_annotations AS a INNER JOIN entities AS e",
-						"ON a.entity_key = e.key",
-						"AND e.deleted = FALSE",
-						"AND e.last_modified_at_block <= ?",
-						"AND NOT EXISTS (",
-						"SELECT 1",
-						"FROM entities AS e2",
-						"WHERE e2.key = e.key",
-						"AND e2.last_modified_at_block > e.last_modified_at_block",
-						"AND e2.last_modified_at_block <= ?",
-						")",
-						"WHERE annotation_key = ?",
+						"annotation_key = ?",
 						"AND value != ?",
 					},
 					" ",
 				),
-				blockNumber,
-				blockNumber,
 				e.Var,
 				*e.Value.Number,
 			)
@@ -1020,7 +951,7 @@ var Parser = participle.MustBuild[Expression](
 )
 
 func Parse(s string) (*Expression, error) {
-	log.Debug("Parsing query", "query", s)
+	log.Info("Parsing query", "query", s)
 
 	v, err := Parser.ParseString("", s)
 	if err != nil {
