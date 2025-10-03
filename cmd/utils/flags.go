@@ -2496,6 +2496,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			block,
 			config.ChainID,
 			receipts,
+			nil,
 		)
 	})
 	if err != nil {

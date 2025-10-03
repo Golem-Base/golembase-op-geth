@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"encoding/hex"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/hasher"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/log"
@@ -59,7 +62,8 @@ type ExtendBTL struct {
 
 // SQLStore encapsulates the SQLite SQLStore functionality
 type SQLStore struct {
-	db *sql.DB
+	db     *sql.DB
+	hasher *hasher.SimpleMerkleTree
 }
 
 // NewStore creates a new ETL instance with database connection and schema setup
@@ -70,7 +74,9 @@ func NewStore(dbFile string) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL", dbFile))
+	//db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL", dbFile))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=rwc", dbFile))
+	log.Info("opened database", "dbFile", dbFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -97,7 +103,11 @@ func NewStore(dbFile string) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to check schema: %w", err)
 	}
 
-	return &SQLStore{db: db}, nil
+	hasher := hasher.NewSimpleMerkleTree(4096, dbFile)
+	hasher.Build()
+	log.Info("hasher", "root", hex.EncodeToString(hasher.Root()))
+
+	return &SQLStore{db: db, hasher: hasher}, nil
 }
 
 // Close closes the database connection

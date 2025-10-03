@@ -2,14 +2,18 @@ package sqlstore
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/fuse"
+	"github.com/ethereum/go-ethereum/golem-base/hasher"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
@@ -25,6 +29,7 @@ func WriteLogForBlockSqlite(
 	block *types.Block,
 	chainID *big.Int,
 	receipts []*types.Receipt,
+	fuseDriver *fuse.FuseDriver,
 ) (err error) {
 
 	ctx := context.Background()
@@ -299,6 +304,17 @@ func WriteLogForBlockSqlite(
 	if err != nil {
 		return fmt.Errorf("failed to insert block: %w", err)
 	}
+
+	// measure the time it takes to process the events
+	start := time.Now()
+	hasher.ProcessEvents(fuseDriver.GetEvents(true), sqlStore.hasher)
+	log.Info("hasher after update", "root", hex.EncodeToString(sqlStore.hasher.Root()))
+	log.Info("time taken to process events", "time", time.Since(start))
+
+	start = time.Now()
+	sqlStore.hasher.Build()
+	log.Info("hasher from scratch", "root", hex.EncodeToString(sqlStore.hasher.Root()))
+	log.Info("time taken to build hasher from scratch", "time", time.Since(start))
 
 	return nil
 }

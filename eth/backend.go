@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -50,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/golem-base/fuse"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/sequencerapi"
@@ -111,6 +114,10 @@ type Ethereum struct {
 	// OP-Stack additions
 	seqRPCService        *rpc.Client
 	historicalRPCService *rpc.Client
+
+	// Arkiv additions
+	sqlStore   *sqlstore.SQLStore
+	fuseDriver *fuse.FuseDriver
 
 	interopRPC *interop.InteropClient
 
@@ -271,15 +278,42 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
 	sqlStateFile := stack.Config().GolemBaseSQLStateFile
+	sqlFinalStateFile := stack.Config().GolemBaseSQLStateFile
+
+	if err := os.MkdirAll(filepath.Dir(sqlStateFile), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create source directory: %w", err)
+	}
 
 	if sqlStateFile == "" {
 		sqlStateFile = ":memory:"
+	} else {
+		fuseMountPoint := "/tmp/golem_fuse"
+		log.Info("Creating FUSE filesystem", "path", fuseMountPoint)
+		config := &fuse.Config{
+			MountPoint: fuseMountPoint,
+			SourceDir:  filepath.Dir(sqlStateFile),
+			TargetFile: filepath.Base(sqlStateFile),
+		}
+		// if err := os.MkdirAll(config.MountPoint, 0755); err != nil {
+		// 	return nil, fmt.Errorf("failed to create source directory: %w", err)
+		// }
+		fd, err := fuse.Mount(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to mount FUSE filesystem: %w", err)
+		}
+		eth.fuseDriver = fd
+		log.Info("FUSE filesystem mounted successfully", "mountPoint", config.MountPoint)
+		sqlFinalStateFile = filepath.Join(config.MountPoint, filepath.Base(sqlStateFile))
 	}
 
+	log.Info("Creating SQLStore DB", "path", sqlFinalStateFile)
 	st, err := sqlstore.NewStore(
-		stack.Config().GolemBaseSQLStateFile,
+		sqlFinalStateFile,
 	)
+	eth.sqlStore = st
 	if err != nil {
+		log.Error("Failed to create SQLStore", "error", err)
+		time.Sleep(120 * time.Second)
 		return nil, fmt.Errorf("failed to create SQLStore: %w", err)
 	}
 
@@ -294,6 +328,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			block,
 			chainID,
 			receipts,
+			eth.fuseDriver,
 		)
 	}
 
@@ -665,6 +700,10 @@ func (s *Ethereum) Stop() error {
 
 	s.chainDb.Close()
 	s.eventMux.Stop()
+
+	// Arkiv additions
+	s.sqlStore.Close()
+	s.fuseDriver.Unmount()
 
 	return nil
 }
