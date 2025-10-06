@@ -33,7 +33,6 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 		return nil, err
 	}
 	return payload, nil
-
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {

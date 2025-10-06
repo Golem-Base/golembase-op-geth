@@ -4,6 +4,10 @@
 
 package sqlitegolem
 
+import (
+	"database/sql"
+)
+
 type Entity struct {
 	Key                         string
 	ExpiresAt                   int64
@@ -25,6 +29,11 @@ type ProcessingStatus struct {
 	Network                  string
 	LastProcessedBlockNumber int64
 	LastProcessedBlockHash   string
+}
+
+type SchemaVersion struct {
+	Entities    sql.NullInt64
+	Annotations sql.NullInt64
 }
 
 type StringAnnotation struct {

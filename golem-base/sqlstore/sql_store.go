@@ -17,6 +17,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const entitiesSchemaVersion = uint64(1)
+
 type BlockWal struct {
 	BlockInfo  BlockInfo
 	Operations []Operation
@@ -83,26 +85,103 @@ func NewStore(dbFile string) (*SQLStore, error) {
 
 	// Check if schema exists and apply if needed
 	ctx := context.Background()
+
+	// Check if schema is up to date
+	readVersions := true
+	entitiesVersion := uint64(0)
+
 	var tableName string
 	err = db.QueryRowContext(ctx, `
 		SELECT name FROM sqlite_master
-		WHERE type='table' AND name='entities';
+		WHERE type='table' AND name='schema_versions';
 	`).Scan(&tableName)
 
 	switch err {
 	case sql.ErrNoRows:
-		err = sqlitegolem.ApplySchema(ctx, db)
-		if err != nil {
-			db.Close()
-			return nil, err
-		}
+		// In version 0, we didn't have the schema_versions table yet
+		entitiesVersion = 0
+		readVersions = false
+		log.Warn("arkiv: no schema version info found, table missing")
 	case nil:
-		// schema exists, do nothing
+		// The schema exists, we can read the versions from it
 	default:
+		// We got another error
 		db.Close()
 		return nil, fmt.Errorf("failed to check schema: %w", err)
 	}
 
+	if readVersions {
+		err = db.QueryRowContext(
+			ctx,
+			`SELECT entities FROM schema_versions WHERE id = 1;`,
+		).Scan(&entitiesVersion)
+
+		switch err {
+		case sql.ErrNoRows:
+			entitiesVersion = 0
+			log.Warn("arkiv: no schema version info found, table empty", "error", err)
+		case nil:
+			// We read the versions, all good
+			log.Info("arkiv: schema versions read from database", "entities", entitiesVersion)
+		default:
+			db.Close()
+			return nil, fmt.Errorf("failed to check schema: %w", err)
+		}
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if entitiesVersion != entitiesSchemaVersion {
+		log.Warn(
+			"arkiv: entities table has an outdated schema, dropping tables",
+			"existingVersion", entitiesVersion,
+			"requiredVersion", entitiesSchemaVersion,
+		)
+		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS entities;`)
+		if err != nil {
+			tx.Rollback()
+			db.Close()
+			return nil, fmt.Errorf("failed to recreate schema: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS string_annotations;`)
+		if err != nil {
+			tx.Rollback()
+			db.Close()
+			return nil, fmt.Errorf("failed to recreate schema: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS numeric_annotations;`)
+		if err != nil {
+			tx.Rollback()
+			db.Close()
+			return nil, fmt.Errorf("failed to recreate schema: %w", err)
+		}
+	}
+
+	log.Info("arkiv: applying database schema")
+	err = sqlitegolem.ApplySchemaTx(ctx, tx)
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("failed to recreate schema: %w", err)
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		`INSERT OR REPLACE INTO schema_versions (id, entities) VALUES (1, ?);`,
+		entitiesSchemaVersion)
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("failed to update schema versions: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("failed to recreate schema: %w", err)
+	}
+
+	log.Info("arkiv: database ready", "entitySchemaVersion", entitiesSchemaVersion)
 	return &SQLStore{db: db}, nil
 }
 
