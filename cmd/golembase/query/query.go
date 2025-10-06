@@ -58,7 +58,7 @@ func Query() *cli.Command {
 				query,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+				return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 			}
 
 			for _, r := range res {

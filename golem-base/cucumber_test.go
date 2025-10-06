@@ -143,6 +143,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the payload of the entity should be changed$`, thePayloadOfTheEntityShouldBeChanged)
 	ctx.Step(`^I submit a transaction to update the entity, changing the annotations$`, iSubmitATransactionToUpdateTheEntityChangingTheAnnotations)
 	ctx.Step(`^the annotations of the entity should be changed$`, theAnnotationsOfTheEntityShouldBeChanged)
+	ctx.Step(`^the annotations of the entity at the previous block should not be changed$`, theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged)
 	ctx.Step(`^I submit a transaction to update the entity, changing the btl of the entity$`, iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity)
 	ctx.Step(`^the btl of the entity should be changed$`, theBtlOfTheEntityShouldBeChanged)
 	ctx.Step(`^submit a transaction to create an entity of (\d+)K$`, submitATransactionToCreateAnEntityOfK)
@@ -441,7 +442,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 		"test_number",
 		42,
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
 	if len(keys) != 1 {
@@ -460,7 +461,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 		"test_number = 42",
 		struct{}{},
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
 	if len(entities) != 1 {
@@ -561,7 +562,7 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 		"golembase_queryEntities",
 		fmt.Sprintf(`%s="%s"`, key, value),
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 	w.SearchResult = res
 
@@ -573,7 +574,7 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 		fmt.Sprintf(`%s="%s"`, key, value),
 		struct{}{},
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 	w.ArkivSearchResult = res2
 
@@ -641,7 +642,7 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 		"golembase_queryEntities",
 		fmt.Sprintf(`%s=%d`, key, value),
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 	w.SearchResult = res
 
@@ -653,7 +654,7 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 		fmt.Sprintf(`%s=%d`, key, value),
 		struct{}{},
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 	w.ArkivSearchResult = res2
 
@@ -834,7 +835,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 		"golembase_queryEntities",
 		`test_key1="test_value1" && test_number1=43`,
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
 	if len(res) == 0 {
@@ -853,7 +854,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 		`test_key1="test_value1" && test_number1=43`,
 		struct{}{},
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
 	if len(res2) == 0 {
@@ -862,6 +863,46 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	if res2[0].Key != w.CreatedEntityKey {
 		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), res2[0].Key.Hex())
+	}
+
+	return nil
+}
+
+func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
+
+	res := []golemtype.SearchResult{}
+
+	block, err := w.GethInstance.ETHClient.BlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get block number: %w", err)
+	}
+
+	if err := rpcClient.CallContext(
+		ctx,
+		&res,
+		"arkiv_queryEntities",
+		`test_key = "test_value" && test_number=42`,
+		struct {
+			AtBlock uint64 `json:"at_block"`
+		}{
+			AtBlock: block - 1,
+		},
+	); err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
+	}
+
+	if len(res) == 0 {
+		return fmt.Errorf("could not find any result when searching by new annotations")
+	}
+
+	if res[0].Key != w.CreatedEntityKey {
+		return fmt.Errorf(
+			"expected entity hash %s but got %s",
+			w.CreatedEntityKey.Hex(),
+			res[0].Key.Hex(),
+		)
 	}
 
 	return nil
@@ -994,7 +1035,7 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 		"golembase_queryEntities",
 		queryDoc.Content,
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 	w.SearchResult = res
 
@@ -1006,7 +1047,7 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 		queryDoc.Content,
 		struct{}{},
 	); err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 	w.ArkivSearchResult = res2
 
@@ -1704,7 +1745,6 @@ func theTraceShouldBeEmpty(ctx context.Context) error {
 
 	t := trace{}
 
-	fmt.Println(string(w.LastTrace))
 	err := json.Unmarshal(w.LastTrace, &t)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal trace: %w", err)
