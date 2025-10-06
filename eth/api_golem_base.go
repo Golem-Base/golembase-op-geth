@@ -72,7 +72,14 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 	return entities, nil
 }
 
-func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
+func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string, selector *golemtype.Selector) ([]golemtype.SearchResult, error) {
+	// If selector is null, return everything (all selector flags)
+	var sel golemtype.Selector
+	if selector == nil {
+		sel = golemtype.SelectorAll
+	} else {
+		sel = *selector
+	}
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -89,14 +96,33 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 	searchResults := make([]golemtype.SearchResult, 0)
 
 	for _, key := range entities {
-		v, err := api.GetStorageValue(ctx, key)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get storage value for key %s: %w", key.Hex(), err)
+		result := golemtype.SearchResult{
+			Key: key,
 		}
-		searchResults = append(searchResults, golemtype.SearchResult{
-			Key:   key,
-			Value: v,
-		})
+
+		if sel&golemtype.SelectorValue != 0 {
+			v, err := api.GetStorageValue(ctx, key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get storage value for key %s: %w", key.Hex(), err)
+			}
+			result.Value = &v
+		}
+
+		if sel&golemtype.SelectorMetadata != 0 {
+			metadata, err := api.GetEntityMetaData(ctx, key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get entity metadata for key %s: %w", key.Hex(), err)
+			}
+			result.Metadata = metadata
+		}
+
+		if sel&golemtype.SelectorAttributes != 0 {
+			// For now, we'll leave this as nil since there's no specific attributes method
+			// This can be extended later when attributes functionality is implemented
+			result.Attributes = nil
+		}
+
+		searchResults = append(searchResults, result)
 	}
 
 	return searchResults, nil

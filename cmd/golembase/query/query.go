@@ -64,7 +64,7 @@ func Query() *cli.Command {
 			for _, r := range res {
 				fmt.Println(r.Key)
 				if !cfg.NoData {
-					fmt.Println("  payload:", string(r.Value))
+					fmt.Println("  payload:", string(*r.Value))
 				}
 			}
 
