@@ -12,15 +12,26 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
-var COLUMNS string = strings.Join(
-	[]string{
-		"key",
-		"payload",
-		"expires_at",
-		"owner_address",
-	},
-	", ",
-)
+var COLUMNS []string = []string{
+	"key",
+	"payload",
+	"expires_at",
+	"owner_address",
+}
+
+type QueryOptions struct {
+	AtBlock            uint64   `json:"at_block"`
+	IncludeAnnotations bool     `json:"include_annotations"`
+	Columns            []string `json:"columns"`
+}
+
+func (opts *QueryOptions) columnString() string {
+	columns := opts.Columns
+	if len(columns) == 0 {
+		columns = COLUMNS
+	}
+	return strings.Join(columns, ", ")
+}
 
 // Define the lexer with distinct tokens for each operator and parentheses.
 var lex = lexer.MustSimple([]lexer.SimpleRule{
@@ -50,8 +61,9 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 })
 
 type SelectQuery struct {
-	Query string
-	Args  []any
+	Query   string
+	Args    []any
+	Columns []string
 }
 
 type QueryBuilder struct {
@@ -59,6 +71,7 @@ type QueryBuilder struct {
 	args         []any
 	needsComma   bool
 	tableCounter uint64
+	options      QueryOptions
 }
 
 func (b *QueryBuilder) nextTableName() string {
@@ -126,27 +139,29 @@ func (e *Expression) invert() *Expression {
 	}
 }
 
-func (e *Expression) Evaluate(blockNumber uint64) *SelectQuery {
+func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
 	tableBuilder := strings.Builder{}
 	args := []any{}
 
 	tableBuilder.WriteString("WITH ")
 
 	builder := QueryBuilder{
+		options:      options,
 		tableBuilder: &tableBuilder,
 		args:         args,
 		needsComma:   false,
 	}
 
-	tableName := e.Or.Evaluate(&builder, blockNumber)
+	tableName := e.Or.Evaluate(&builder)
 
 	tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
 	tableBuilder.WriteString(tableName)
 	tableBuilder.WriteString(" ORDER BY 1")
 
 	return &SelectQuery{
-		Query: tableBuilder.String(),
-		Args:  builder.args,
+		Query:   tableBuilder.String(),
+		Args:    builder.args,
+		Columns: options.Columns,
 	}
 }
 
@@ -197,12 +212,12 @@ func (e *OrExpression) invert() *AndExpression {
 	}
 }
 
-func (e *OrExpression) Evaluate(b *QueryBuilder, blockNumber uint64) string {
-	leftTable := e.Left.Evaluate(b, blockNumber)
+func (e *OrExpression) Evaluate(b *QueryBuilder) string {
+	leftTable := e.Left.Evaluate(b)
 	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b, blockNumber)
+		rightTable := rhs.Evaluate(b)
 		tableName = b.nextTableName()
 
 		b.writeComma()
@@ -247,8 +262,8 @@ func (e *OrRHS) invert() *AndRHS {
 	}
 }
 
-func (e *OrRHS) Evaluate(b *QueryBuilder, blockNumber uint64) string {
-	return e.Expr.Evaluate(b, blockNumber)
+func (e *OrRHS) Evaluate(b *QueryBuilder) string {
+	return e.Expr.Evaluate(b)
 }
 
 // AndExpression handles expressions connected with &&.
@@ -293,12 +308,12 @@ func (e *AndExpression) invert() *OrExpression {
 	}
 }
 
-func (e *AndExpression) Evaluate(b *QueryBuilder, blockNumber uint64) string {
-	leftTable := e.Left.Evaluate(b, blockNumber)
+func (e *AndExpression) Evaluate(b *QueryBuilder) string {
+	leftTable := e.Left.Evaluate(b)
 	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b, blockNumber)
+		rightTable := rhs.Evaluate(b)
 		tableName = b.nextTableName()
 
 		b.writeComma()
@@ -338,8 +353,8 @@ func (e *AndRHS) invert() *OrRHS {
 	}
 }
 
-func (e *AndRHS) Evaluate(b *QueryBuilder, blockNumber uint64) string {
-	return e.Expr.Evaluate(b, blockNumber)
+func (e *AndRHS) Evaluate(b *QueryBuilder) string {
+	return e.Expr.Evaluate(b)
 }
 
 // EqualExpr can be either an equality or a parenthesized expression.
@@ -422,45 +437,45 @@ func (e *EqualExpr) invert() *EqualExpr {
 	panic("This should not happen!")
 }
 
-func (e *EqualExpr) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 	if e.Paren != nil {
-		return e.Paren.Evaluate(b, blockNumber)
+		return e.Paren.Evaluate(b)
 	}
 
 	if e.Owner != nil {
-		return e.Owner.Evaluate(b, blockNumber)
+		return e.Owner.Evaluate(b)
 	}
 
 	if e.KeyEq != nil {
-		return e.KeyEq.Evaluate(b, blockNumber)
+		return e.KeyEq.Evaluate(b)
 	}
 
 	if e.ExpirationEq != nil {
-		return e.ExpirationEq.Evaluate(b, blockNumber)
+		return e.ExpirationEq.Evaluate(b)
 	}
 
 	if e.LessThan != nil {
-		return e.LessThan.Evaluate(b, blockNumber)
+		return e.LessThan.Evaluate(b)
 	}
 
 	if e.LessOrEqualThan != nil {
-		return e.LessOrEqualThan.Evaluate(b, blockNumber)
+		return e.LessOrEqualThan.Evaluate(b)
 	}
 
 	if e.GreaterThan != nil {
-		return e.GreaterThan.Evaluate(b, blockNumber)
+		return e.GreaterThan.Evaluate(b)
 	}
 
 	if e.GreaterOrEqualThan != nil {
-		return e.GreaterOrEqualThan.Evaluate(b, blockNumber)
+		return e.GreaterOrEqualThan.Evaluate(b)
 	}
 
 	if e.Glob != nil {
-		return e.Glob.Evaluate(b, blockNumber)
+		return e.Glob.Evaluate(b)
 	}
 
 	if e.Assign != nil {
-		return e.Assign.Evaluate(b, blockNumber)
+		return e.Assign.Evaluate(b)
 	}
 
 	panic("This should not happen!")
@@ -491,7 +506,7 @@ func (e *Paren) invert() *Paren {
 	}
 }
 
-func (e *Paren) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *Paren) Evaluate(b *QueryBuilder) string {
 	expr := e.Nested
 	// If we have a negation, we will push it down into the expression
 	if e.IsNot {
@@ -499,28 +514,28 @@ func (e *Paren) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	}
 	// We don't have to do anything here regarding precedence, the parsing order
 	// is already taking care of precedence since the nested OR node will create a subquery
-	return expr.Or.Evaluate(b, blockNumber)
+	return expr.Or.Evaluate(b)
 }
 
 func (b *QueryBuilder) createAnnotationQuery(
 	tableName string,
-	blockNumber uint64,
 	whereClause string,
 	arguments ...any,
 ) string {
 	args := make([]any, 0, len(arguments)+2)
-	args = append(args, blockNumber, blockNumber)
+	args = append(args, b.options.AtBlock, b.options.AtBlock)
 	args = append(args, arguments...)
 
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
-				"SELECT DISTINCT ",
-				COLUMNS,
+				"SELECT DISTINCT",
+				b.options.columnString(),
 				"FROM",
 				tableName,
 				"AS a INNER JOIN entities AS e",
 				"ON a.entity_key = e.key",
+				"AND a.entity_last_modified_at_block = e.last_modified_at_block",
 				"AND e.deleted = FALSE",
 				"AND e.last_modified_at_block <= ?",
 				"AND NOT EXISTS (",
@@ -553,11 +568,10 @@ func (e *Glob) invert() *Glob {
 	}
 }
 
-func (e *Glob) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *Glob) Evaluate(b *QueryBuilder) string {
 	if !e.IsNot {
 		return b.createAnnotationQuery(
 			"string_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -571,7 +585,6 @@ func (e *Glob) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	} else {
 		return b.createAnnotationQuery(
 			"string_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -597,11 +610,10 @@ func (e *LessThan) invert() *GreaterOrEqualThan {
 	}
 }
 
-func (e *LessThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *LessThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -615,7 +627,6 @@ func (e *LessThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	} else {
 		return b.createAnnotationQuery(
 			"numeric_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -641,11 +652,10 @@ func (e *LessOrEqualThan) invert() *GreaterThan {
 	}
 }
 
-func (e *LessOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -659,7 +669,6 @@ func (e *LessOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	} else {
 		return b.createAnnotationQuery(
 			"numeric_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -685,11 +694,10 @@ func (e *GreaterThan) invert() *LessOrEqualThan {
 	}
 }
 
-func (e *GreaterThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -703,7 +711,6 @@ func (e *GreaterThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 	} else {
 		return b.createAnnotationQuery(
 			"numeric_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -729,11 +736,10 @@ func (e *GreaterOrEqualThan) invert() *LessThan {
 	}
 }
 
-func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -747,7 +753,6 @@ func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder, blockNumber uint64) strin
 	} else {
 		return b.createAnnotationQuery(
 			"numeric_annotations",
-			blockNumber,
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -799,19 +804,18 @@ func (e *ExpirationEquality) invert() *ExpirationEquality {
 	}
 }
 func (b *QueryBuilder) createEntityQuery(
-	blockNumber uint64,
 	whereClause string,
 	arguments ...any,
 ) string {
 	args := make([]any, 0, len(arguments)+2)
-	args = append(args, blockNumber, blockNumber)
+	args = append(args, b.options.AtBlock, b.options.AtBlock)
 	args = append(args, arguments...)
 
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
-				"SELECT DISTINCT ",
-				COLUMNS,
+				"SELECT DISTINCT",
+				b.options.columnString(),
 				"FROM entities AS e",
 				"WHERE e.deleted = FALSE",
 				"AND e.last_modified_at_block <= ?",
@@ -831,31 +835,31 @@ func (b *QueryBuilder) createEntityQuery(
 	)
 }
 
-func (e *Ownership) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *Ownership) Evaluate(b *QueryBuilder) string {
 	var address = common.Address{}
 	if common.IsHexAddress(e.Owner) {
 		address = common.HexToAddress(e.Owner)
 	}
 	if !e.IsNot {
-		return b.createEntityQuery(blockNumber, "e.owner_address = ?", address.Hex())
+		return b.createEntityQuery("e.owner_address = ?", address.Hex())
 	} else {
-		return b.createEntityQuery(blockNumber, "e.owner_address != ?", address.Hex())
+		return b.createEntityQuery("e.owner_address != ?", address.Hex())
 	}
 }
-func (e *KeyEquality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *KeyEquality) Evaluate(b *QueryBuilder) string {
 	key := common.HexToHash(e.Key)
 	if !e.IsNot {
-		return b.createEntityQuery(blockNumber, "e.key = ?", key.Hex())
+		return b.createEntityQuery("e.key = ?", key.Hex())
 	} else {
-		return b.createEntityQuery(blockNumber, "e.key != ?", key.Hex())
+		return b.createEntityQuery("e.key != ?", key.Hex())
 	}
 }
 
-func (e *ExpirationEquality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *ExpirationEquality) Evaluate(b *QueryBuilder) string {
 	if !e.IsNot {
-		return b.createEntityQuery(blockNumber, "e.expires_at = ?", e.Expiration)
+		return b.createEntityQuery("e.expires_at = ?", e.Expiration)
 	} else {
-		return b.createEntityQuery(blockNumber, "e.expires_at != ?", e.Expiration)
+		return b.createEntityQuery("e.expires_at != ?", e.Expiration)
 	}
 }
 
@@ -874,16 +878,15 @@ func (e *Equality) invert() *Equality {
 	}
 }
 
-func (e *Equality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
+func (e *Equality) Evaluate(b *QueryBuilder) string {
 	if !e.IsNot {
 		if e.Value.String != nil {
 			return b.createAnnotationQuery(
 				"string_annotations",
-				blockNumber,
 				strings.Join(
 					[]string{
-						"annotation_key = ?",
-						"AND value = ?",
+						"a.annotation_key = ?",
+						"AND a.value = ?",
 					},
 					" ",
 				),
@@ -893,11 +896,10 @@ func (e *Equality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 		} else {
 			return b.createAnnotationQuery(
 				"numeric_annotations",
-				blockNumber,
 				strings.Join(
 					[]string{
-						"annotation_key = ?",
-						"AND value = ?",
+						"a.annotation_key = ?",
+						"AND a.value = ?",
 					},
 					" ",
 				),
@@ -909,11 +911,10 @@ func (e *Equality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 		if e.Value.String != nil {
 			return b.createAnnotationQuery(
 				"string_annotations",
-				blockNumber,
 				strings.Join(
 					[]string{
-						"annotation_key = ?",
-						"AND value != ?",
+						"a.annotation_key = ?",
+						"AND a.value != ?",
 					},
 					" ",
 				),
@@ -923,11 +924,10 @@ func (e *Equality) Evaluate(b *QueryBuilder, blockNumber uint64) string {
 		} else {
 			return b.createAnnotationQuery(
 				"numeric_annotations",
-				blockNumber,
 				strings.Join(
 					[]string{
-						"annotation_key = ?",
-						"AND value != ?",
+						"a.annotation_key = ?",
+						"AND a.value != ?",
 					},
 					" ",
 				),

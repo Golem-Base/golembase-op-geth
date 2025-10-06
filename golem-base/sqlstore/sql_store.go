@@ -18,7 +18,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const entitiesSchemaVersion = uint64(1)
+const entitiesSchemaVersion = uint64(2)
 
 type BlockWal struct {
 	BlockInfo  BlockInfo
@@ -691,7 +691,12 @@ func (e *SQLStore) QueryEntityKeys(ctx context.Context, query string, args ...an
 	return keys, nil
 }
 
-func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any) ([]arkivtype.SearchResult, error) {
+func (e *SQLStore) QueryEntities(
+	ctx context.Context,
+	query string,
+	args []any,
+	columns []string,
+) ([]arkivtype.SearchResult, error) {
 	log.Info("Executing query", "query", query, "args", args)
 
 	rows, err := e.db.QueryContext(ctx, query, args...)
@@ -700,25 +705,70 @@ func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any)
 	}
 	defer rows.Close()
 
-	keys := []arkivtype.SearchResult{}
-	var key string
-	var payload []byte
-	var expiresAt uint64
-	var ownerAddress string
+	results := make([]arkivtype.SearchResult, 0)
 	for rows.Next() {
-		if err := rows.Scan(&key, &payload, &expiresAt, &ownerAddress); err != nil {
+
+		result := struct {
+			key       *string
+			expiresAt *uint64
+			payload   *[]byte
+			owner     *string
+		}{}
+		dest := []any{}
+		for _, column := range columns {
+			switch column {
+			case "key":
+				var key string
+				result.key = &key
+				dest = append(dest, result.key)
+			case "expires_at":
+				var expiration uint64
+				result.expiresAt = &expiration
+				dest = append(dest, result.expiresAt)
+			case "payload":
+				var payload []byte
+				result.payload = &payload
+				dest = append(dest, result.payload)
+			case "owner_address":
+				var owner string
+				result.owner = &owner
+				dest = append(dest, result.owner)
+			}
+		}
+
+		if err := rows.Scan(dest...); err != nil {
 			return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
 		}
-		keys = append(keys, arkivtype.SearchResult{
-			Key:       common.HexToHash(key),
-			Value:     payload,
+
+		key := common.Hash{}
+		if result.key != nil {
+			key = common.HexToHash(*result.key)
+		}
+		expiresAt := uint64(0)
+		if result.expiresAt != nil {
+			expiresAt = *result.expiresAt
+		}
+		var payload []byte = nil
+		if result.payload != nil {
+			payload = *result.payload
+		}
+		owner := common.Address{}
+		if result.owner != nil {
+			owner = common.HexToAddress(*result.owner)
+		}
+
+		results = append(results, arkivtype.SearchResult{
+			Key:       key,
 			ExpiresAt: expiresAt,
-			Owner:     common.HexToAddress(ownerAddress),
+			Value:     payload,
+			Owner:     owner,
 		})
+
 	}
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
 	}
 
-	return keys, nil
+	return results, nil
 }

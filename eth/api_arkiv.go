@@ -15,7 +15,14 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
-// arkivAPI offers helper utils
+type QueryOptions struct {
+	AtBlock *uint64 `json:"at_block"`
+	// TODO Ramses: implement this
+	// After that we can use it in GetEntityMetaData
+	//IncludeAnnotations bool     `json:"include_annotations"`
+	Columns []string `json:"columns"`
+}
+
 type arkivAPI struct {
 	eth   *Ethereum
 	store *sqlstore.SQLStore
@@ -40,13 +47,11 @@ func (api *arkivAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*e
 	return metadata, nil
 }
 
-type QueryOptions struct {
-	AtBlock            *uint64 `json:"at_block"`
-	IncludeAnnotations bool    `json:"include_annotations"`
-	Count              bool    `json:"count"`
-}
-
-func (api *arkivAPI) QueryEntities(ctx context.Context, req string, options QueryOptions) ([]arkivtype.SearchResult, error) {
+func (api *arkivAPI) QueryEntities(
+	ctx context.Context,
+	req string,
+	options QueryOptions,
+) ([]arkivtype.SearchResult, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -57,15 +62,23 @@ func (api *arkivAPI) QueryEntities(ctx context.Context, req string, options Quer
 	if options.AtBlock != nil {
 		block = *options.AtBlock
 	}
+	columns := query.COLUMNS
+	if len(options.Columns) > 0 {
+		columns = options.Columns
+	}
 
-	query := expr.Evaluate(block)
+	query := expr.Evaluate(query.QueryOptions{
+		AtBlock: block,
+		//IncludeAnnotations: options.IncludeAnnotations,
+		Columns: columns,
+	})
 
-	entities, err := api.store.QueryEntities(ctx, query.Query, query.Args...)
+	results, err := api.store.QueryEntities(ctx, query.Query, query.Args, query.Columns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	return entities, nil
+	return results, nil
 }
 
 // GetEntityCount returns the total number of entities in the storage.

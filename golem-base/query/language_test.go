@@ -40,28 +40,8 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("empty query", func(t *testing.T) {
-		v, err := query.Parse(``)
-		require.NoError(t, err)
-
-		require.Equal(
-			t,
-			&query.Expression{
-				Or: query.OrExpression{
-					Left: query.AndExpression{
-						Left: query.EqualExpr{
-							Assign: &query.Equality{
-								Var:   "name",
-								IsNot: false,
-								Value: query.Value{
-									String: pointerOf("test\"2"),
-								},
-							},
-						},
-					},
-				},
-			},
-			v,
-		)
+		_, err := query.Parse(``)
+		require.Error(t, err)
 	})
 
 	t.Run("number", func(t *testing.T) {
