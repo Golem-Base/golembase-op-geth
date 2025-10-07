@@ -27,8 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // L1 Info Gas Overhead is the amount of gas the the L1 info deposit consumes.
@@ -192,6 +195,22 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 			return fmt.Errorf("set code tx must have at least one authorization tuple")
 		}
 	}
+
+	to := tx.To()
+
+	if to != nil && *to == address.GolemBaseStorageProcessorAddress {
+
+		if tx.Data() == nil || len(tx.Data()) == 0 {
+			return fmt.Errorf("storage transaction must have data")
+		}
+
+		storageTx := &storagetx.StorageTransaction{}
+		if err := rlp.DecodeBytes(tx.Data(), storageTx); err != nil {
+			return fmt.Errorf("failed to decode storage transaction: %w", err)
+		}
+
+	}
+
 	return nil
 }
 
