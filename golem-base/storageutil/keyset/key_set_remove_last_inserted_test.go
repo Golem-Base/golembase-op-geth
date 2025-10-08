@@ -5,12 +5,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/testutil"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRemoveLastInserted(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 
 	k1 := newHash("0xa")
 	k2 := newHash("0xb")
@@ -42,7 +43,7 @@ func TestRemoveLastInserted(t *testing.T) {
 }
 
 func TestRemoveSecondButLastInserted(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 
 	k1 := newHash("0xa")
 	k2 := newHash("0xb")
@@ -74,7 +75,7 @@ func TestRemoveSecondButLastInserted(t *testing.T) {
 }
 
 func TestRemoveInOrder(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 
 	k1 := newHash("0xa")
 	k2 := newHash("0xb")

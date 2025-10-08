@@ -1,88 +1,16 @@
 package keyset_test
 
 import (
-	"fmt"
 	"slices"
-	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// mockStateAccess implements StateAccess interface for testing
-type mockStateAccess struct {
-	storage map[common.Address]map[common.Hash]common.Hash
-}
-
-func newMockStateAccess() *mockStateAccess {
-	return &mockStateAccess{
-		storage: make(map[common.Address]map[common.Hash]common.Hash),
-	}
-}
-
-func (m *mockStateAccess) GetState(addr common.Address, key common.Hash) common.Hash {
-	if _, exists := m.storage[addr]; !exists {
-		return common.Hash{}
-	}
-	if val, exists := m.storage[addr][key]; exists {
-		return val
-	}
-	return common.Hash{}
-}
-
-func (m *mockStateAccess) SetState(addr common.Address, key common.Hash, value common.Hash) common.Hash {
-	zeroHash := common.Hash{}
-
-	// If value is zero, delete the entry instead of storing it
-	if value == zeroHash {
-		if storageMap, exists := m.storage[addr]; exists {
-			delete(storageMap, key)
-
-			// If address map is now empty, delete it too
-			if len(storageMap) == 0 {
-				delete(m.storage, addr)
-			}
-		}
-		return zeroHash
-	}
-
-	// Otherwise store the non-zero value
-	if _, exists := m.storage[addr]; !exists {
-		m.storage[addr] = make(map[common.Hash]common.Hash)
-	}
-	m.storage[addr][key] = value
-	return value
-}
-
-// Helper method to get the number of entries in storage for testing
-func (m *mockStateAccess) GetStorageEntryCount(addr common.Address) int {
-	if storageMap, exists := m.storage[addr]; exists {
-		return len(storageMap)
-	}
-	return 0
-}
-
-func (m *mockStateAccess) Print(addr common.Address) {
-	keys := []common.Hash{}
-
-	for key := range m.storage[addr] {
-		keys = append(keys, key)
-	}
-
-	sort.Slice(keys, func(i, j int) bool {
-		return keys[i].Big().Cmp(keys[j].Big()) < 0
-	})
-
-	for _, key := range keys {
-		value := m.storage[addr][key]
-		fmt.Printf("%s: %s\n", key.Hex(), value.Hex())
-
-	}
-}
 
 // Helper function to create test values
 func newHash(val string) common.Hash {
@@ -90,7 +18,7 @@ func newHash(val string) common.Hash {
 }
 
 func TestAddAndCheckValueInEmptySet(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value := newHash("0x2")
 
@@ -106,7 +34,7 @@ func TestAddAndCheckValueInEmptySet(t *testing.T) {
 }
 
 func TestAddDuplicateValue(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value := newHash("0x2")
 
@@ -123,7 +51,7 @@ func TestAddDuplicateValue(t *testing.T) {
 }
 
 func TestRemoveValueFromSet(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value := newHash("0x2")
 
@@ -141,7 +69,7 @@ func TestRemoveValueFromSet(t *testing.T) {
 }
 
 func TestRemoveNonExistentValue(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value := newHash("0x2")
 
@@ -152,7 +80,7 @@ func TestRemoveNonExistentValue(t *testing.T) {
 }
 
 func TestMultipleValuesInSet(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value1 := newHash("0x2")
 	value2 := newHash("0x3")
@@ -199,7 +127,7 @@ func TestMultipleValuesInSet(t *testing.T) {
 }
 
 func TestSizeEmptySet(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 
 	// Empty set should have size 0
@@ -208,7 +136,7 @@ func TestSizeEmptySet(t *testing.T) {
 }
 
 func TestSizeAfterAddingValues(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 
 	// Initially empty
@@ -235,7 +163,7 @@ func TestSizeAfterAddingValues(t *testing.T) {
 }
 
 func TestSizeAfterRemovingValues(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 
 	// Add two values
@@ -270,7 +198,7 @@ func TestSizeAfterRemovingValues(t *testing.T) {
 }
 
 func TestSizeWithDuplicateValues(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value := newHash("0x2")
 
@@ -296,7 +224,7 @@ func TestSizeWithDuplicateValues(t *testing.T) {
 }
 
 func TestClearEmptySet(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 
 	// Clear an empty set
@@ -311,7 +239,7 @@ func TestClearEmptySet(t *testing.T) {
 }
 
 func TestClearSetWithSingleValue(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value := newHash("0x2")
 
@@ -341,7 +269,7 @@ func TestClearSetWithSingleValue(t *testing.T) {
 }
 
 func TestClearSetWithMultipleValues(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	values := []common.Hash{
 		newHash("0x2"),
@@ -381,7 +309,7 @@ func TestClearSetWithMultipleValues(t *testing.T) {
 }
 
 func TestClearAndReaddValues(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value1 := newHash("0x2")
 	value2 := newHash("0x3")
@@ -424,14 +352,14 @@ func TestClearAndReaddValues(t *testing.T) {
 }
 
 func TestIterateEmptySet(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 
 	assert.Empty(t, slices.Collect(keyset.Iterate(db, setKey)))
 }
 
 func TestIterateSetWithSingleValue(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value := newHash("0x2")
 
@@ -447,7 +375,7 @@ func TestIterateSetWithSingleValue(t *testing.T) {
 }
 
 func TestIterateSetWithMultipleValues(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value1 := newHash("0x2")
 	value2 := newHash("0x3")
@@ -476,7 +404,7 @@ func TestIterateSetWithMultipleValues(t *testing.T) {
 }
 
 func TestIterateWithEarlyTermination(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x1")
 	value1 := newHash("0x2")
 	value2 := newHash("0x3")
@@ -506,7 +434,7 @@ func TestIterateWithEarlyTermination(t *testing.T) {
 }
 
 func TestIterateAfterRemovingMiddleValue(t *testing.T) {
-	db := newMockStateAccess()
+	db := testutil.NewMockStateAccess()
 	setKey := newHash("0x0")
 	value1 := newHash("0x41")
 	value2 := newHash("0x42")
