@@ -612,20 +612,18 @@ func (st *stateTransition) innerExecute() (*ExecutionResult, error) {
 		case st.to() == address.GolemBaseStorageProcessorAddress:
 			st.evm.Context.Transfer(st.evm.StateDB, msg.From, st.to(), value)
 
-			if len(st.msg.Data) > 0 {
-				var logs []*types.Log
-				// run the storage transaction
-				// We set the tx index to 0, since it doesn't matter because this execution won't modify the account state
-				logs, vmerr = storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, 0, msg.From, st.evm.StateDB)
-				if err != nil {
-					return nil, fmt.Errorf("failed to execute storage transaction: %w", err)
-				}
+			var logs []*types.Log
+			// run the storage transaction
+			// We set the tx index to 0, since it doesn't matter because this execution won't modify the account state
+			logs, vmerr = storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, 0, msg.From, st.evm.StateDB)
+			if err != nil {
+				return nil, fmt.Errorf("failed to execute storage transaction: %w", err)
+			}
 
-				if vmerr == nil {
-					// add logs of the storage transaction
-					for _, log := range logs {
-						st.evm.StateDB.AddLog(log)
-					}
+			if vmerr == nil {
+				// add logs of the storage transaction
+				for _, log := range logs {
+					st.evm.StateDB.AddLog(log)
 				}
 			}
 		case msg.IsDepositTx:
