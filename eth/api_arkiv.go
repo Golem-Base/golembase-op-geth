@@ -10,17 +10,15 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
-	"github.com/ethereum/go-ethereum/golem-base/sqlstore/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
 type QueryOptions struct {
 	AtBlock *uint64 `json:"at_block"`
 	// TODO Ramses: implement this
 	// After that we can use it in GetEntityMetaData
-	//IncludeAnnotations bool     `json:"include_annotations"`
-	Columns []string `json:"columns"`
+	IncludeAnnotations bool     `json:"include_annotations"`
+	Columns            []string `json:"columns"`
 }
 
 type arkivAPI struct {
@@ -33,18 +31,6 @@ func NewArkivAPI(eth *Ethereum, store *sqlstore.SQLStore) *arkivAPI {
 		eth:   eth,
 		store: store,
 	}
-}
-
-func (api *arkivAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
-	metadata, err := api.store.GetEntityMetaData(ctx, sqlitegolem.GetEntityMetadataParams{
-		Key:   key.Hex(),
-		Block: api.eth.blockchain.CurrentBlock().Number.Int64(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return metadata, nil
 }
 
 func (api *arkivAPI) QueryEntities(
@@ -67,13 +53,19 @@ func (api *arkivAPI) QueryEntities(
 		columns = options.Columns
 	}
 
-	query := expr.Evaluate(query.QueryOptions{
-		AtBlock: block,
-		//IncludeAnnotations: options.IncludeAnnotations,
-		Columns: columns,
-	})
+	queryOptions := query.QueryOptions{
+		AtBlock:            block,
+		IncludeAnnotations: options.IncludeAnnotations,
+		Columns:            columns,
+	}
+	query := expr.Evaluate(queryOptions)
 
-	results, err := api.store.QueryEntities(ctx, query.Query, query.Args, query.Columns)
+	results, err := api.store.QueryEntities(
+		ctx,
+		query.Query,
+		query.Args,
+		queryOptions,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
+	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/log"
@@ -244,81 +245,6 @@ func (e *SQLStore) GetEntityCount(ctx context.Context, block uint64) (uint64, er
 	}
 
 	return uint64(count), nil
-}
-
-// GetEntityMetaData retrieves entity metadata from the database using a transaction
-func (e *SQLStore) GetEntityMetaData(ctx context.Context, params sqlitegolem.GetEntityMetadataParams) (*entity.EntityMetaData, error) {
-	// Begin a read-only transaction for consistency
-	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback() // Safe to call even after commit
-
-	txDB := sqlitegolem.New(tx)
-	keyHex := params.Key
-
-	// Get main entity data
-	entityData, err := txDB.GetEntityMetadata(ctx, params)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("entity %s not found", keyHex)
-		}
-		return nil, fmt.Errorf("failed to get entity metadata: %w", err)
-	}
-
-	// Get string annotations
-	stringAnnotRows, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
-		EntityKey: params.Key,
-		Block:     params.Block,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get string annotations: %w", err)
-	}
-
-	// Get numeric annotations
-	numericAnnotRows, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
-		EntityKey: params.Key,
-		Block:     params.Block,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get numeric annotations: %w", err)
-	}
-
-	// Convert to entity.EntityMetaData structure
-	metadata := &entity.EntityMetaData{
-		ExpiresAtBlock:      uint64(entityData.ExpiresAt),
-		StringAnnotations:   make([]entity.StringAnnotation, len(stringAnnotRows)),
-		NumericAnnotations:  make([]entity.NumericAnnotation, len(numericAnnotRows)),
-		Owner:               common.HexToAddress(entityData.OwnerAddress),
-		CreatedAtBlock:      uint64(entityData.CreatedAtBlock),
-		LastModifiedAtBlock: uint64(entityData.LastModifiedAtBlock),
-		TransactionIndex:    uint64(entityData.TransactionIndex),
-		OperationIndex:      uint64(entityData.OperationIndex),
-	}
-
-	// Convert string annotations
-	for i, row := range stringAnnotRows {
-		metadata.StringAnnotations[i] = entity.StringAnnotation{
-			Key:   row.AnnotationKey,
-			Value: row.Value,
-		}
-	}
-
-	// Convert numeric annotations
-	for i, row := range numericAnnotRows {
-		metadata.NumericAnnotations[i] = entity.NumericAnnotation{
-			Key:   row.AnnotationKey,
-			Value: uint64(row.Value),
-		}
-	}
-
-	// Commit the transaction (read-only, but ensures consistency)
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return metadata, nil
 }
 
 func (e *SQLStore) SnapSyncToBlock(
@@ -664,42 +590,24 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 	return tx.Commit()
 }
 
-func (e *SQLStore) QueryEntityKeys(ctx context.Context, query string, args ...any) ([]common.Hash, error) {
-	log.Info("Executing query", "query", query, "args", args)
-
-	rows, err := e.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
-	}
-	defer rows.Close()
-
-	keys := []common.Hash{}
-	var key string
-	var payload []byte
-	var expiresAt uint64
-	var ownerAddress string
-	for rows.Next() {
-		if err := rows.Scan(&key, &payload, &expiresAt, &ownerAddress); err != nil {
-			return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
-		}
-		keys = append(keys, common.HexToHash(key))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
-	}
-
-	return keys, nil
-}
-
 func (e *SQLStore) QueryEntities(
 	ctx context.Context,
 	query string,
 	args []any,
-	columns []string,
+	options query.QueryOptions,
 ) ([]arkivtype.SearchResult, error) {
 	log.Info("Executing query", "query", query, "args", args)
 
-	rows, err := e.db.QueryContext(ctx, query, args...)
+	// Begin a read-only transaction for consistency
+	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Safe to call even after commit
+
+	txDB := sqlitegolem.New(tx)
+
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
 	}
@@ -715,7 +623,7 @@ func (e *SQLStore) QueryEntities(
 			owner     *string
 		}{}
 		dest := []any{}
-		for _, column := range columns {
+		for _, column := range options.Columns {
 			switch column {
 			case "key":
 				var key string
@@ -757,17 +665,61 @@ func (e *SQLStore) QueryEntities(
 			owner = common.HexToAddress(*result.owner)
 		}
 
-		results = append(results, arkivtype.SearchResult{
-			Key:       key,
-			ExpiresAt: expiresAt,
-			Value:     payload,
-			Owner:     owner,
-		})
+		r := arkivtype.SearchResult{
+			Key:                key,
+			ExpiresAt:          expiresAt,
+			Value:              payload,
+			Owner:              owner,
+			StringAnnotations:  []entity.StringAnnotation{},
+			NumericAnnotations: []entity.NumericAnnotation{},
+		}
 
+		if options.IncludeAnnotations {
+			// Get string annotations
+			stringAnnotRows, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
+				EntityKey: key.Hex(),
+				Block:     int64(options.AtBlock),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to get string annotations: %w", err)
+			}
+
+			// Get numeric annotations
+			numericAnnotRows, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
+				EntityKey: key.Hex(),
+				Block:     int64(options.AtBlock),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to get numeric annotations: %w", err)
+			}
+
+			// Convert string annotations
+			for _, row := range stringAnnotRows {
+				r.StringAnnotations = append(r.StringAnnotations, entity.StringAnnotation{
+					Key:   row.AnnotationKey,
+					Value: row.Value,
+				})
+			}
+
+			// Convert numeric annotations
+			for _, row := range numericAnnotRows {
+				r.NumericAnnotations = append(r.NumericAnnotations, entity.NumericAnnotation{
+					Key:   row.AnnotationKey,
+					Value: uint64(row.Value),
+				})
+			}
+		}
+
+		results = append(results, r)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+
+	// Commit the transaction (read-only, but ensures consistency)
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return results, nil

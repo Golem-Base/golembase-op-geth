@@ -43,12 +43,29 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
-	metadata, err := api.arkivAPI.GetEntityMetaData(ctx, key)
+	rows, err := api.arkivAPI.QueryEntities(
+		ctx,
+		fmt.Sprintf("$key = %s", key),
+		QueryOptions{
+			IncludeAnnotations: true,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	return metadata, nil
+	if len(rows) != 1 {
+		return nil, fmt.Errorf("expected a single result row but got %d", len(rows))
+	}
+
+	metadata := rows[0]
+
+	return &entity.EntityMetaData{
+		ExpiresAtBlock:     metadata.ExpiresAt,
+		Owner:              metadata.Owner,
+		StringAnnotations:  metadata.StringAnnotations,
+		NumericAnnotations: metadata.NumericAnnotations,
+	}, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirationBlock uint64) ([]common.Hash, error) {
