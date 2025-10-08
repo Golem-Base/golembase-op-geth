@@ -140,19 +140,19 @@ func NewStore(dbFile string) (*SQLStore, error) {
 		if err != nil {
 			tx.Rollback()
 			db.Close()
-			return nil, fmt.Errorf("failed to recreate schema: %w", err)
+			return nil, fmt.Errorf("failed to drop entities table: %w", err)
 		}
 		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS string_annotations;`)
 		if err != nil {
 			tx.Rollback()
 			db.Close()
-			return nil, fmt.Errorf("failed to recreate schema: %w", err)
+			return nil, fmt.Errorf("failed to drop string_annotations table: %w", err)
 		}
 		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS numeric_annotations;`)
 		if err != nil {
 			tx.Rollback()
 			db.Close()
-			return nil, fmt.Errorf("failed to recreate schema: %w", err)
+			return nil, fmt.Errorf("failed to drop numeric_annotations table: %w", err)
 		}
 	}
 
