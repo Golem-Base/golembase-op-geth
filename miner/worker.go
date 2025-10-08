@@ -162,10 +162,10 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 		}
 	}
 
-	for txIx, tx := range params.txs {
+	for _, tx := range params.txs {
 		from, _ := types.Sender(work.signer, tx)
 		work.state.SetTxContext(tx.Hash(), work.tcount)
-		err = miner.commitTransaction(work, tx, txIx)
+		err = miner.commitTransaction(work, tx)
 		if err != nil {
 			return &newPayloadResult{err: fmt.Errorf("failed to force-include tx: %s type: %d sender: %s nonce: %d, err: %w", tx.Hash(), tx.Type(), from, tx.Nonce(), err)}
 		}
@@ -386,9 +386,9 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}, nil
 }
 
-func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction, txIx int) error {
+func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) error {
 	if tx.Type() == types.BlobTxType {
-		return miner.commitBlobTransaction(env, tx, txIx)
+		return miner.commitBlobTransaction(env, tx)
 	}
 
 	// If a conditional is set, check prior to applying
@@ -404,7 +404,7 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction, t
 		}
 	}
 
-	receipt, err := miner.applyTransaction(env, tx, txIx)
+	receipt, err := miner.applyTransaction(env, tx, env.tcount)
 	if err != nil {
 		return err
 	}
@@ -414,7 +414,7 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction, t
 	return nil
 }
 
-func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction, txIx int) error {
+func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) error {
 	sc := tx.BlobTxSidecar()
 	if sc == nil {
 		panic("blob transaction without blobs in miner")
@@ -427,7 +427,7 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	if env.blobs+len(sc.Blobs) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
-	receipt, err := miner.applyTransaction(env, tx, txIx)
+	receipt, err := miner.applyTransaction(env, tx, env.tcount)
 	if err != nil {
 		return err
 	}
@@ -498,7 +498,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 
 	blockDABytes := new(big.Int)
 
-	txIx := 0
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -600,7 +599,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		err := miner.commitTransaction(env, tx, txIx)
+		err := miner.commitTransaction(env, tx)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
@@ -628,7 +627,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			blockDABytes = daBytesAfter
 			txs.Shift()
-			txIx += 1
 
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
