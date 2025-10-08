@@ -141,15 +141,6 @@ SELECT COUNT(DISTINCT network) FROM processing_status;
 -- name: DeleteProcessingStatus :exec
 DELETE FROM processing_status WHERE network = ?;
 
----- name: EntityExists :one
---SELECT COUNT(*) > 0 FROM entities WHERE key = ?;
-
----- name: StringAnnotationsForEntityExists :one
---SELECT COUNT(*) > 0 FROM string_annotations WHERE entity_key = ?;
-
----- name: NumericAnnotationsForEntityExists :one
---SELECT COUNT(*) > 0 FROM numeric_annotations WHERE entity_key = ?;
-
 -- name: DeleteAllEntities :exec
 DELETE FROM entities;
 
@@ -161,27 +152,6 @@ DELETE FROM numeric_annotations;
 
 -- name: DeleteAllProcessingStatus :exec
 DELETE FROM processing_status;
-
--- name: GetEntityMetadata :one
-SELECT
-  e.expires_at,
-  e.owner_address,
-  e.payload,
-  e.created_at_block,
-  e.last_modified_at_block,
-  e.transaction_index_in_block AS transaction_index,
-  e.operation_index_in_transaction AS operation_index
-FROM entities AS e
-WHERE e.key = sqlc.arg(key)
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?2
-);
 
 -- name: GetAllEntityKeys :many
 SELECT key

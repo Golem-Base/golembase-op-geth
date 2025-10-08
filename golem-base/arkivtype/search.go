@@ -2,6 +2,7 @@ package arkivtype
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
 type SearchResult struct {
@@ -9,4 +10,7 @@ type SearchResult struct {
 	Value     []byte         `json:"value"`
 	ExpiresAt uint64         `json:"expires_at"`
 	Owner     common.Address `json:"owner"`
+
+	StringAnnotations  []entity.StringAnnotation  `json:"string_annotations"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numeric_annotations"`
 }

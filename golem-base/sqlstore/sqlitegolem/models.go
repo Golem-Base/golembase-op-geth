@@ -34,8 +34,8 @@ type ProcessingStatus struct {
 }
 
 type SchemaVersion struct {
-	Entities    sql.NullInt64
-	Annotations sql.NullInt64
+	ID       int64
+	Entities sql.NullInt64
 }
 
 type StringAnnotation struct {

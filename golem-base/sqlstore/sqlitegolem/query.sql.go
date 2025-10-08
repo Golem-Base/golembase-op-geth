@@ -21,18 +21,9 @@ func (q *Queries) CountNetworks(ctx context.Context) (int64, error) {
 }
 
 const deleteAllEntities = `-- name: DeleteAllEntities :exec
-
-
-
 DELETE FROM entities
 `
 
-// -- name: EntityExists :one
-// SELECT COUNT(*) > 0 FROM entities WHERE key = ?;
-// -- name: StringAnnotationsForEntityExists :one
-// SELECT COUNT(*) > 0 FROM string_annotations WHERE entity_key = ?;
-// -- name: NumericAnnotationsForEntityExists :one
-// SELECT COUNT(*) > 0 FROM numeric_annotations WHERE entity_key = ?;
 func (q *Queries) DeleteAllEntities(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteAllEntities)
 	return err
@@ -292,58 +283,6 @@ func (q *Queries) GetEntityCount(ctx context.Context, block int64) (int64, error
 	var count int64
 	err := row.Scan(&count)
 	return count, err
-}
-
-const getEntityMetadata = `-- name: GetEntityMetadata :one
-SELECT
-  e.expires_at,
-  e.owner_address,
-  e.payload,
-  e.created_at_block,
-  e.last_modified_at_block,
-  e.transaction_index_in_block AS transaction_index,
-  e.operation_index_in_transaction AS operation_index
-FROM entities AS e
-WHERE e.key = ?1
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= ?2
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?2
-)
-`
-
-type GetEntityMetadataParams struct {
-	Key   string
-	Block int64
-}
-
-type GetEntityMetadataRow struct {
-	ExpiresAt           int64
-	OwnerAddress        string
-	Payload             []byte
-	CreatedAtBlock      int64
-	LastModifiedAtBlock int64
-	TransactionIndex    int64
-	OperationIndex      int64
-}
-
-func (q *Queries) GetEntityMetadata(ctx context.Context, arg GetEntityMetadataParams) (GetEntityMetadataRow, error) {
-	row := q.db.QueryRowContext(ctx, getEntityMetadata, arg.Key, arg.Block)
-	var i GetEntityMetadataRow
-	err := row.Scan(
-		&i.ExpiresAt,
-		&i.OwnerAddress,
-		&i.Payload,
-		&i.CreatedAtBlock,
-		&i.LastModifiedAtBlock,
-		&i.TransactionIndex,
-		&i.OperationIndex,
-	)
-	return i, err
 }
 
 const getNumericAnnotations = `-- name: GetNumericAnnotations :many
