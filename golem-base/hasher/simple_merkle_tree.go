@@ -72,7 +72,7 @@ func (mt *SimpleMerkleTree) Build() error {
 
 // Update applies chunk-level updates or truncates, then rebuilds the tree
 func (mt *SimpleMerkleTree) Update(blockRanges []BlockRange) error {
-	log.Trace("Updating Merkle tree", "blockRanges", blockRanges)
+	log.Debug("Updating Merkle tree", "blockRanges", blockRanges)
 	// 1) Re-digest any ranges marked as "dirty"
 	if len(blockRanges) > 0 {
 		f, err := os.Open(mt.fullPath)
@@ -85,7 +85,7 @@ func (mt *SimpleMerkleTree) Update(blockRanges []BlockRange) error {
 
 		for _, br := range blockRanges {
 			for idx := br.Start; idx < br.Start+br.Length; idx++ {
-				if idx >= int64(len(mt.chunkHashes)) {
+				if idx > int64(len(mt.chunkHashes)) {
 					break
 				}
 				// Seek to chunk position
@@ -160,6 +160,8 @@ func (mt *SimpleMerkleTree) Root() []byte {
 		return []byte{}
 	}
 
+	log.Trace("Building Merkle tree", "chunkHashes", mt.chunkHashes)
+
 	return mt.buildMerkleRoot(mt.chunkHashes)
 }
 
@@ -207,4 +209,22 @@ func (mt *SimpleMerkleTree) GetChunkHashes() [][]byte {
 // ChunkCount returns the number of chunks currently tracked
 func (mt *SimpleMerkleTree) ChunkCount() int {
 	return len(mt.chunkHashes)
+}
+
+// Copy creates a deep copy of the SimpleMerkleTree
+func (mt *SimpleMerkleTree) Copy() *SimpleMerkleTree {
+	// Create new instance with same chunk size and path
+	copiedTree := &SimpleMerkleTree{
+		chunkSize:   mt.chunkSize,
+		fullPath:    mt.fullPath,
+		chunkHashes: make([][]byte, len(mt.chunkHashes)),
+	}
+
+	// Deep copy the chunk hashes
+	for i, hash := range mt.chunkHashes {
+		copiedTree.chunkHashes[i] = make([]byte, len(hash))
+		copy(copiedTree.chunkHashes[i], hash)
+	}
+
+	return copiedTree
 }

@@ -1,6 +1,7 @@
 package sqlstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -308,13 +309,28 @@ func WriteLogForBlockSqlite(
 	// measure the time it takes to process the events
 	start := time.Now()
 	hasher.ProcessEvents(fuseDriver.GetEvents(true), sqlStore.hasher)
-	log.Info("hasher after update", "root", hex.EncodeToString(sqlStore.hasher.Root()))
+	hasherRoot := sqlStore.hasher.Root()
+	log.Info("hasher after update", "root", hex.EncodeToString(hasherRoot))
 	log.Info("time taken to process events", "time", time.Since(start))
 
+	hasherCopy := sqlStore.hasher.Copy()
 	start = time.Now()
-	sqlStore.hasher.Build()
-	log.Info("hasher from scratch", "root", hex.EncodeToString(sqlStore.hasher.Root()))
+	hasherCopy.Build()
+	hasherCopyRoot := hasherCopy.Root()
+	log.Info("hasher from scratch", "root", hex.EncodeToString(hasherCopyRoot))
 	log.Info("time taken to build hasher from scratch", "time", time.Since(start))
+
+	// new hasher from scratch
+	start = time.Now()
+	hasherNew := hasher.NewSimpleMerkleTree(4096, "/tmp/golem_base/db")
+	hasherNew.Build()
+	hasherNewRoot := hasherNew.Root()
+	log.Info("hasher from scratch on raw file", "root", hex.EncodeToString(hasherNewRoot))
+	log.Info("time taken to build hasher from scratch on raw file", "time", time.Since(start))
+
+	if !bytes.Equal(hasherRoot, hasherCopyRoot) || !bytes.Equal(hasherRoot, hasherNewRoot) {
+		return fmt.Errorf("hasher root mismatch")
+	}
 
 	return nil
 }

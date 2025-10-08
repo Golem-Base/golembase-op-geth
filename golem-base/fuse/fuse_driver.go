@@ -69,17 +69,17 @@ func Mount(config *Config) (*FuseDriver, error) {
 		return nil, err
 	}
 
-	log.Debug("Mounted at: %s", config.MountPoint)
-	log.Debug("Source directory: %s", config.SourceDir)
-	log.Debug("Intercepting writes for: %s", config.TargetFile)
+	log.Info("Mounted at: %s", config.MountPoint)
+	log.Info("Source directory: %s", config.SourceDir)
+	log.Info("Intercepting writes for: %s", config.TargetFile)
 
 	return mfs, nil
 }
 
 func (fd *FuseDriver) serve() {
-	log.Debug("Starting FUSE filesystem serve")
+	log.Info("Starting FUSE filesystem serve")
 	defer func() {
-		log.Debug("Server goroutine finishing...")
+		log.Info("Server goroutine finishing...")
 		close(fd.done)
 	}()
 
@@ -131,7 +131,7 @@ func (fd *FuseDriver) setError(err error) {
 
 // Unmount unmounts the filesystem gracefully
 func (fd *FuseDriver) Unmount() error {
-	log.Debug("Unmounting FUSE filesystem")
+	log.Info("Unmounting FUSE filesystem")
 	if fd.server == nil {
 		return nil
 	}
@@ -157,7 +157,7 @@ func (fd *FuseDriver) Unmount() error {
 	}
 
 	<-fd.done
-	log.Debug("Unmounted", "mountPoint", fd.config.MountPoint)
+	log.Info("Unmounted", "mountPoint", fd.config.MountPoint)
 
 	fd.errMux.Lock()
 	defer fd.errMux.Unlock()
@@ -166,7 +166,7 @@ func (fd *FuseDriver) Unmount() error {
 
 // Wait blocks until the filesystem is unmounted
 func (fd *FuseDriver) Wait() error {
-	log.Debug("Waiting for FUSE filesystem to finish")
+	log.Info("Waiting for FUSE filesystem to finish")
 	<-fd.done
 	fd.errMux.Lock()
 	defer fd.errMux.Unlock()
@@ -246,7 +246,7 @@ var _ = (fs.NodeStatfser)((*Node)(nil))
 
 // Lookup looks up a child node
 func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	log.Debug("Fuse->Lookup", "path", n.path, "name", name)
+	log.Trace("Fuse->Lookup", "path", n.path, "name", name)
 	fullPath := filepath.Join(n.path, name)
 
 	info, err := os.Lstat(fullPath)
@@ -278,7 +278,7 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs
 
 // Readdir reads directory entries
 func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
-	log.Debug("Fuse->Readdir", "path", n.path)
+	log.Trace("Fuse->Readdir", "path", n.path)
 	entries, err := os.ReadDir(n.path)
 	if err != nil {
 		return nil, syscall.EIO
@@ -308,7 +308,7 @@ func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 
 // Open opens a file
 func (n *Node) Open(ctx context.Context, flags uint32) (fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
-	log.Debug("Fuse->Open", "path", n.path, "flags", flags)
+	log.Trace("Fuse->Open", "path", n.path, "flags", flags)
 	file, err := os.OpenFile(n.path, int(flags), 0)
 	if err != nil {
 		return nil, 0, syscall.EIO
@@ -339,7 +339,7 @@ func (n *Node) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) 
 
 // Setattr sets file attributes
 func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
-	log.Debug("Fuse->Setattr", "path", n.path)
+	log.Trace("Fuse->Setattr", "path", n.path)
 	// Handle size changes (truncation)
 	if sz, ok := in.GetSize(); ok {
 		if err := os.Truncate(n.path, int64(sz)); err != nil {
@@ -383,7 +383,7 @@ func (n *Node) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn,
 
 // Create creates a new file
 func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (inode *fs.Inode, fh fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
-	log.Debug("Fuse->Create", "path", n.path, "name", name, "flags", flags, "mode", mode)
+	log.Trace("Fuse->Create", "path", n.path, "name", name, "flags", flags, "mode", mode)
 	fullPath := filepath.Join(n.path, name)
 
 	// Create the file
@@ -431,7 +431,7 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, mode uint3
 
 // Mkdir creates a new directory
 func (n *Node) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	log.Debug("Fuse->Mkdir", "path", n.path, "name", name, "mode", mode)
+	log.Trace("Fuse->Mkdir", "path", n.path, "name", name, "mode", mode)
 	fullPath := filepath.Join(n.path, name)
 
 	if err := os.Mkdir(fullPath, os.FileMode(mode)); err != nil {
@@ -461,7 +461,7 @@ func (n *Node) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.En
 
 // Unlink removes a file
 func (n *Node) Unlink(ctx context.Context, name string) syscall.Errno {
-	log.Debug("Fuse->Unlink", "path", n.path, "name", name)
+	log.Trace("Fuse->Unlink", "path", n.path, "name", name)
 	fullPath := filepath.Join(n.path, name)
 
 	if err := os.Remove(fullPath); err != nil {
@@ -473,7 +473,7 @@ func (n *Node) Unlink(ctx context.Context, name string) syscall.Errno {
 
 // Rmdir removes a directory
 func (n *Node) Rmdir(ctx context.Context, name string) syscall.Errno {
-	log.Debug("Fuse->Rmdir", "path", n.path, "name", name)
+	log.Trace("Fuse->Rmdir", "path", n.path, "name", name)
 	fullPath := filepath.Join(n.path, name)
 
 	if err := os.Remove(fullPath); err != nil {
@@ -485,7 +485,7 @@ func (n *Node) Rmdir(ctx context.Context, name string) syscall.Errno {
 
 // Rename renames a file or directory
 func (n *Node) Rename(ctx context.Context, oldName string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
-	log.Debug("Fuse->Rename", "path", n.path, "oldName", oldName, "newName", newName)
+	log.Trace("Fuse->Rename", "path", n.path, "oldName", oldName, "newName", newName)
 	oldPath := filepath.Join(n.path, oldName)
 
 	newParentNode := newParent.(*Node)
@@ -500,7 +500,7 @@ func (n *Node) Rename(ctx context.Context, oldName string, newParent fs.InodeEmb
 
 // Statfs returns filesystem statistics (required for SQLite)
 func (n *Node) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
-	log.Debug("Fuse->Statfs", "path", n.path)
+	log.Trace("Fuse->Statfs", "path", n.path)
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs(n.path, &stat); err != nil {
 		return syscall.EIO
@@ -558,7 +558,7 @@ var _ = (fs.FileFsyncer)((*FileHandle)(nil))
 
 // Read reads from the file
 func (fh *FileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	log.Debug("Fuse->Read", "path", fh.path, "offset", off, "size", len(dest))
+	log.Trace("Fuse->Read", "path", fh.path, "offset", off, "size", len(dest))
 	n, err := fh.file.ReadAt(dest, off)
 	if err != nil && err.Error() != "EOF" {
 		return nil, syscall.EIO
@@ -568,10 +568,10 @@ func (fh *FileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.Re
 
 // Write writes to the file
 func (fh *FileHandle) Write(ctx context.Context, data []byte, off int64) (written uint32, errno syscall.Errno) {
-	log.Debug("Fuse->Write", "path", fh.path, "offset", off, "size", len(data))
+	log.Trace("Fuse->Write", "path", fh.path, "offset", off, "size", len(data))
 	// Intercept writes for target file
 	if fh.isTarget {
-		log.Debug("Fuse->Write intercepted", "file", filepath.Base(fh.path), "offset", off, "size", len(data))
+		log.Debug("Fuse->Write intercepted", "file", filepath.Base(fh.path), "offset", off, "index", off/int64(fh.config.ChunkSize), "size", len(data))
 		// Collect write event
 		writeEvent := FuseWriteEvent{
 			BaseFuseEvent: BaseFuseEvent{
@@ -595,7 +595,7 @@ func (fh *FileHandle) Write(ctx context.Context, data []byte, off int64) (writte
 
 // Flush flushes the file (critical for SQLite)
 func (fh *FileHandle) Flush(ctx context.Context) syscall.Errno {
-	log.Debug("Fuse->Flush", "path", fh.path)
+	log.Trace("Fuse->Flush", "path", fh.path)
 	if err := fh.file.Sync(); err != nil {
 		return syscall.EIO
 	}
@@ -604,7 +604,7 @@ func (fh *FileHandle) Flush(ctx context.Context) syscall.Errno {
 
 // Fsync syncs the file (critical for SQLite)
 func (fh *FileHandle) Fsync(ctx context.Context, flags uint32) syscall.Errno {
-	log.Debug("Fuse->Fsync", "path", fh.path, "flags", flags)
+	log.Trace("Fuse->Fsync", "path", fh.path, "flags", flags)
 	if err := fh.file.Sync(); err != nil {
 		return syscall.EIO
 	}
@@ -613,7 +613,7 @@ func (fh *FileHandle) Fsync(ctx context.Context, flags uint32) syscall.Errno {
 
 // Release closes the file
 func (fh *FileHandle) Release(ctx context.Context) syscall.Errno {
-	log.Debug("Fuse->Release", "path", fh.path)
+	log.Trace("Fuse->Release", "path", fh.path)
 	if err := fh.file.Close(); err != nil {
 		return syscall.EIO
 	}
