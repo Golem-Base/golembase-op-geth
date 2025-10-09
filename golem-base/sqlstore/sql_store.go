@@ -105,7 +105,7 @@ func NewStore(dbFile string) (*SQLStore, error) {
 
 	hasher := hasher.NewSimpleMerkleTree(4096, dbFile)
 	hasher.Build()
-	log.Info("hasher", "root", hex.EncodeToString(hasher.Root()))
+	log.Info("Hasher root after build", "root", hex.EncodeToString(hasher.Root()))
 
 	return &SQLStore{db: db, hasher: hasher}, nil
 }

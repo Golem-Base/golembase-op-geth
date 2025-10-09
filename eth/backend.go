@@ -337,6 +337,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
+	// Sync if needed current block with new SQlite file
+	sqlstore.SyncSQLiteFromChain(eth.blockchain.CurrentBlock().Number.Uint64(), eth.blockchain.CurrentBlock().Hash(), eth.blockchain.CurrentBlock().Root, eth.sqlStore, eth.fuseDriver, big.NewInt(int64(config.NetworkId)), eth.blockchain.StateCache())
+	//sqlstore.SyncSQLiteFromChain(eth.blockchain.CurrentBlock(), eth.sqlStore, eth.fuseDriver, big.NewInt(int64(config.NetworkId)), eth.blockchain.StateCache())
+
 	if chainConfig := eth.blockchain.Config(); chainConfig.Optimism != nil { // config.Genesis.Config.ChainID cannot be used because it's based on CLI flags only, thus default to mainnet L1
 		config.NetworkId = chainConfig.ChainID.Uint64() // optimism defaults eth network ID to chain ID
 		eth.networkID = config.NetworkId
