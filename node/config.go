@@ -216,6 +216,8 @@ type Config struct {
 	GolemBaseSQLStateFile string `toml:",omitempty"`
 
 	ArkivHistoricBlocksFlag uint64 `toml:",omitempty"`
+
+	ArkivQueryPageSizeKB uint64 `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

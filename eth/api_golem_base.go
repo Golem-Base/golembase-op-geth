@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
@@ -24,16 +25,18 @@ func NewGolemBaseAPI(eth *Ethereum, store *sqlstore.SQLStore) *golemBaseAPI {
 func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) ([]byte, error) {
 	q := fmt.Sprintf(`$key = %s`, key)
 
-	entities, err := api.arkivAPI.QueryEntities(
+	result, err := api.arkivAPI.QueryEntities(
 		ctx,
 		q,
-		QueryOptions{
+		arkivtype.QueryOptions{
 			Columns: []string{"payload"},
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
+
+	entities := result.Results
 
 	if len(entities) != 1 {
 		return nil, fmt.Errorf("expected a single result but got %d", len(entities))
@@ -43,16 +46,18 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
-	rows, err := api.arkivAPI.QueryEntities(
+	result, err := api.arkivAPI.QueryEntities(
 		ctx,
 		fmt.Sprintf("$key = %s", key),
-		QueryOptions{
+		arkivtype.QueryOptions{
 			IncludeAnnotations: true,
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
+
+	rows := result.Results
 
 	if len(rows) != 1 {
 		return nil, fmt.Errorf("expected a single result row but got %d", len(rows))
@@ -70,12 +75,14 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 
 func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirationBlock uint64) ([]common.Hash, error) {
 	q := fmt.Sprintf(`$expiration = %d`, expirationBlock)
-	entities, err := api.arkivAPI.QueryEntities(ctx, q, QueryOptions{
+	result, err := api.arkivAPI.QueryEntities(ctx, q, arkivtype.QueryOptions{
 		Columns: []string{"key"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
+
+	entities := result.Results
 
 	results := make([]common.Hash, 0, len(entities))
 	for _, entity := range entities {
@@ -87,12 +94,14 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirat
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context, key, value string) ([]common.Hash, error) {
 	q := fmt.Sprintf(`%s = "%s"`, key, value)
-	entities, err := api.arkivAPI.QueryEntities(ctx, q, QueryOptions{
+	result, err := api.arkivAPI.QueryEntities(ctx, q, arkivtype.QueryOptions{
 		Columns: []string{"key"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
+
+	entities := result.Results
 
 	results := make([]common.Hash, 0, len(entities))
 	for _, entity := range entities {
@@ -104,12 +113,14 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context
 
 func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Context, key string, value uint64) ([]common.Hash, error) {
 	q := fmt.Sprintf(`%s = %d`, key, value)
-	entities, err := api.arkivAPI.QueryEntities(ctx, q, QueryOptions{
+	result, err := api.arkivAPI.QueryEntities(ctx, q, arkivtype.QueryOptions{
 		Columns: []string{"key"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
+
+	entities := result.Results
 
 	results := make([]common.Hash, 0, len(entities))
 	for _, entity := range entities {
@@ -120,7 +131,7 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 }
 
 func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
-	entities, err := api.arkivAPI.QueryEntities(ctx, req, QueryOptions{
+	result, err := api.arkivAPI.QueryEntities(ctx, req, arkivtype.QueryOptions{
 		Columns: []string{"key", "payload"},
 	})
 	if err != nil {
@@ -128,6 +139,8 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 	}
 
 	searchResults := make([]golemtype.SearchResult, 0)
+
+	entities := result.Results
 
 	for _, entity := range entities {
 		searchResults = append(searchResults, golemtype.SearchResult{
@@ -143,12 +156,14 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 
 func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
 	q := fmt.Sprintf(`$owner = %s`, owner)
-	entities, err := api.arkivAPI.QueryEntities(ctx, q, QueryOptions{
+	result, err := api.arkivAPI.QueryEntities(ctx, q, arkivtype.QueryOptions{
 		Columns: []string{"key"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
+
+	entities := result.Results
 
 	results := make([]common.Hash, 0, len(entities))
 	for _, entity := range entities {
@@ -156,4 +171,24 @@ func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Ad
 	}
 
 	return results, nil
+}
+
+// GetEntityCount returns the total number of entities in the storage.
+func (api *golemBaseAPI) GetEntityCount(ctx context.Context) (uint64, error) {
+	count, err := api.store.GetEntityCount(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// GetAllEntityKeys returns all entity keys in the storage.
+func (api *golemBaseAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
+	entities, err := api.store.GetAllEntityKeys(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
+	if err != nil {
+		return nil, err
+	}
+
+	return entities, nil
 }

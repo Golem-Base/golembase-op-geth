@@ -9,3 +9,9 @@ Feature: creating entities
     And the entity should be in the list of all entities
     And the sender should be the owner of the entity
     And the entity should be in the list of entities of the owner
+
+  Scenario: creating a lot of entities
+    Given I have enough funds to pay for the transaction
+    When submit a transaction to create a lot of entities
+    Then the entity should be created
+    And querying all the entities requires pagination

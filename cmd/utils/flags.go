@@ -916,6 +916,12 @@ var (
 		Category: flags.MiscCategory,
 		Value:    128,
 	}
+	ArkivQueryPageSizeKB = &cli.Uint64Flag{
+		Name:     "arkiv.querypagesizekb",
+		Usage:    "Number of kBs to include in a single RPC response to an Arkiv query",
+		Category: flags.MiscCategory,
+		Value:    4 * 1024,
+	}
 
 	// Console
 	JSpathFlag = &flags.DirectoryFlag{
@@ -1589,6 +1595,14 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(ArkivHistoricBlocksFlag.Name) {
 		cfg.ArkivHistoricBlocksFlag = ctx.Uint64(ArkivHistoricBlocksFlag.Name)
+	} else {
+		cfg.ArkivHistoricBlocksFlag = ArkivHistoricBlocksFlag.Value
+	}
+
+	if ctx.IsSet(ArkivQueryPageSizeKB.Name) {
+		cfg.ArkivQueryPageSizeKB = ctx.Uint64(ArkivQueryPageSizeKB.Name)
+	} else {
+		cfg.ArkivQueryPageSizeKB = ArkivQueryPageSizeKB.Value
 	}
 
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
@@ -2494,6 +2508,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
 		stack.Config().ArkivHistoricBlocksFlag,
+		stack.Config().ArkivQueryPageSizeKB,
 	)
 	if err != nil {
 		Fatalf("failed to create SQLStore: %v", err)

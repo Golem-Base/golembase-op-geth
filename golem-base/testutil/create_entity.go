@@ -20,6 +20,20 @@ func (w *World) CreateEntity(
 	stringAnnotations []entity.StringAnnotation,
 	numericAnnotations []entity.NumericAnnotation,
 ) (*types.Receipt, error) {
+	return w.CreateEntities(ctx, []storagetx.Create{
+		{
+			BTL:                btl,
+			Payload:            payload,
+			StringAnnotations:  stringAnnotations,
+			NumericAnnotations: numericAnnotations,
+		},
+	})
+}
+
+func (w *World) CreateEntities(
+	ctx context.Context,
+	creates []storagetx.Create,
+) (*types.Receipt, error) {
 
 	client := w.GethInstance.ETHClient
 
@@ -36,14 +50,7 @@ func (w *World) CreateEntity(
 
 	// Create a StorageTransaction with a single Create operation
 	storageTx := &storagetx.StorageTransaction{
-		Create: []storagetx.Create{
-			{
-				BTL:                btl,
-				Payload:            payload,
-				StringAnnotations:  stringAnnotations,
-				NumericAnnotations: numericAnnotations,
-			},
-		},
+		Create: creates,
 	}
 
 	// RLP encode the storage transaction
@@ -97,5 +104,4 @@ func (w *World) CreateEntity(
 	w.CreatedEntityKey = receipt.Logs[0].Topics[1]
 
 	return receipt, nil
-
 }

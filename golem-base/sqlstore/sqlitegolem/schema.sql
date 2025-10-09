@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS entities (
 );
 
 CREATE INDEX IF NOT EXISTS idx_entities_owner_address ON entities(owner_address);
+CREATE INDEX IF NOT EXISTS idx_pagination ON entities(created_at_block, transaction_index_in_block, operation_index_in_transaction);
 
 CREATE TABLE IF NOT EXISTS string_annotations (
   entity_key TEXT NOT NULL,

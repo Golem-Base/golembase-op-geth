@@ -9,28 +9,104 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
-var COLUMNS []string = []string{
+var DefaultColumns []string = []string{
 	"key",
 	"payload",
 	"expires_at",
 	"owner_address",
 }
 
-type QueryOptions struct {
-	AtBlock            uint64   `json:"at_block"`
-	IncludeAnnotations bool     `json:"include_annotations"`
-	Columns            []string `json:"columns"`
+var DefaultOrderBy []arkivtype.OrderBy = []arkivtype.OrderBy{
+	{Column: "created_at_block"},
+	{Column: "transaction_index_in_block"},
+	{Column: "operation_index_in_transaction"},
 }
 
-func (opts *QueryOptions) columnString() string {
-	columns := opts.Columns
-	if len(columns) == 0 {
-		columns = COLUMNS
+type QueryOptions struct {
+	AtBlock            uint64                `json:"at_block"`
+	IncludeAnnotations bool                  `json:"include_annotations"`
+	Columns            []string              `json:"columns"`
+	From               []arkivtype.FromEntry `json:"from"`
+	OrderBy            []arkivtype.OrderBy   `json:"order_by"`
+}
+
+func NewQueryOptions(
+	atBlock uint64,
+	includeAnnotations bool,
+	columns []string,
+	from []arkivtype.FromEntry,
+	orderBies []arkivtype.OrderBy,
+) (*QueryOptions, error) {
+
+	candidateOrderBies := []arkivtype.OrderBy{}
+	// TODO: check how to get the order right here. Custom columns first, then defaults
+	// do we still have the needed guarantees on uniqueness if one of the default columns
+	// comes earlier in that case??
+	candidateOrderBies = append(candidateOrderBies, DefaultOrderBy...)
+	candidateOrderBies = append(candidateOrderBies, orderBies...)
+
+	seenOrderBy := make(map[string]struct{})
+	finalOrderBies := make([]arkivtype.OrderBy, 0, len(candidateOrderBies))
+	for _, orderBy := range candidateOrderBies {
+		_, exists := seenOrderBy[orderBy.Column]
+		if !exists {
+			finalOrderBies = append(finalOrderBies, orderBy)
+			seenOrderBy[orderBy.Column] = struct{}{}
+		}
 	}
-	return strings.Join(columns, ", ")
+
+	orderByColumns := []string{}
+	for _, orderby := range candidateOrderBies {
+		orderByColumns = append(orderByColumns, orderby.Column)
+	}
+
+	candidateColumns := []string{}
+	if len(columns) == 0 {
+		candidateColumns = append(candidateColumns, DefaultColumns...)
+	} else {
+		candidateColumns = append(candidateColumns, columns...)
+	}
+	candidateColumns = append(candidateColumns, orderByColumns...)
+
+	seen := make(map[string]struct{})
+	finalColumns := make([]string, 0, len(candidateColumns))
+	for _, column := range candidateColumns {
+		switch column {
+		case
+			"key",
+			"expires_at",
+			"payload",
+			"owner_address",
+			"created_at_block",
+			"last_modified_at_block",
+			"transaction_index_in_block",
+			"operation_index_in_transaction":
+			// Nothing to do
+		default:
+			return nil, fmt.Errorf("unknown column: %s", column)
+		}
+		_, exists := seen[column]
+		if !exists {
+			finalColumns = append(finalColumns, column)
+			seen[column] = struct{}{}
+		}
+	}
+
+	return &QueryOptions{
+		AtBlock:            atBlock,
+		IncludeAnnotations: includeAnnotations,
+		Columns:            finalColumns,
+		From:               from,
+		OrderBy:            finalOrderBies,
+	}, nil
+}
+
+func (opts *QueryOptions) columnString() (string, error) {
+	return strings.Join(opts.Columns, ", "), nil
 }
 
 // Define the lexer with distinct tokens for each operator and parentheses.
@@ -71,7 +147,7 @@ type QueryBuilder struct {
 	args         []any
 	needsComma   bool
 	tableCounter uint64
-	options      QueryOptions
+	options      *QueryOptions
 }
 
 func (b *QueryBuilder) nextTableName() string {
@@ -139,7 +215,7 @@ func (e *Expression) invert() *Expression {
 	}
 }
 
-func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
+func (e *Expression) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 	tableBuilder := strings.Builder{}
 	args := []any{}
 
@@ -152,17 +228,22 @@ func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
 		needsComma:   false,
 	}
 
-	tableName := e.Or.Evaluate(&builder)
+	tableName, err := e.Or.Evaluate(&builder)
+	if err != nil {
+		return nil, err
+	}
 
 	tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
 	tableBuilder.WriteString(tableName)
-	tableBuilder.WriteString(" ORDER BY 1")
+	tableBuilder.WriteString(" ORDER BY created_at_block ASC, transaction_index_in_block ASC, operation_index_in_transaction ASC")
+
+	columns := options.Columns
 
 	return &SelectQuery{
 		Query:   tableBuilder.String(),
 		Args:    builder.args,
-		Columns: options.Columns,
-	}
+		Columns: columns,
+	}, nil
 }
 
 // OrExpression handles expressions connected with ||.
@@ -212,12 +293,18 @@ func (e *OrExpression) invert() *AndExpression {
 	}
 }
 
-func (e *OrExpression) Evaluate(b *QueryBuilder) string {
-	leftTable := e.Left.Evaluate(b)
+func (e *OrExpression) Evaluate(b *QueryBuilder) (string, error) {
+	leftTable, err := e.Left.Evaluate(b)
+	if err != nil {
+		return "", err
+	}
 	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b)
+		rightTable, err := rhs.Evaluate(b)
+		if err != nil {
+			return "", err
+		}
 		tableName = b.nextTableName()
 
 		b.writeComma()
@@ -235,7 +322,7 @@ func (e *OrExpression) Evaluate(b *QueryBuilder) string {
 		leftTable = tableName
 	}
 
-	return tableName
+	return tableName, nil
 }
 
 // OrRHS represents the right-hand side of an OR.
@@ -262,7 +349,7 @@ func (e *OrRHS) invert() *AndRHS {
 	}
 }
 
-func (e *OrRHS) Evaluate(b *QueryBuilder) string {
+func (e *OrRHS) Evaluate(b *QueryBuilder) (string, error) {
 	return e.Expr.Evaluate(b)
 }
 
@@ -308,12 +395,18 @@ func (e *AndExpression) invert() *OrExpression {
 	}
 }
 
-func (e *AndExpression) Evaluate(b *QueryBuilder) string {
-	leftTable := e.Left.Evaluate(b)
+func (e *AndExpression) Evaluate(b *QueryBuilder) (string, error) {
+	leftTable, err := e.Left.Evaluate(b)
+	if err != nil {
+		return "", err
+	}
 	tableName := leftTable
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b)
+		rightTable, err := rhs.Evaluate(b)
+		if err != nil {
+			return "", err
+		}
 		tableName = b.nextTableName()
 
 		b.writeComma()
@@ -331,7 +424,7 @@ func (e *AndExpression) Evaluate(b *QueryBuilder) string {
 		leftTable = tableName
 	}
 
-	return tableName
+	return tableName, nil
 }
 
 // AndRHS represents the right-hand side of an AND.
@@ -353,7 +446,7 @@ func (e *AndRHS) invert() *OrRHS {
 	}
 }
 
-func (e *AndRHS) Evaluate(b *QueryBuilder) string {
+func (e *AndRHS) Evaluate(b *QueryBuilder) (string, error) {
 	return e.Expr.Evaluate(b)
 }
 
@@ -437,7 +530,7 @@ func (e *EqualExpr) invert() *EqualExpr {
 	panic("This should not happen!")
 }
 
-func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
+func (e *EqualExpr) Evaluate(b *QueryBuilder) (string, error) {
 	if e.Paren != nil {
 		return e.Paren.Evaluate(b)
 	}
@@ -506,7 +599,7 @@ func (e *Paren) invert() *Paren {
 	}
 }
 
-func (e *Paren) Evaluate(b *QueryBuilder) string {
+func (e *Paren) Evaluate(b *QueryBuilder) (string, error) {
 	expr := e.Nested
 	// If we have a negation, we will push it down into the expression
 	if e.IsNot {
@@ -521,16 +614,30 @@ func (b *QueryBuilder) createAnnotationQuery(
 	tableName string,
 	whereClause string,
 	arguments ...any,
-) string {
-	args := make([]any, 0, len(arguments)+2)
+) (string, error) {
+
+	paginationCondition, paginationArgs := b.getPaginationArguments()
+
+	args := []any{}
 	args = append(args, b.options.AtBlock, b.options.AtBlock)
+	args = append(args, paginationArgs...)
 	args = append(args, arguments...)
+
+	columns, err := b.options.columnString()
+	if err != nil {
+		return "", err
+	}
+
+	p := ""
+	if len(paginationCondition) > 0 {
+		p = fmt.Sprintf("( %s ) AND", paginationCondition)
+	}
 
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
 				"SELECT DISTINCT",
-				b.options.columnString(),
+				columns,
 				"FROM",
 				tableName,
 				"AS a INNER JOIN entities AS e",
@@ -546,12 +653,13 @@ func (b *QueryBuilder) createAnnotationQuery(
 				"AND e2.last_modified_at_block <= ?",
 				")",
 				"WHERE",
+				p,
 				whereClause,
 			},
 			" ",
 		),
 		args...,
-	)
+	), nil
 }
 
 type Glob struct {
@@ -568,7 +676,7 @@ func (e *Glob) invert() *Glob {
 	}
 }
 
-func (e *Glob) Evaluate(b *QueryBuilder) string {
+func (e *Glob) Evaluate(b *QueryBuilder) (string, error) {
 	if !e.IsNot {
 		return b.createAnnotationQuery(
 			"string_annotations",
@@ -610,7 +718,7 @@ func (e *LessThan) invert() *GreaterOrEqualThan {
 	}
 }
 
-func (e *LessThan) Evaluate(b *QueryBuilder) string {
+func (e *LessThan) Evaluate(b *QueryBuilder) (string, error) {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
@@ -652,7 +760,7 @@ func (e *LessOrEqualThan) invert() *GreaterThan {
 	}
 }
 
-func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
+func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) (string, error) {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
@@ -694,7 +802,7 @@ func (e *GreaterThan) invert() *LessOrEqualThan {
 	}
 }
 
-func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
+func (e *GreaterThan) Evaluate(b *QueryBuilder) (string, error) {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
@@ -736,7 +844,7 @@ func (e *GreaterOrEqualThan) invert() *LessThan {
 	}
 }
 
-func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
+func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) (string, error) {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
 			"string_annotations",
@@ -803,21 +911,78 @@ func (e *ExpirationEquality) invert() *ExpirationEquality {
 		Expiration: e.Expiration,
 	}
 }
+
+func (b *QueryBuilder) getPaginationArguments() (string, []any) {
+	args := []any{}
+	paginationConditions := []string{}
+	for i := range b.options.From {
+		subcondition := []string{}
+		for j, from := range b.options.From {
+			if j > i {
+				break
+			}
+			var operator string
+
+			if j < i {
+				operator = "="
+			} else if false {
+				// TODO: we need to know if ASC or DESC
+				operator = "<"
+			} else {
+				if j == len(b.options.From)-1 {
+					operator = ">="
+				} else {
+					operator = ">"
+				}
+			}
+
+			args = append(args, from.Value)
+			subcondition = append(
+				subcondition,
+				fmt.Sprintf("e.%s %s ?", from.Column, operator),
+			)
+		}
+		paginationConditions = append(
+			paginationConditions,
+			fmt.Sprintf("(%s)", strings.Join(subcondition, " AND ")),
+		)
+	}
+	paginationCondition := strings.Join(paginationConditions, " OR ")
+
+	return paginationCondition, args
+}
+
 func (b *QueryBuilder) createEntityQuery(
 	whereClause string,
 	arguments ...any,
-) string {
-	args := make([]any, 0, len(arguments)+2)
+) (string, error) {
+
+	paginationCondition, paginationArgs := b.getPaginationArguments()
+
+	args := []any{}
+	args = append(args, paginationArgs...)
 	args = append(args, b.options.AtBlock, b.options.AtBlock)
 	args = append(args, arguments...)
+
+	columns, err := b.options.columnString()
+	if err != nil {
+		return "", err
+	}
+
+	p := ""
+	if len(paginationCondition) > 0 {
+		p = fmt.Sprintf("( %s ) AND", paginationCondition)
+	}
 
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
 				"SELECT DISTINCT",
-				b.options.columnString(),
+				columns,
 				"FROM entities AS e",
-				"WHERE e.deleted = FALSE",
+				"WHERE",
+				p,
+				"e.deleted = FALSE",
 				"AND e.last_modified_at_block <= ?",
 				"AND NOT EXISTS (",
 				"SELECT 1",
@@ -832,10 +997,10 @@ func (b *QueryBuilder) createEntityQuery(
 			" ",
 		),
 		args...,
-	)
+	), nil
 }
 
-func (e *Ownership) Evaluate(b *QueryBuilder) string {
+func (e *Ownership) Evaluate(b *QueryBuilder) (string, error) {
 	var address = common.Address{}
 	if common.IsHexAddress(e.Owner) {
 		address = common.HexToAddress(e.Owner)
@@ -846,7 +1011,7 @@ func (e *Ownership) Evaluate(b *QueryBuilder) string {
 		return b.createEntityQuery("e.owner_address != ?", address.Hex())
 	}
 }
-func (e *KeyEquality) Evaluate(b *QueryBuilder) string {
+func (e *KeyEquality) Evaluate(b *QueryBuilder) (string, error) {
 	key := common.HexToHash(e.Key)
 	if !e.IsNot {
 		return b.createEntityQuery("e.key = ?", key.Hex())
@@ -855,7 +1020,7 @@ func (e *KeyEquality) Evaluate(b *QueryBuilder) string {
 	}
 }
 
-func (e *ExpirationEquality) Evaluate(b *QueryBuilder) string {
+func (e *ExpirationEquality) Evaluate(b *QueryBuilder) (string, error) {
 	if !e.IsNot {
 		return b.createEntityQuery("e.expires_at = ?", e.Expiration)
 	} else {
@@ -878,7 +1043,7 @@ func (e *Equality) invert() *Equality {
 	}
 }
 
-func (e *Equality) Evaluate(b *QueryBuilder) string {
+func (e *Equality) Evaluate(b *QueryBuilder) (string, error) {
 	if !e.IsNot {
 		if e.Value.String != nil {
 			return b.createAnnotationQuery(

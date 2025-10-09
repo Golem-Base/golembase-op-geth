@@ -75,12 +75,17 @@ type Delete struct {
 
 // SQLStore encapsulates the SQLite SQLStore functionality
 type SQLStore struct {
-	db                  *sql.DB
-	historicBlocksCount uint64
+	db                   *sql.DB
+	historicBlocksCount  uint64
+	queryPageSizeLimitKB uint64
 }
 
 // NewStore creates a new ETL instance with database connection and schema setup
-func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
+func NewStore(
+	dbFile string,
+	historicBlocksCount uint64,
+	queryPageSizeLimitMB uint64,
+) (*SQLStore, error) {
 	dir := filepath.Dir(dbFile)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
@@ -139,6 +144,11 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 	}
 
 	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
 	if entitiesVersion != entitiesSchemaVersion {
 		log.Warn(
 			"arkiv: entities table has an outdated schema, dropping tables",
@@ -190,10 +200,15 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to recreate schema: %w", err)
 	}
 
-	log.Info("arkiv: database ready", "entitySchemaVersion", entitiesSchemaVersion)
+	log.Info("arkiv: database ready",
+		"entitySchemaVersion", entitiesSchemaVersion,
+		"historicBlocksCount", historicBlocksCount,
+		"queryPageSizeLimitMB", queryPageSizeLimitMB,
+	)
 	return &SQLStore{
-		db:                  db,
-		historicBlocksCount: historicBlocksCount,
+		db:                   db,
+		historicBlocksCount:  historicBlocksCount,
+		queryPageSizeLimitKB: queryPageSizeLimitMB,
 	}, nil
 }
 
@@ -594,8 +609,8 @@ func (e *SQLStore) QueryEntities(
 	ctx context.Context,
 	query string,
 	args []any,
-	options query.QueryOptions,
-) ([]arkivtype.SearchResult, error) {
+	options *query.QueryOptions,
+) (*arkivtype.QueryEntitiesResult, error) {
 	log.Info("Executing query", "query", query, "args", args)
 
 	// Begin a read-only transaction for consistency
@@ -614,33 +629,71 @@ func (e *SQLStore) QueryEntities(
 	defer rows.Close()
 
 	results := make([]arkivtype.SearchResult, 0)
+	resultsSize := 0
+	next := arkivtype.NextData{
+		AtBlock: options.AtBlock,
+		From:    []arkivtype.FromEntry{},
+	}
+	done := true
 	for rows.Next() {
 
 		result := struct {
-			key       *string
-			expiresAt *uint64
-			payload   *[]byte
-			owner     *string
+			key                         *string
+			expiresAt                   *uint64
+			payload                     *[]byte
+			owner                       *string
+			createdAtBlock              *uint64
+			lastModifiedAtBlock         *uint64
+			transactionIndexInBlock     *uint64
+			operationIndexInTransaction *uint64
 		}{}
 		dest := []any{}
+
+		columns := map[string]any{}
 		for _, column := range options.Columns {
 			switch column {
 			case "key":
 				var key string
 				result.key = &key
 				dest = append(dest, result.key)
+				columns["key"] = result.key
 			case "expires_at":
 				var expiration uint64
 				result.expiresAt = &expiration
 				dest = append(dest, result.expiresAt)
+				columns["expires_at"] = result.expiresAt
 			case "payload":
 				var payload []byte
 				result.payload = &payload
 				dest = append(dest, result.payload)
+				columns["payload"] = result.payload
 			case "owner_address":
 				var owner string
 				result.owner = &owner
 				dest = append(dest, result.owner)
+				columns["owner"] = result.owner
+			case "created_at_block":
+				var createdAtBlock uint64
+				result.createdAtBlock = &createdAtBlock
+				dest = append(dest, result.createdAtBlock)
+				columns["created_at_block"] = result.createdAtBlock
+			case "last_modified_at_block":
+				var lastModifiedAtBlock uint64
+				result.lastModifiedAtBlock = &lastModifiedAtBlock
+				dest = append(dest, result.lastModifiedAtBlock)
+				columns["last_modified_at_block"] = result.lastModifiedAtBlock
+			case "transaction_index_in_block":
+				var transactionIndexInBlock uint64
+				result.transactionIndexInBlock = &transactionIndexInBlock
+				dest = append(dest, result.transactionIndexInBlock)
+				columns["transaction_index_in_block"] = result.transactionIndexInBlock
+			case "operation_index_in_transaction":
+				var operationIndexInTransaction uint64
+				result.operationIndexInTransaction = &operationIndexInTransaction
+				dest = append(dest, result.operationIndexInTransaction)
+				columns["operation_index_in_transaction"] = result.operationIndexInTransaction
+			default:
+				return nil, fmt.Errorf("unknown column: %s", column)
 			}
 		}
 
@@ -710,7 +763,26 @@ func (e *SQLStore) QueryEntities(
 			}
 		}
 
+		size, err := r.EncodedSize()
+		if err != nil {
+			return nil, err
+		}
+		resultsSize += size
+
+		if uint64(resultsSize) > e.queryPageSizeLimitKB*1024 {
+			done = false
+			next.From = []arkivtype.FromEntry{}
+			for _, orderBy := range options.OrderBy {
+				next.From = append(next.From, arkivtype.FromEntry{
+					Column: orderBy.Column,
+					Value:  columns[orderBy.Column],
+				})
+			}
+			break
+		}
+
 		results = append(results, r)
+		log.Info("sql store", "next", next)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -722,5 +794,13 @@ func (e *SQLStore) QueryEntities(
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return results, nil
+	if !done {
+		return &arkivtype.QueryEntitiesResult{
+			Results: results,
+			Next:    next,
+		}, nil
+	}
+	return &arkivtype.QueryEntitiesResult{
+		Results: results,
+	}, nil
 }

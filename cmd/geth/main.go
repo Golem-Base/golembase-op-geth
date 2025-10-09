@@ -100,6 +100,7 @@ var (
 		utils.ChainHistoryFlag,
 		utils.LogHistoryFlag,
 		utils.ArkivHistoricBlocksFlag,
+		utils.ArkivQueryPageSizeKB,
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,

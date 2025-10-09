@@ -279,6 +279,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
 		stack.Config().ArkivHistoricBlocksFlag,
+		stack.Config().ArkivQueryPageSizeKB,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SQLStore: %w", err)

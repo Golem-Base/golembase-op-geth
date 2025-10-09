@@ -5,21 +5,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 )
-
-type QueryOptions struct {
-	AtBlock *uint64 `json:"at_block"`
-	// TODO Ramses: implement this
-	// After that we can use it in GetEntityMetaData
-	IncludeAnnotations bool     `json:"include_annotations"`
-	Columns            []string `json:"columns"`
-}
 
 type arkivAPI struct {
 	eth   *Ethereum
@@ -36,8 +27,8 @@ func NewArkivAPI(eth *Ethereum, store *sqlstore.SQLStore) *arkivAPI {
 func (api *arkivAPI) QueryEntities(
 	ctx context.Context,
 	req string,
-	options QueryOptions,
-) ([]arkivtype.SearchResult, error) {
+	options arkivtype.QueryOptions,
+) (*arkivtype.QueryEntitiesResult, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -48,17 +39,21 @@ func (api *arkivAPI) QueryEntities(
 	if options.AtBlock != nil {
 		block = *options.AtBlock
 	}
-	columns := query.COLUMNS
-	if len(options.Columns) > 0 {
-		columns = options.Columns
-	}
 
-	queryOptions := query.QueryOptions{
-		AtBlock:            block,
-		IncludeAnnotations: options.IncludeAnnotations,
-		Columns:            columns,
+	queryOptions, err := query.NewQueryOptions(
+		block,
+		options.IncludeAnnotations,
+		options.Columns,
+		options.From,
+		options.OrderBy,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate query: %w", err)
 	}
-	query := expr.Evaluate(queryOptions)
+	query, err := expr.Evaluate(queryOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate query: %w", err)
+	}
 
 	results, err := api.store.QueryEntities(
 		ctx,
@@ -71,26 +66,6 @@ func (api *arkivAPI) QueryEntities(
 	}
 
 	return results, nil
-}
-
-// GetEntityCount returns the total number of entities in the storage.
-func (api *arkivAPI) GetEntityCount(ctx context.Context) (uint64, error) {
-	count, err := api.store.GetEntityCount(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
-// GetAllEntityKeys returns all entity keys in the storage.
-func (api *arkivAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
-	entities, err := api.store.GetAllEntityKeys(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
-	if err != nil {
-		return nil, err
-	}
-
-	return entities, nil
 }
 
 func (api *arkivAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {
