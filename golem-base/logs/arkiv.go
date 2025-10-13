@@ -7,8 +7,8 @@ import "github.com/ethereum/go-ethereum/crypto"
 var ArkivEntityCreated = crypto.Keccak256Hash([]byte("ArkivEntityCreated(uint256,address,uint256,uint256)"))
 
 // ArkivEntityUpdated is the event signature for entity update logs.
-// Parameters: entityKey (indexed), ownerAddress(indexed), expirationBlock, cost (wei)
-var ArkivEntityUpdated = crypto.Keccak256Hash([]byte("ArkivEntityUpdated(uint256,address,uint256,uint256)"))
+// Parameters: entityKey (indexed), ownerAddress(indexed), oldExpirationBlock, newExpirationBlock, cost (wei)
+var ArkivEntityUpdated = crypto.Keccak256Hash([]byte("ArkivEntityUpdated(uint256,address,uint256,uint256,uint256)"))
 
 // ArkivEntityExpired is the event signature for entity expiration logs.
 // Parameters: entityKey (indexed), ownerAddress(indexed)
