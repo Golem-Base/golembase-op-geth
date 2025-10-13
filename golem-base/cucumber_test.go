@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
+	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
@@ -175,6 +176,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I trace the transaction that created the entity$`, iTraceTheTransactionThatCreatedTheEntity)
 	ctx.Step(`^the trace should be empty$`, theTraceShouldBeEmpty)
 
+	ctx.Step(`^the entity update log should be recorded$`, theEntityUpdateLogShouldBeRecorded)
+	ctx.Step(`^the entity delete log should be recorded$`, theEntityDeleteLogShouldBeRecorded)
+	ctx.Step(`^the entity extend log should be recorded$`, theEntityExtendLogShouldBeRecorded)
+
 	// Storage Transaction Validation Steps
 	ctx.Step(`^I have a storage transaction with create, update, delete, and extend operations$`, iHaveAStorageTransactionWithCreateUpdateDeleteAndExtendOperations)
 	ctx.Step(`^all BTL values are greater than (\d+)$`, allBTLValuesAreGreaterThan)
@@ -275,6 +280,10 @@ func submitATransactionToCreateAnEntity(ctx context.Context) error {
 
 }
 
+func hashToAddress(hash common.Hash) common.Address {
+	return common.Address(hash[12:])
+}
+
 func theEntityShouldBeCreated(ctx context.Context) error {
 
 	w := testutil.GetWorld(ctx)
@@ -282,6 +291,62 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	if len(receipt.Logs) == 0 {
 		return fmt.Errorf("no logs found in receipt")
+	}
+
+	logs := receipt.Logs
+
+	if len(logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(logs))
+	}
+
+	oldCreatedLog := logs[0]
+
+	if oldCreatedLog.Topics[0] != storagetx.GolemBaseStorageEntityCreated {
+		return fmt.Errorf("expected GolemBaseStorageEntityCreated log, got %s", oldCreatedLog.Topics[0])
+	}
+
+	oldLogData := oldCreatedLog.Data
+
+	if len(oldLogData) != 32 {
+		return fmt.Errorf("expected old log data to be 32 bytes, got %d", len(oldLogData))
+	}
+
+	expiresAtBlockU256 := uint256.NewInt(0).SetBytes(oldLogData[:32])
+	oldExpiresAtBlock := expiresAtBlockU256.Uint64()
+
+	expiresAtBlockExpected := receipt.BlockNumber.Uint64() + 100
+
+	if oldExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected expires at block to be %d, got %d", expiresAtBlockExpected, oldExpiresAtBlock)
+	}
+
+	newCreatedLog := logs[1]
+
+	if newCreatedLog.Topics[0] != arkivlogs.ArkivEntityCreated {
+		return fmt.Errorf("expected ArkivEntityCreated log, got %s", newCreatedLog.Topics[0])
+	}
+
+	if newCreatedLog.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv created entity key to be %s, got %s", w.CreatedEntityKey, newCreatedLog.Topics[1])
+	}
+
+	newLogData := newCreatedLog.Data
+
+	if len(newLogData) != 64 {
+		return fmt.Errorf("expected new log data to be 64 bytes, got %d", len(newLogData))
+	}
+
+	newExpiresAtBlockU256 := uint256.NewInt(0).SetBytes(newLogData[:32])
+	newExpiresAtBlock := newExpiresAtBlockU256.Uint64()
+
+	if newExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected archiv expires at block to be %d, got %d", expiresAtBlockExpected, newExpiresAtBlock)
+	}
+
+	owner := hashToAddress(newCreatedLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
 	}
 
 	key := receipt.Logs[0].Topics[1]
@@ -1810,5 +1875,184 @@ func iSubmitAStorageTransactionWithUnparseableData(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to transfer: %w", err)
 	}
+	return nil
+}
+
+func theEntityUpdateLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	logs := receipt.Logs
+
+	if len(logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(logs))
+	}
+
+	oldLog := logs[0]
+
+	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityUpdated {
+		return fmt.Errorf("expected GolemBaseStorageEntityUpdated log, got %s", oldLog.Topics[0])
+	}
+
+	oldLogData := oldLog.Data
+
+	if len(oldLogData) != 32 {
+		return fmt.Errorf("expected old log data to be 32 bytes, got %d", len(oldLogData))
+	}
+
+	oldExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData).Uint64()
+
+	expiresAtBlockExpected := receipt.BlockNumber.Uint64() + 100
+
+	if oldExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected old expires at block to be %d, got %d", expiresAtBlockExpected, oldExpiresAtBlock)
+	}
+
+	newLog := logs[1]
+
+	if newLog.Topics[0] != arkivlogs.ArkivEntityUpdated {
+		return fmt.Errorf("expected ArkivEntityUpdated log, got %s", newLog.Topics[0])
+	}
+
+	newLogData := newLog.Data
+
+	if len(newLogData) != 96 {
+		return fmt.Errorf("expected new log data to be 64 bytes, got %d", len(newLogData))
+	}
+
+	oldEntityExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[:32]).Uint64()
+
+	if oldEntityExpiresAtBlock != (expiresAtBlockExpected - 1) {
+		return fmt.Errorf("expected old entity expires at block to be %d, got %d", expiresAtBlockExpected-1, oldExpiresAtBlock)
+	}
+
+	newExpiresAtBlockU256 := uint256.NewInt(0).SetBytes(newLogData[32:64])
+	newExpiresAtBlock := newExpiresAtBlockU256.Uint64()
+
+	if newExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected new expires at block to be %d, got %d", expiresAtBlockExpected, newExpiresAtBlock)
+	}
+
+	owner := hashToAddress(newLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
+	}
+
+	return nil
+}
+
+func theEntityDeleteLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	if len(receipt.Logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	}
+
+	oldLog := receipt.Logs[0]
+
+	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityDeleted {
+		return fmt.Errorf("expected GolemBaseStorageEntityDeleted log, got %s", oldLog.Topics[0])
+	}
+
+	newLog := receipt.Logs[1]
+
+	if newLog.Topics[0] != arkivlogs.ArkivEntityDeleted {
+		return fmt.Errorf("expected ArkivEntityDeleted log, got %s", newLog.Topics[0])
+	}
+
+	if len(newLog.Topics) != 3 {
+		return fmt.Errorf("expected 3 topics, got %d", len(newLog.Topics))
+	}
+
+	if newLog.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv entity deleted entity key to be %s, got %s", w.CreatedEntityKey.Hex(), newLog.Topics[1])
+	}
+
+	owner := hashToAddress(newLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
+	}
+
+	return nil
+}
+
+func theEntityExtendLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	if len(receipt.Logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	}
+
+	oldLog := receipt.Logs[0]
+
+	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityBTLExtended {
+		return fmt.Errorf("expected GolemBaseStorageEntityBTLExtended log, got %s", oldLog.Topics[0])
+	}
+
+	{
+		oldLogData := oldLog.Data
+		if len(oldLogData) != 64 {
+			return fmt.Errorf("expected old log data to be 64 bytes, got %d", len(oldLogData))
+		}
+		oldExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData[:32]).Uint64()
+		if oldExpiresAtBlock != (receipt.BlockNumber.Uint64() + 100 - 1) {
+			return fmt.Errorf("expected old entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+100-1, oldExpiresAtBlock)
+		}
+		newExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData[32:64]).Uint64()
+		if newExpiresAtBlock != (receipt.BlockNumber.Uint64() + 200 - 1) {
+			return fmt.Errorf("expected new entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+200-1, newExpiresAtBlock)
+		}
+	}
+
+	newLog := receipt.Logs[1]
+
+	if newLog.Topics[0] != arkivlogs.ArkivEntityBTLExtended {
+		return fmt.Errorf("expected ArkivEntityBTLExtended log, got %s", newLog.Topics[0])
+	}
+
+	if len(newLog.Topics) != 3 {
+		return fmt.Errorf("expected 3 topics, got %d", len(newLog.Topics))
+	}
+
+	if newLog.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv entity extended entity key to be %s, got %s", w.CreatedEntityKey.Hex(), newLog.Topics[1])
+	}
+
+	owner := hashToAddress(newLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
+	}
+	{
+		newLogData := newLog.Data
+		if len(newLogData) != 96 {
+			return fmt.Errorf("expected new log data to be 96 bytes, got %d", len(newLogData))
+		}
+		oldExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[:32]).Uint64()
+		if oldExpiresAtBlock != (receipt.BlockNumber.Uint64() + 100 - 1) {
+			return fmt.Errorf("expected old entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+100-1, oldExpiresAtBlock)
+		}
+		newExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[32:64]).Uint64()
+		if newExpiresAtBlock != (receipt.BlockNumber.Uint64() + 200 - 1) {
+			return fmt.Errorf("expected new entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+200-1, newExpiresAtBlock)
+		}
+	}
+
 	return nil
 }

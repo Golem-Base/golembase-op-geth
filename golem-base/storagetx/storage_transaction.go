@@ -191,7 +191,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 			expiresAtBlockNumberBig.PutUint256(data[:32])
 
 			cost := uint256.NewInt(0)
-			cost.PutUint256(data[:32])
+			cost.PutUint256(data[32:])
 
 			// create the log for the created entity
 			logs = append(
@@ -221,10 +221,6 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 	}
 
 	for opIx, create := range tx.Create {
-
-		if create.BTL == 0 {
-			return nil, fmt.Errorf("create BTL is 0 for create %d", opIx)
-		}
 
 		// Convert i to a big integer and pad to 32 bytes
 		bigI := big.NewInt(int64(opIx))
@@ -304,10 +300,6 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 
 	for opIx, update := range tx.Update {
 
-		if update.BTL == 0 {
-			return nil, fmt.Errorf("update BTL is 0 for entity %s", update.EntityKey.Hex())
-		}
-
 		oldMetaData, err := entity.GetEntityMetaData(access, update.EntityKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get entity meta data for update %s: %w", update.EntityKey.Hex(), err)
@@ -343,7 +335,9 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 		data := make([]byte, 96)
 		oldExpiresAtBlockNumberBig := uint256.NewInt(oldMetaData.ExpiresAtBlock)
 		oldExpiresAtBlockNumberBig.PutUint256(data[:32])
+
 		expiresAtBlockNumberBig.PutUint256(data[32:64])
+
 		cost := uint256.NewInt(0)
 		cost.PutUint256(data[64:])
 
