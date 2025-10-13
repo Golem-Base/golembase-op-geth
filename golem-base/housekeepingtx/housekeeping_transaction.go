@@ -9,11 +9,18 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
+
+func addressToHash(a common.Address) common.Hash {
+	h := common.Hash{}
+	copy(h[12:], a[:])
+	return h
+}
 
 func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (_ []*types.Log, err error) {
 
@@ -37,20 +44,33 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 
 	deleteEntity := func(toDelete common.Hash) error {
 
-		err := entity.Delete(st, toDelete)
+		owner, err := entity.Delete(st, toDelete)
 		if err != nil {
 			return fmt.Errorf("failed to delete entity: %w", err)
 		}
 
 		// create the log for the created entity
-		log := &types.Log{
-			Address:     address.GolemBaseStorageProcessorAddress, // Set the appropriate address if needed
-			Topics:      []common.Hash{storagetx.GolemBaseStorageEntityDeleted, toDelete},
-			Data:        []byte{},
-			BlockNumber: blockNumber,
-		}
+		logs = append(
+			logs,
+			&types.Log{
+				Address:     address.GolemBaseStorageProcessorAddress, // Set the appropriate address if needed
+				Topics:      []common.Hash{storagetx.GolemBaseStorageEntityDeleted, toDelete},
+				Data:        []byte{},
+				BlockNumber: blockNumber,
+			},
+			&types.Log{
+				Address: common.Address(address.GolemBaseStorageProcessorAddress),
+				Topics: []common.Hash{
+					arkivlogs.ArkivEntityExpired,
+					toDelete,
+					addressToHash(owner),
+				},
+				Data:        []byte{},
+				BlockNumber: blockNumber,
+			},
+		)
 
-		logs = append(logs, log)
+		// logs = append(logs, log)
 
 		return nil
 	}

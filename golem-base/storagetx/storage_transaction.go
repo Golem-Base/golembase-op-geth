@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
@@ -155,6 +156,12 @@ type ExtendBTL struct {
 	NumberOfBlocks uint64      `json:"numberOfBlocks"`
 }
 
+func addressToHash(a common.Address) common.Hash {
+	h := common.Hash{}
+	copy(h[12:], a[:])
+	return h
+}
+
 func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
 
 	defer func() {
@@ -180,17 +187,33 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 		if emitLogs {
 			expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
 
-			data := make([]byte, 32)
+			data := make([]byte, 64)
 			expiresAtBlockNumberBig.PutUint256(data[:32])
 
+			cost := uint256.NewInt(0)
+			cost.PutUint256(data[:32])
+
 			// create the log for the created entity
-			log := &types.Log{
-				Address:     address.GolemBaseStorageProcessorAddress,
-				Topics:      []common.Hash{GolemBaseStorageEntityCreated, key},
-				Data:        data,
-				BlockNumber: blockNumber,
-			}
-			logs = append(logs, log)
+			logs = append(
+				logs,
+				&types.Log{
+					Address:     address.GolemBaseStorageProcessorAddress,
+					Topics:      []common.Hash{GolemBaseStorageEntityCreated, key},
+					Data:        data[:32],
+					BlockNumber: blockNumber,
+				},
+				&types.Log{
+					Address: common.Address(address.GolemBaseStorageProcessorAddress),
+					Topics: []common.Hash{
+						arkivlogs.ArkivEntityCreated,
+						key,
+						addressToHash(ap.Owner),
+					},
+					Data:        data,
+					BlockNumber: blockNumber,
+				},
+			)
+
 		}
 
 		return nil
@@ -230,7 +253,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 
 	deleteEntity := func(toDelete common.Hash, emitLogs bool) error {
 
-		err := entity.Delete(access, toDelete)
+		owner, err := entity.Delete(access, toDelete)
 		if err != nil {
 			return fmt.Errorf("failed to delete entity: %w", err)
 		}
@@ -238,14 +261,25 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 		if emitLogs {
 
 			// create the log for the created entity
-			log := &types.Log{
-				Address:     address.GolemBaseStorageProcessorAddress,
-				Topics:      []common.Hash{GolemBaseStorageEntityDeleted, toDelete},
-				Data:        []byte{},
-				BlockNumber: blockNumber,
-			}
-
-			logs = append(logs, log)
+			logs = append(
+				logs,
+				&types.Log{
+					Address:     address.GolemBaseStorageProcessorAddress,
+					Topics:      []common.Hash{GolemBaseStorageEntityDeleted, toDelete},
+					Data:        []byte{},
+					BlockNumber: blockNumber,
+				},
+				&types.Log{
+					Address: common.Address(address.GolemBaseStorageProcessorAddress),
+					Topics: []common.Hash{
+						arkivlogs.ArkivEntityDeleted,
+						toDelete,
+						addressToHash(owner),
+					},
+					Data:        []byte{},
+					BlockNumber: blockNumber,
+				},
+			)
 		}
 
 		return nil
@@ -306,40 +340,71 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 		}
 
 		expiresAtBlockNumberBig := uint256.NewInt(ap.ExpiresAtBlock)
-		data := make([]byte, 32)
-		expiresAtBlockNumberBig.PutUint256(data[:32])
+		data := make([]byte, 96)
+		oldExpiresAtBlockNumberBig := uint256.NewInt(oldMetaData.ExpiresAtBlock)
+		oldExpiresAtBlockNumberBig.PutUint256(data[:32])
+		expiresAtBlockNumberBig.PutUint256(data[32:64])
+		cost := uint256.NewInt(0)
+		cost.PutUint256(data[64:])
 
-		logs = append(logs, &types.Log{
-			Address:     address.GolemBaseStorageProcessorAddress,
-			Topics:      []common.Hash{GolemBaseStorageEntityUpdated, update.EntityKey},
-			Data:        data,
-			BlockNumber: blockNumber,
-		})
+		logs = append(
+			logs,
+			&types.Log{
+				Address:     address.GolemBaseStorageProcessorAddress,
+				Topics:      []common.Hash{GolemBaseStorageEntityUpdated, update.EntityKey},
+				Data:        data[32:64],
+				BlockNumber: blockNumber,
+			},
+			&types.Log{
+				Address: common.Address(address.GolemBaseStorageProcessorAddress),
+				Topics: []common.Hash{
+					arkivlogs.ArkivEntityUpdated,
+					update.EntityKey,
+					addressToHash(ap.Owner),
+				},
+				Data:        data,
+				BlockNumber: blockNumber,
+			},
+		)
 
 	}
 
 	for _, extend := range tx.Extend {
-		newExpiresAtBlock, err := entity.ExtendBTL(access, extend.EntityKey, extend.NumberOfBlocks)
+		oldExpiresAtBlock, owner, err := entity.ExtendBTL(access, extend.EntityKey, extend.NumberOfBlocks)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extend BTL of entity %s: %w", extend.EntityKey.Hex(), err)
 		}
 
-		oldExpiresAtBlock := newExpiresAtBlock - extend.NumberOfBlocks
+		newExpiresAtBlock := oldExpiresAtBlock + extend.NumberOfBlocks
 
 		oldExpiresAtBlockBig := uint256.NewInt(oldExpiresAtBlock)
 		newExpiresAtBlockBig := uint256.NewInt(newExpiresAtBlock)
 
-		data := make([]byte, 64)
-
+		data := make([]byte, 96)
 		oldExpiresAtBlockBig.PutUint256(data[:32])
-		newExpiresAtBlockBig.PutUint256(data[32:])
+		newExpiresAtBlockBig.PutUint256(data[32:64])
+		cost := uint256.NewInt(0)
+		cost.PutUint256(data[64:])
 
-		logs = append(logs, &types.Log{
-			Address:     address.GolemBaseStorageProcessorAddress,
-			Topics:      []common.Hash{GolemBaseStorageEntityBTLExtended, extend.EntityKey},
-			Data:        data,
-			BlockNumber: blockNumber,
-		})
+		logs = append(
+			logs,
+			&types.Log{
+				Address:     address.GolemBaseStorageProcessorAddress,
+				Topics:      []common.Hash{GolemBaseStorageEntityBTLExtended, extend.EntityKey},
+				Data:        data[:64],
+				BlockNumber: blockNumber,
+			},
+			&types.Log{
+				Address: common.Address(address.GolemBaseStorageProcessorAddress),
+				Topics: []common.Hash{
+					arkivlogs.ArkivEntityBTLExtended,
+					extend.EntityKey,
+					addressToHash(owner),
+				},
+				Data:        data,
+				BlockNumber: blockNumber,
+			},
+		)
 	}
 
 	return logs, nil
