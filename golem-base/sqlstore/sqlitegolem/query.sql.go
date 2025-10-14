@@ -289,6 +289,7 @@ const getNumericAnnotations = `-- name: GetNumericAnnotations :many
 SELECT a.annotation_key, a.value
 FROM numeric_annotations AS a INNER JOIN entities AS e
   ON a.entity_key = e.key
+AND a.entity_last_modified_at_block = e.last_modified_at_block
 AND e.deleted = FALSE
 AND e.last_modified_at_block <= ?2
 AND NOT EXISTS (
@@ -354,6 +355,7 @@ const getStringAnnotations = `-- name: GetStringAnnotations :many
 SELECT a.annotation_key, a.value
 FROM string_annotations AS a INNER JOIN entities AS e
   ON a.entity_key = e.key
+AND a.entity_last_modified_at_block = e.last_modified_at_block
 AND e.deleted = FALSE
 AND e.last_modified_at_block <= ?2
 AND NOT EXISTS (
