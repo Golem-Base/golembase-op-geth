@@ -15,7 +15,6 @@ func pointerOf[T any](v T) *T {
 
 func TestParse(t *testing.T) {
 	t.Run("quoted string", func(t *testing.T) {
-
 		v, err := query.Parse(`name = "test\"2"`)
 		require.NoError(t, err)
 
@@ -38,7 +37,11 @@ func TestParse(t *testing.T) {
 			},
 			v,
 		)
+	})
 
+	t.Run("empty query", func(t *testing.T) {
+		_, err := query.Parse(``)
+		require.Error(t, err)
 	})
 
 	t.Run("number", func(t *testing.T) {
@@ -385,7 +388,7 @@ func TestParse(t *testing.T) {
 
 	t.Run("owner", func(t *testing.T) {
 		owner := common.HexToAddress("0x1")
-		v, err := query.Parse(fmt.Sprintf(`$owner = "%s"`, owner))
+		v, err := query.Parse(fmt.Sprintf(`$owner = %s`, owner))
 		require.NoError(t, err)
 
 		require.Equal(
@@ -408,7 +411,7 @@ func TestParse(t *testing.T) {
 
 	t.Run("not owner", func(t *testing.T) {
 		owner := common.HexToAddress("0x1")
-		v, err := query.Parse(fmt.Sprintf(`$owner != "%s"`, owner))
+		v, err := query.Parse(fmt.Sprintf(`$owner != %s`, owner))
 		require.NoError(t, err)
 
 		require.Equal(
