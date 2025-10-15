@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -19,7 +20,7 @@ type BlockRange struct {
 // using a Merkle tree structure
 type SimpleMerkleTree struct {
 	chunkSize   int
-	chunkHashes [][]byte // SHA256 digests of each chunk
+	chunkHashes []common.Hash // SHA256 digests of each chunk
 	fullPath    string
 }
 
@@ -27,7 +28,7 @@ type SimpleMerkleTree struct {
 func NewSimpleMerkleTree(chunkSize int, fullPath string) *SimpleMerkleTree {
 	return &SimpleMerkleTree{
 		chunkSize:   chunkSize,
-		chunkHashes: make([][]byte, 0),
+		chunkHashes: make([]common.Hash, 0),
 		fullPath:    fullPath,
 	}
 }
@@ -45,7 +46,7 @@ func (mt *SimpleMerkleTree) Build() error {
 	count := int(math.Ceil(float64(size) / float64(mt.chunkSize)))
 
 	// Clear existing hashes
-	mt.chunkHashes = make([][]byte, 0, count)
+	mt.chunkHashes = make([]common.Hash, 0, count)
 
 	// Open file for reading
 	f, err := os.Open(mt.fullPath)
@@ -64,7 +65,7 @@ func (mt *SimpleMerkleTree) Build() error {
 
 		// Hash the chunk
 		hash := sha256.Sum256(buffer[:n])
-		mt.chunkHashes = append(mt.chunkHashes, hash[:])
+		mt.chunkHashes = append(mt.chunkHashes, common.Hash(hash))
 	}
 
 	return nil
@@ -72,7 +73,7 @@ func (mt *SimpleMerkleTree) Build() error {
 
 // Update applies chunk-level updates or truncates, then rebuilds the tree
 func (mt *SimpleMerkleTree) Update(blockRanges []BlockRange) error {
-	log.Debug("Updating Merkle tree", "blockRanges", blockRanges)
+	log.Debug("Updating Merkle tree", "blockRanges length", len(blockRanges), "blockRanges", blockRanges)
 	// 1) Re-digest any ranges marked as "dirty"
 	if len(blockRanges) > 0 {
 		f, err := os.Open(mt.fullPath)
@@ -105,10 +106,10 @@ func (mt *SimpleMerkleTree) Update(blockRanges []BlockRange) error {
 
 				if idx < int64(len(mt.chunkHashes)) {
 					// Overwrite existing chunk digest
-					mt.chunkHashes[idx] = hash[:]
+					mt.chunkHashes[idx] = common.Hash(hash)
 				} else {
 					// Writing past EOF; append new chunk digest
-					mt.chunkHashes = append(mt.chunkHashes, hash[:])
+					mt.chunkHashes = append(mt.chunkHashes, common.Hash(hash))
 				}
 			}
 		}
@@ -147,17 +148,19 @@ func (mt *SimpleMerkleTree) Update(blockRanges []BlockRange) error {
 			}
 
 			hash := sha256.Sum256(buffer[:n])
-			mt.chunkHashes[expectedChunks-1] = hash[:]
+			mt.chunkHashes[expectedChunks-1] = common.Hash(hash)
 		}
 	}
+
+	log.Trace("Merkle tree updated", "chunkHashes length", len(mt.chunkHashes), "chunkHashes", mt.chunkHashes)
 
 	return nil
 }
 
-// Root returns the current Merkle root as raw bytes
-func (mt *SimpleMerkleTree) Root() []byte {
+// Root returns the current Merkle root as a common.Hash
+func (mt *SimpleMerkleTree) Root() common.Hash {
 	if len(mt.chunkHashes) == 0 {
-		return []byte{}
+		return common.Hash{}
 	}
 
 	log.Trace("Building Merkle tree", "chunkHashes", mt.chunkHashes)
@@ -166,9 +169,9 @@ func (mt *SimpleMerkleTree) Root() []byte {
 }
 
 // buildMerkleRoot builds a Merkle tree from the chunk hashes and returns the root
-func (mt *SimpleMerkleTree) buildMerkleRoot(hashes [][]byte) []byte {
+func (mt *SimpleMerkleTree) buildMerkleRoot(hashes []common.Hash) common.Hash {
 	if len(hashes) == 0 {
-		return []byte{}
+		return common.Hash{}
 	}
 
 	if len(hashes) == 1 {
@@ -176,19 +179,19 @@ func (mt *SimpleMerkleTree) buildMerkleRoot(hashes [][]byte) []byte {
 	}
 
 	// Build next level of the tree
-	var nextLevel [][]byte
+	var nextLevel []common.Hash
 
 	for i := 0; i < len(hashes); i += 2 {
 		if i+1 < len(hashes) {
 			// Combine two hashes
-			combined := append(hashes[i], hashes[i+1]...)
+			combined := append(hashes[i][:], hashes[i+1][:]...)
 			hash := sha256.Sum256(combined)
-			nextLevel = append(nextLevel, hash[:])
+			nextLevel = append(nextLevel, common.Hash(hash))
 		} else {
 			// Odd number of hashes, carry forward the last one
-			combined := append(hashes[i], hashes[i]...)
+			combined := append(hashes[i][:], hashes[i][:]...)
 			hash := sha256.Sum256(combined)
-			nextLevel = append(nextLevel, hash[:])
+			nextLevel = append(nextLevel, common.Hash(hash))
 		}
 	}
 
@@ -197,12 +200,9 @@ func (mt *SimpleMerkleTree) buildMerkleRoot(hashes [][]byte) []byte {
 }
 
 // GetChunkHashes returns a copy of the current chunk hashes
-func (mt *SimpleMerkleTree) GetChunkHashes() [][]byte {
-	result := make([][]byte, len(mt.chunkHashes))
-	for i, hash := range mt.chunkHashes {
-		result[i] = make([]byte, len(hash))
-		copy(result[i], hash)
-	}
+func (mt *SimpleMerkleTree) GetChunkHashes() []common.Hash {
+	result := make([]common.Hash, len(mt.chunkHashes))
+	copy(result, mt.chunkHashes)
 	return result
 }
 
@@ -217,14 +217,11 @@ func (mt *SimpleMerkleTree) Copy() *SimpleMerkleTree {
 	copiedTree := &SimpleMerkleTree{
 		chunkSize:   mt.chunkSize,
 		fullPath:    mt.fullPath,
-		chunkHashes: make([][]byte, len(mt.chunkHashes)),
+		chunkHashes: make([]common.Hash, len(mt.chunkHashes)),
 	}
 
-	// Deep copy the chunk hashes
-	for i, hash := range mt.chunkHashes {
-		copiedTree.chunkHashes[i] = make([]byte, len(hash))
-		copy(copiedTree.chunkHashes[i], hash)
-	}
+	// Copy the chunk hashes
+	copy(copiedTree.chunkHashes, mt.chunkHashes)
 
 	return copiedTree
 }

@@ -4,15 +4,16 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"iter"
 	"os"
 	"path/filepath"
-
-	"encoding/hex"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/fuse"
 	"github.com/ethereum/go-ethereum/golem-base/hasher"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore/sqlitegolem"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
@@ -62,12 +63,13 @@ type ExtendBTL struct {
 
 // SQLStore encapsulates the SQLite SQLStore functionality
 type SQLStore struct {
-	db     *sql.DB
-	hasher *hasher.SimpleMerkleTree
+	db         *sql.DB
+	hasher     *hasher.SimpleMerkleTree
+	fuseDriver *fuse.FuseDriver
 }
 
 // NewStore creates a new ETL instance with database connection and schema setup
-func NewStore(dbFile string) (*SQLStore, error) {
+func NewStore(dbFile string, fuseDriver *fuse.FuseDriver) (*SQLStore, error) {
 	dir := filepath.Dir(dbFile)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
@@ -103,15 +105,23 @@ func NewStore(dbFile string) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to check schema: %w", err)
 	}
 
-	hasher := hasher.NewSimpleMerkleTree(4096, dbFile)
-	hasher.Build()
-	log.Info("Hasher root after build", "root", hex.EncodeToString(hasher.Root()))
+	var dbHasher *hasher.SimpleMerkleTree
+	if fuseDriver != nil {
+		dbHasher = hasher.NewSimpleMerkleTree(4096, dbFile)
+		dbHasher.Build()
+		log.Info("Hasher root after build", "root", hex.EncodeToString(dbHasher.Root().Bytes()))
+	} else {
+		dbHasher = nil
+	}
 
-	return &SQLStore{db: db, hasher: hasher}, nil
+	return &SQLStore{db: db, hasher: dbHasher, fuseDriver: fuseDriver}, nil
 }
 
 // Close closes the database connection
 func (e *SQLStore) Close() error {
+	if e.fuseDriver != nil {
+		e.fuseDriver.Unmount()
+	}
 	return e.db.Close()
 }
 
@@ -424,14 +434,34 @@ func (e *SQLStore) SnapSyncToBlock(
 	return tx.Commit()
 }
 
+// Make a savepoint on SQLite
+func (e *SQLStore) MakeSavepoint(ctx context.Context) error {
+	log.Info("Making savepoint on SQLite")
+	_, err := e.db.ExecContext(ctx, "SAVEPOINT savepoint")
+	if err != nil {
+		return fmt.Errorf("failed to make savepoint: %w", err)
+	}
+	return nil
+}
+
+// Rollback to the savepoint on SQLite
+func (e *SQLStore) RollbackToSavepoint(ctx context.Context) error {
+	log.Info("Rolling back to savepoint on SQLite")
+	_, err := e.db.ExecContext(ctx, "ROLLBACK TO savepoint")
+	if err != nil {
+		return fmt.Errorf("failed to rollback to savepoint: %w", err)
+	}
+	return nil
+}
+
 // InsertBlock processes a single block from the WAL and inserts it into the database
-func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID string) (err error) {
+func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID string) (blockDbHash common.Hash, err error) {
 	log.Info("processing block", "block", blockWal.BlockInfo.Number)
 	defer log.Info("processing block end", "block", blockWal.BlockInfo.Number)
 
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return common.Hash{}, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
 	defer func() {
@@ -445,18 +475,18 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 	// Ensure single network constraint: check if this would create a new network
 	hasNetwork, err := txDB.HasProcessingStatus(ctx, networkID)
 	if err != nil {
-		return fmt.Errorf("failed to check if network exists: %w", err)
+		return common.Hash{}, fmt.Errorf("failed to check if network exists: %w", err)
 	}
 
 	if !hasNetwork {
 		// This is a new network, check if there are already other networks
 		networkCount, err := txDB.CountNetworks(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to count existing networks: %w", err)
+			return common.Hash{}, fmt.Errorf("failed to count existing networks: %w", err)
 		}
 
 		if networkCount > 0 {
-			return fmt.Errorf("cannot add network %s: database already contains %d network(s), only one network is allowed", networkID, networkCount)
+			return common.Hash{}, fmt.Errorf("cannot add network %s: database already contains %d network(s), only one network is allowed", networkID, networkCount)
 		}
 
 		err = txDB.InsertProcessingStatus(ctx, sqlitegolem.InsertProcessingStatusParams{
@@ -465,7 +495,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 			LastProcessedBlockHash:   blockWal.BlockInfo.ParentHash.Hex(),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to insert initial processing status: %w", err)
+			return common.Hash{}, fmt.Errorf("failed to insert initial processing status: %w", err)
 		}
 	}
 
@@ -475,20 +505,20 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 	if blockWal.BlockInfo.Number > 1 { // Skip check for genesis block
 		processingStatus, err := txDB.GetProcessingStatus(ctx, networkID)
 		if err != nil {
-			return fmt.Errorf("failed to get processing status: %w", err)
+			return common.Hash{}, fmt.Errorf("failed to get processing status: %w", err)
 		}
 
 		expectedParentHash := processingStatus.LastProcessedBlockHash
 		actualParentHash := blockWal.BlockInfo.ParentHash.Hex()
 
 		if expectedParentHash != actualParentHash {
-			return fmt.Errorf("parent block hash mismatch: expected %s, got %s", expectedParentHash, actualParentHash)
+			return common.Hash{}, fmt.Errorf("parent block hash mismatch: expected %s, got %s", expectedParentHash, actualParentHash)
 		}
 
 		// Verify block number sequence
 		expectedBlockNumber := processingStatus.LastProcessedBlockNumber + 1
 		if int64(blockWal.BlockInfo.Number) != expectedBlockNumber {
-			return fmt.Errorf("block number sequence error: expected %d, got %d", expectedBlockNumber, blockWal.BlockInfo.Number)
+			return common.Hash{}, fmt.Errorf("block number sequence error: expected %d, got %d", expectedBlockNumber, blockWal.BlockInfo.Number)
 		}
 	}
 
@@ -504,7 +534,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				OwnerAddress: op.Create.Owner.Hex(),
 			})
 			if err != nil {
-				return fmt.Errorf("failed to insert entity: %w", err)
+				return common.Hash{}, fmt.Errorf("failed to insert entity: %w", err)
 			}
 
 			for _, annotation := range op.Create.NumericAnnotations {
@@ -514,7 +544,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 					Value:         int64(annotation.Value),
 				})
 				if err != nil {
-					return fmt.Errorf("failed to insert numeric annotation: %w", err)
+					return common.Hash{}, fmt.Errorf("failed to insert numeric annotation: %w", err)
 				}
 			}
 
@@ -525,13 +555,13 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 					Value:         annotation.Value,
 				})
 				if err != nil {
-					return fmt.Errorf("failed to insert string annotation: %w", err)
+					return common.Hash{}, fmt.Errorf("failed to insert string annotation: %w", err)
 				}
 			}
 		case op.Update != nil:
 			existingEntity, err := txDB.GetEntity(ctx, op.Update.EntityKey.Hex())
 			if err != nil {
-				return fmt.Errorf("failed to get existing entity: %w", err)
+				return common.Hash{}, fmt.Errorf("failed to get existing entity: %w", err)
 			}
 
 			txDB.DeleteEntity(ctx, op.Update.EntityKey.Hex())
@@ -552,7 +582,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 					Value:         int64(annotation.Value),
 				})
 				if err != nil {
-					return fmt.Errorf("failed to insert numeric annotation: %w", err)
+					return common.Hash{}, fmt.Errorf("failed to insert numeric annotation: %w", err)
 				}
 			}
 
@@ -563,23 +593,23 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 					Value:         annotation.Value,
 				})
 				if err != nil {
-					return fmt.Errorf("failed to insert string annotation: %w", err)
+					return common.Hash{}, fmt.Errorf("failed to insert string annotation: %w", err)
 				}
 			}
 		case op.Delete != nil:
 			err = txDB.DeleteEntity(ctx, op.Delete.Hex())
 			if err != nil {
-				return fmt.Errorf("failed to delete entity: %w", err)
+				return common.Hash{}, fmt.Errorf("failed to delete entity: %w", err)
 			}
 
 			err = txDB.DeleteNumericAnnotations(ctx, op.Delete.Hex())
 			if err != nil {
-				return fmt.Errorf("failed to delete numeric annotations: %w", err)
+				return common.Hash{}, fmt.Errorf("failed to delete numeric annotations: %w", err)
 			}
 
 			err = txDB.DeleteStringAnnotations(ctx, op.Delete.Hex())
 			if err != nil {
-				return fmt.Errorf("failed to delete string annotations: %w", err)
+				return common.Hash{}, fmt.Errorf("failed to delete string annotations: %w", err)
 			}
 		case op.Extend != nil:
 			log.Info("extend BTL", "entity", op.Extend.EntityKey.Hex())
@@ -590,7 +620,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				Key:       op.Extend.EntityKey.Hex(),
 			})
 			if err != nil {
-				return fmt.Errorf("failed to extend entity BTL: %w", err)
+				return common.Hash{}, fmt.Errorf("failed to extend entity BTL: %w", err)
 			}
 		}
 
@@ -603,10 +633,41 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 		LastProcessedBlockHash:   blockWal.BlockInfo.Hash.Hex(),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to insert processing status: %w", err)
+		return common.Hash{}, fmt.Errorf("failed to insert processing status: %w", err)
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// measure the time it takes to process the events
+	start := time.Now()
+	hasher.ProcessEvents(e.fuseDriver.GetEvents(true), e.hasher)
+	hasherRoot := e.hasher.Root()
+	log.Info("hasher after update", "root", hex.EncodeToString(hasherRoot.Bytes()))
+	log.Info("time taken to process events", "time", time.Since(start))
+
+	hasherCopy := e.hasher.Copy()
+	start = time.Now()
+	hasherCopy.Build()
+	hasherCopyRoot := hasherCopy.Root()
+	log.Info("hasher from scratch", "root", hex.EncodeToString(hasherCopyRoot.Bytes()))
+	log.Info("time taken to build hasher from scratch", "time", time.Since(start))
+
+	// new hasher from scratch
+	start = time.Now()
+	hasherNew := hasher.NewSimpleMerkleTree(4096, "/tmp/golem_base/db")
+	hasherNew.Build()
+	hasherNewRoot := hasherNew.Root()
+	log.Info("hasher from scratch on raw file", "root", hex.EncodeToString(hasherNewRoot.Bytes()))
+	log.Info("time taken to build hasher from scratch on raw file", "time", time.Since(start))
+
+	if hasherRoot != hasherCopyRoot || hasherRoot != hasherNewRoot {
+		return hasherRoot, fmt.Errorf("hasher root mismatch")
+	}
+
+	return hasherRoot, nil
 }
 
 func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any) ([]common.Hash, error) {

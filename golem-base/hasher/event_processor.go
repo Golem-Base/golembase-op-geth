@@ -1,6 +1,8 @@
 package hasher
 
 import (
+	"sort"
+
 	"github.com/ethereum/go-ethereum/golem-base/fuse"
 )
 
@@ -21,5 +23,11 @@ func ProcessWriteEvents(events []*fuse.FuseWriteEvent, hasher *SimpleMerkleTree)
 	for _, event := range events {
 		blockRanges = append(blockRanges, BlockRange{Start: event.GetStartIndex(), Length: event.GetChunksChanged()})
 	}
+	sort.Slice(blockRanges, func(i, j int) bool {
+		return blockRanges[i].Start < blockRanges[j].Start
+	})
+
+	//TODO: merge block ranges if they are overlapping
+
 	hasher.Update(blockRanges)
 }

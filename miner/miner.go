@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/interoptypes"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -47,6 +48,7 @@ var (
 type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *txpool.TxPool
+	QueryState() *sqlstore.SQLStore
 }
 type BackendWithHistoricalState interface {
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, tracers.StateReleaseFunc, error)

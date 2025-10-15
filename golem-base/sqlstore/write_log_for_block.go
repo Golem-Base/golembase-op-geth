@@ -1,23 +1,16 @@
 package sqlstore
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
-	"github.com/ethereum/go-ethereum/golem-base/fuse"
-	"github.com/ethereum/go-ethereum/golem-base/hasher"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
@@ -25,13 +18,12 @@ import (
 
 func WriteLogForBlockSqlite(
 	sqlStore *SQLStore,
-	db *state.CachingDB,
+	db state.Database,
 	hc *core.HeaderChain,
 	block *types.Block,
 	chainID *big.Int,
 	receipts []*types.Receipt,
-	fuseDriver *fuse.FuseDriver,
-) (err error) {
+) (blockDbHash common.Hash, err error) {
 
 	ctx := context.Background()
 
@@ -43,106 +35,7 @@ func WriteLogForBlockSqlite(
 
 	networkID := chainID.String()
 
-	processingStatus, err := sqlStore.GetProcessingStatus(ctx, networkID)
-	if err != nil {
-		return fmt.Errorf("failed to get processing status 11: %w", err)
-	}
-
-	var haveToResync bool
-	switch {
-	case processingStatus.LastProcessedBlockNumber == 0 && block.NumberU64() == 1:
-		haveToResync = false
-	case processingStatus.LastProcessedBlockNumber == 0 && block.NumberU64() != 1:
-		haveToResync = true
-	case processingStatus.LastProcessedBlockNumber != int64(block.NumberU64()-1):
-		haveToResync = true
-	case processingStatus.LastProcessedBlockHash != block.ParentHash().Hex():
-		haveToResync = true
-	default:
-		haveToResync = false
-	}
-
-	log.Info(
-		"processing status",
-		"lastProcessedBlockNumber", processingStatus.LastProcessedBlockNumber,
-		"lastProcessedBlockHash", processingStatus.LastProcessedBlockHash,
-		"block", block.NumberU64(),
-		"parentHash", block.ParentHash().Hex(),
-		"haveToResync", haveToResync,
-	)
-
-	if haveToResync {
-
-		log.Info("resyncing", "block", block.NumberU64(), "parentHash", block.ParentHash().Hex())
-
-		entityIterator := func(
-			yield func(*struct {
-				Key      common.Hash
-				Metadata entity.EntityMetaData
-				Payload  []byte
-			},
-				error,
-			) bool,
-		) {
-
-			parentHash := hc.GetHeaderByHash(block.ParentHash())
-			statedb, err := state.New(parentHash.Root, db)
-			if err != nil {
-				yield(nil, fmt.Errorf("failed to get statedb: %w", err))
-				return
-			}
-
-			log.Info("starting entity iteration")
-
-			for entityKey := range allentities.Iterate(statedb) {
-				log.Info("iterating over entity", "entityKey", entityKey.Hex())
-				emd, err := entity.GetEntityMetaData(statedb, entityKey)
-				if err != nil {
-					yield(nil, fmt.Errorf("failed to get entity metadata for key %s: %w", entityKey.Hex(), err))
-					return
-				}
-				payload := entity.GetPayload(statedb, entityKey)
-
-				if !yield(&struct {
-					Key      common.Hash
-					Metadata entity.EntityMetaData
-					Payload  []byte
-				}{
-					Key:      entityKey,
-					Metadata: *emd,
-					Payload:  payload,
-				}, nil) {
-					return
-				}
-			}
-		}
-
-		log.Info("resyncing -1", "block", block.NumberU64(), "parentHash", block.ParentHash().Hex())
-
-		if block.NumberU64() == uint64(1) {
-
-			// for genesis block, we need to iterate over all entities in the database, this is an empty iterator
-
-			log.Info("resyncing on top of genesis block", "block", block.NumberU64(), "parentHash", block.ParentHash().Hex())
-			entityIterator = func(
-				yield func(*struct {
-					Key      common.Hash
-					Metadata entity.EntityMetaData
-					Payload  []byte
-				},
-					error,
-				) bool,
-			) {
-
-			}
-		}
-
-		err = sqlStore.SnapSyncToBlock(ctx, chainID.String(), block.NumberU64()-1, block.ParentHash(), entityIterator)
-		if err != nil {
-			return fmt.Errorf("failed to snap sync to block: %w", err)
-		}
-
-	}
+	SyncSQLiteFromChain(block.NumberU64()-1, block.ParentHash(), hc.GetHeaderByHash(block.ParentHash()).Root, sqlStore, chainID, db)
 
 	txns := block.Transactions()
 
@@ -192,7 +85,7 @@ func WriteLogForBlockSqlite(
 			stx := storagetx.StorageTransaction{}
 			err := rlp.DecodeBytes(tx.Data(), &stx)
 			if err != nil {
-				return fmt.Errorf("failed to decode storage transaction: %w", err)
+				return common.Hash{}, fmt.Errorf("failed to decode storage transaction: %w", err)
 			}
 
 			createdLogs := []*types.Log{}
@@ -227,7 +120,7 @@ func WriteLogForBlockSqlite(
 
 				from, err := types.Sender(signer, tx)
 				if err != nil {
-					return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
+					return common.Hash{}, fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
 				}
 
 				cr := Create{
@@ -297,40 +190,15 @@ func WriteLogForBlockSqlite(
 
 	}
 
-	err = sqlStore.InsertBlock(
+	blockDbHash, err = sqlStore.InsertBlock(
 		ctx,
 		wal,
 		networkID,
 	)
+
 	if err != nil {
-		return fmt.Errorf("failed to insert block: %w", err)
+		return common.Hash{}, fmt.Errorf("failed to insert block: %w", err)
 	}
 
-	// measure the time it takes to process the events
-	start := time.Now()
-	hasher.ProcessEvents(fuseDriver.GetEvents(true), sqlStore.hasher)
-	hasherRoot := sqlStore.hasher.Root()
-	log.Info("hasher after update", "root", hex.EncodeToString(hasherRoot))
-	log.Info("time taken to process events", "time", time.Since(start))
-
-	hasherCopy := sqlStore.hasher.Copy()
-	start = time.Now()
-	hasherCopy.Build()
-	hasherCopyRoot := hasherCopy.Root()
-	log.Info("hasher from scratch", "root", hex.EncodeToString(hasherCopyRoot))
-	log.Info("time taken to build hasher from scratch", "time", time.Since(start))
-
-	// new hasher from scratch
-	start = time.Now()
-	hasherNew := hasher.NewSimpleMerkleTree(4096, "/tmp/golem_base/db")
-	hasherNew.Build()
-	hasherNewRoot := hasherNew.Root()
-	log.Info("hasher from scratch on raw file", "root", hex.EncodeToString(hasherNewRoot))
-	log.Info("time taken to build hasher from scratch on raw file", "time", time.Since(start))
-
-	if !bytes.Equal(hasherRoot, hasherCopyRoot) || !bytes.Equal(hasherRoot, hasherNewRoot) {
-		return fmt.Errorf("hasher root mismatch")
-	}
-
-	return nil
+	return blockDbHash, nil
 }

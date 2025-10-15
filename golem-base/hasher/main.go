@@ -1,7 +1,6 @@
 package hasher
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -26,7 +25,7 @@ func main() {
 	}
 
 	fmt.Printf("Chunk count: %d\n", mt.ChunkCount())
-	fmt.Printf("Root hash: %s\n", hex.EncodeToString(mt.Root()))
+	fmt.Printf("Root hash: %s\n", hex.EncodeToString(mt.Root().Bytes()))
 
 	// Modify a chunk in the middle
 	fmt.Println("\nModifying chunk 5...")
@@ -43,7 +42,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("New root hash: %s\n", hex.EncodeToString(mt.Root()))
+	fmt.Printf("New root hash: %s\n", hex.EncodeToString(mt.Root().Bytes()))
 
 	// Truncate the file
 	fmt.Println("\nTruncating file to 5KB...")
@@ -60,10 +59,10 @@ func main() {
 	if err := mt2.Build(); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Root hash after truncation: %s\n", hex.EncodeToString(mt2.Root()))
+	fmt.Printf("Root hash after truncation: %s\n", hex.EncodeToString(mt2.Root().Bytes()))
 
 	fmt.Printf("Chunk count after truncation: %d\n", mt.ChunkCount())
-	fmt.Printf("Root hash after truncation: %s\n", hex.EncodeToString(mt.Root()))
+	fmt.Printf("Root hash after truncation: %s\n", hex.EncodeToString(mt.Root().Bytes()))
 
 	// Example: Multiple writes
 	fmt.Println("\nSimulating multiple writes...")
@@ -84,15 +83,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Root hash after multiple writes: %s\n", hex.EncodeToString(mt.Root()))
+	fmt.Printf("Root hash after multiple writes: %s\n", hex.EncodeToString(mt.Root().Bytes()))
 	// create a new merkle tree to calculate the root hash of the file and compare it with the previous root hash
 	mt2 = NewSimpleMerkleTree(1024, testFile)
 	if err := mt2.Build(); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Root hash after multiple writes: %s\n", hex.EncodeToString(mt2.Root()))
+	fmt.Printf("Root hash after multiple writes: %s\n", hex.EncodeToString(mt2.Root().Bytes()))
 
-	if bytes.Equal(mt.Root(), mt2.Root()) {
+	if mt.Root() == mt2.Root() {
 		fmt.Println("Root hashes are the same")
 	} else {
 		fmt.Println("Root hashes are different")

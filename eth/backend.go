@@ -116,8 +116,7 @@ type Ethereum struct {
 	historicalRPCService *rpc.Client
 
 	// Arkiv additions
-	sqlStore   *sqlstore.SQLStore
-	fuseDriver *fuse.FuseDriver
+	sqlStore *sqlstore.SQLStore
 
 	interopRPC *interop.InteropClient
 
@@ -279,7 +278,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
 	sqlStateFile := stack.Config().GolemBaseSQLStateFile
 	sqlFinalStateFile := stack.Config().GolemBaseSQLStateFile
-
+	var fuseDriver *fuse.FuseDriver
 	if err := os.MkdirAll(filepath.Dir(sqlStateFile), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create source directory: %w", err)
 	}
@@ -301,7 +300,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to mount FUSE filesystem: %w", err)
 		}
-		eth.fuseDriver = fd
+		fuseDriver = fd
 		log.Info("FUSE filesystem mounted successfully", "mountPoint", config.MountPoint)
 		sqlFinalStateFile = filepath.Join(config.MountPoint, filepath.Base(sqlStateFile))
 	}
@@ -309,27 +308,31 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	log.Info("Creating SQLStore DB", "path", sqlFinalStateFile)
 	st, err := sqlstore.NewStore(
 		sqlFinalStateFile,
+		fuseDriver,
 	)
-	eth.sqlStore = st
+
 	if err != nil {
 		log.Error("Failed to create SQLStore", "error", err)
 		time.Sleep(120 * time.Second)
 		return nil, fmt.Errorf("failed to create SQLStore: %w", err)
 	}
+	eth.sqlStore = st
 
 	onNewBlock := func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
 		if sqlStateFile == ":memory:" {
 			return nil
 		}
-		return sqlstore.WriteLogForBlockSqlite(
+		blockDbHash, err := sqlstore.WriteLogForBlockSqlite(
 			st,
 			db,
 			hc,
 			block,
 			chainID,
 			receipts,
-			eth.fuseDriver,
 		)
+		log.Info("blockDbHash onNewBlock", "blockDbHash", blockDbHash)
+
+		return err
 	}
 
 	eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, onNewBlock)
@@ -338,7 +341,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	// Sync if needed current block with new SQlite file
-	sqlstore.SyncSQLiteFromChain(eth.blockchain.CurrentBlock().Number.Uint64(), eth.blockchain.CurrentBlock().Hash(), eth.blockchain.CurrentBlock().Root, eth.sqlStore, eth.fuseDriver, big.NewInt(int64(config.NetworkId)), eth.blockchain.StateCache())
+	sqlstore.SyncSQLiteFromChain(eth.blockchain.CurrentBlock().Number.Uint64(), eth.blockchain.CurrentBlock().Hash(), eth.blockchain.CurrentBlock().Root, eth.sqlStore, big.NewInt(int64(config.NetworkId)), eth.blockchain.StateCache())
 	//sqlstore.SyncSQLiteFromChain(eth.blockchain.CurrentBlock(), eth.sqlStore, eth.fuseDriver, big.NewInt(int64(config.NetworkId)), eth.blockchain.StateCache())
 
 	if chainConfig := eth.blockchain.Config(); chainConfig.Optimism != nil { // config.Genesis.Config.ChainID cannot be used because it's based on CLI flags only, thus default to mainnet L1
@@ -547,6 +550,7 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downlo
 func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
+func (s *Ethereum) QueryState() *sqlstore.SQLStore     { return s.sqlStore }
 
 // Protocols returns all the currently configured
 // network protocols to start.
@@ -707,7 +711,6 @@ func (s *Ethereum) Stop() error {
 
 	// Arkiv additions
 	s.sqlStore.Close()
-	s.fuseDriver.Unmount()
 
 	return nil
 }

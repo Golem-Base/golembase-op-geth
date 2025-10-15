@@ -2483,21 +2483,26 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
+		nil,
 	)
 	if err != nil {
 		Fatalf("failed to create SQLStore: %v", err)
 	}
 
 	chain, err := core.NewBlockChainWithOnNewBlock(chainDb, cache, gspec, nil, engine, vmcfg, nil, func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
-		return sqlstore.WriteLogForBlockSqlite(
+		blockDbHash, err := sqlstore.WriteLogForBlockSqlite(
 			st,
 			db,
 			hc,
 			block,
 			config.ChainID,
 			receipts,
-			nil,
 		)
+		if err != nil {
+			return err
+		}
+		log.Info("blockDbHash onNewBlock", "blockDbHash", blockDbHash)
+		return nil
 	})
 	if err != nil {
 		Fatalf("Can't create BlockChain with onNewBlock: %v", err)

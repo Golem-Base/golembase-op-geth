@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/interoptypes"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -231,6 +232,23 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
+
+	// calculate blockDbHash base on sealing block
+	// important is to back the state of DB back after new hash calculation
+	blockDbHash, err := sqlstore.WriteLogForBlockSqlite(
+		miner.backend.QueryState(),
+		miner.chain.StateCache(),
+		miner.chain.HeaderChain(),
+		block,
+		miner.chain.Config().ChainID,
+		work.receipts,
+	)
+
+	if err != nil {
+		return &newPayloadResult{err: err}
+	}
+	log.Info("blockDbHash onSealingBlock", "blockDbHash", blockDbHash)
+
 	return &newPayloadResult{
 		block:    block,
 		fees:     totalFees(block, work.receipts),
