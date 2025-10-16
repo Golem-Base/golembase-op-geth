@@ -89,15 +89,11 @@ func NewArkivAPI(eth *Ethereum, store *sqlstore.SQLStore) *arkivAPI {
 	}
 }
 
-type QueryResponse struct {
-	Data []arkivtype.EntityData `json:"data"`
-}
-
 func (api *arkivAPI) Query(
 	ctx context.Context,
 	req string,
 	op *QueryOptions,
-) (*QueryResponse, error) {
+) (*arkivtype.QueryResponse, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -132,7 +128,7 @@ func (api *arkivAPI) Query(
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	return &QueryResponse{
+	return &arkivtype.QueryResponse{
 		Data: results,
 	}, nil
 }
