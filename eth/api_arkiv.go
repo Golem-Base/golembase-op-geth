@@ -41,8 +41,9 @@ func (options *QueryOptions) toInternalQueryOptions() internalQueryOptions {
 		}
 	case options.IncludeData == nil:
 		return internalQueryOptions{
-			Columns: allColumns,
-			AtBlock: options.AtBlock,
+			Columns:            allColumns,
+			IncludeAnnotations: true,
+			AtBlock:            options.AtBlock,
 		}
 	default:
 		iq := internalQueryOptions{
