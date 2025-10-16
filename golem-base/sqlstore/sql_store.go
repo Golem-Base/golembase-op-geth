@@ -777,3 +777,156 @@ func (e *SQLStore) QueryEntities(
 
 	return results, nil
 }
+
+var ErrStopIteration = errors.New("stop iteration")
+
+func (e *SQLStore) QueryEntitiesInternalIterator(
+	ctx context.Context,
+	query string,
+	args []any,
+	options query.QueryOptions,
+	iterator func(arkivtype.EntityData) error,
+) error {
+	log.Info("Executing query", "query", query, "args", args)
+
+	// Begin a read-only transaction for consistency
+	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Safe to call even after commit
+
+	txDB := sqlitegolem.New(tx)
+
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+
+		err := rows.Err()
+		if err != nil {
+			return fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+		}
+
+		result := struct {
+			key       *string
+			expiresAt *uint64
+			payload   *[]byte
+			owner     *string
+		}{}
+		dest := []any{}
+		for _, column := range options.AllColumns() {
+			switch column {
+			case "key":
+				var key string
+				result.key = &key
+				dest = append(dest, result.key)
+			case "expires_at":
+				var expiration uint64
+				result.expiresAt = &expiration
+				dest = append(dest, result.expiresAt)
+			case "payload":
+				var payload []byte
+				result.payload = &payload
+				dest = append(dest, result.payload)
+			case "owner_address":
+				var owner string
+				result.owner = &owner
+				dest = append(dest, result.owner)
+			case "last_modified_at_block":
+				var lastModifiedAtBlock uint64
+				dest = append(dest, &lastModifiedAtBlock)
+			case "transaction_index_in_block":
+				var transactionIndexInBlock uint64
+				dest = append(dest, &transactionIndexInBlock)
+			case "operation_index_in_transaction":
+				var operationIndexInTransaction uint64
+				dest = append(dest, &operationIndexInTransaction)
+			default:
+				return fmt.Errorf("unknown column: %s", column)
+			}
+		}
+
+		if err := rows.Scan(dest...); err != nil {
+			return fmt.Errorf("failed to get entities for query: %s: %w", query, err)
+		}
+
+		key := common.Hash{}
+		if result.key != nil {
+			key = common.HexToHash(*result.key)
+		}
+		expiresAt := uint64(0)
+		if result.expiresAt != nil {
+			expiresAt = *result.expiresAt
+		}
+		var payload []byte = nil
+		if result.payload != nil {
+			payload = *result.payload
+		}
+		owner := common.Address{}
+		if result.owner != nil {
+			owner = common.HexToAddress(*result.owner)
+		}
+
+		r := arkivtype.EntityData{
+			Key:                key,
+			ExpiresAt:          expiresAt,
+			Value:              payload,
+			Owner:              owner,
+			StringAnnotations:  []entity.StringAnnotation{},
+			NumericAnnotations: []entity.NumericAnnotation{},
+		}
+
+		if options.IncludeAnnotations {
+			// Get string annotations
+			stringAnnotRows, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
+				EntityKey: key.Hex(),
+				Block:     int64(options.AtBlock),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to get string annotations: %w", err)
+			}
+
+			// Get numeric annotations
+			numericAnnotRows, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
+				EntityKey: key.Hex(),
+				Block:     int64(options.AtBlock),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to get numeric annotations: %w", err)
+			}
+
+			// Convert string annotations
+			for _, row := range stringAnnotRows {
+				r.StringAnnotations = append(r.StringAnnotations, entity.StringAnnotation{
+					Key:   row.AnnotationKey,
+					Value: row.Value,
+				})
+			}
+
+			// Convert numeric annotations
+			for _, row := range numericAnnotRows {
+				r.NumericAnnotations = append(r.NumericAnnotations, entity.NumericAnnotation{
+					Key:   row.AnnotationKey,
+					Value: uint64(row.Value),
+				})
+			}
+		}
+
+		err = iterator(r)
+		if errors.Is(err, ErrStopIteration) {
+			break
+		}
+	}
+
+	// Commit the transaction (read-only, but ensures consistency)
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}

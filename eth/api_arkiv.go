@@ -117,19 +117,23 @@ func (api *arkivAPI) Query(
 	}
 	query := expr.Evaluate(queryOptions)
 
-	results, err := api.store.QueryEntities(
+	response := &arkivtype.QueryResponse{}
+
+	err = api.store.QueryEntitiesInternalIterator(
 		ctx,
 		query.Query,
 		query.Args,
 		queryOptions,
+		func(entity arkivtype.EntityData) error {
+			response.Data = append(response.Data, entity)
+			return nil
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	return &arkivtype.QueryResponse{
-		Data: results,
-	}, nil
+	return response, nil
 }
 
 // GetEntityCount returns the total number of entities in the storage.
