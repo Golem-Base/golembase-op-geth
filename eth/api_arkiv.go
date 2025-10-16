@@ -13,7 +13,62 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 )
 
+type IncludeData struct {
+	Key         bool `json:"key"`
+	Annotations bool `json:"annotations"`
+	Payload     bool `json:"payload"`
+	Expiration  bool `json:"expiration"`
+	Owner       bool `json:"owner"`
+}
+
 type QueryOptions struct {
+	AtBlock     *uint64      `json:"at_block"`
+	IncludeData *IncludeData `json:"include_data"`
+}
+
+var allColumns = []string{"key", "expires_at", "owner_address", "payload"}
+
+func (options *QueryOptions) toInternalQueryOptions() internalQueryOptions {
+
+	if options == nil {
+
+	}
+	switch {
+	case options == nil:
+		return internalQueryOptions{
+			Columns:            allColumns,
+			IncludeAnnotations: true,
+		}
+	case options.IncludeData == nil:
+		return internalQueryOptions{
+			Columns: allColumns,
+			AtBlock: options.AtBlock,
+		}
+	default:
+		iq := internalQueryOptions{
+			Columns: []string{},
+			AtBlock: options.AtBlock,
+		}
+		if options.IncludeData.Annotations {
+			iq.IncludeAnnotations = true
+		}
+		if options.IncludeData.Payload {
+			iq.Columns = append(iq.Columns, "payload")
+		}
+		if options.IncludeData.Expiration {
+			iq.Columns = append(iq.Columns, "expires_at")
+		}
+		if options.IncludeData.Owner {
+			iq.Columns = append(iq.Columns, "owner_address")
+		}
+		if options.IncludeData.Key {
+			iq.Columns = append(iq.Columns, "key")
+		}
+		return iq
+	}
+}
+
+type internalQueryOptions struct {
 	AtBlock *uint64 `json:"at_block"`
 	// TODO Ramses: implement this
 	// After that we can use it in GetEntityMetaData
@@ -36,13 +91,15 @@ func NewArkivAPI(eth *Ethereum, store *sqlstore.SQLStore) *arkivAPI {
 func (api *arkivAPI) Query(
 	ctx context.Context,
 	req string,
-	options QueryOptions,
+	op *QueryOptions,
 ) ([]arkivtype.SearchResult, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse query: %w", err)
 	}
+
+	options := op.toInternalQueryOptions()
 
 	block := api.eth.blockchain.CurrentBlock().Number.Uint64()
 	if options.AtBlock != nil {

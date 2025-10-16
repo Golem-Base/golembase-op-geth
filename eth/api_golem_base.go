@@ -27,8 +27,10 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 	entities, err := api.arkivAPI.Query(
 		ctx,
 		q,
-		QueryOptions{
-			Columns: []string{"payload"},
+		&QueryOptions{
+			IncludeData: &IncludeData{
+				Payload: true,
+			},
 		},
 	)
 	if err != nil {
@@ -46,8 +48,14 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 	rows, err := api.arkivAPI.Query(
 		ctx,
 		fmt.Sprintf("$key = %s", key),
-		QueryOptions{
-			IncludeAnnotations: true,
+		&QueryOptions{
+			IncludeData: &IncludeData{
+				Annotations: true,
+				Key:         true,
+				Expiration:  true,
+				Owner:       true,
+				Payload:     true,
+			},
 		},
 	)
 	if err != nil {
@@ -70,8 +78,10 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 
 func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirationBlock uint64) ([]common.Hash, error) {
 	q := fmt.Sprintf(`$expiration = %d`, expirationBlock)
-	entities, err := api.arkivAPI.Query(ctx, q, QueryOptions{
-		Columns: []string{"key"},
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
@@ -87,8 +97,10 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirat
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context, key, value string) ([]common.Hash, error) {
 	q := fmt.Sprintf(`%s = "%s"`, key, value)
-	entities, err := api.arkivAPI.Query(ctx, q, QueryOptions{
-		Columns: []string{"key"},
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
@@ -104,8 +116,10 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context
 
 func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Context, key string, value uint64) ([]common.Hash, error) {
 	q := fmt.Sprintf(`%s = %d`, key, value)
-	entities, err := api.arkivAPI.Query(ctx, q, QueryOptions{
-		Columns: []string{"key"},
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
@@ -120,8 +134,11 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 }
 
 func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
-	entities, err := api.arkivAPI.Query(ctx, req, QueryOptions{
-		Columns: []string{"key", "payload"},
+	entities, err := api.arkivAPI.Query(ctx, req, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key:     true,
+			Payload: true,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
@@ -143,8 +160,10 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 
 func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
 	q := fmt.Sprintf(`$owner = %s`, owner)
-	entities, err := api.arkivAPI.Query(ctx, q, QueryOptions{
-		Columns: []string{"key"},
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
