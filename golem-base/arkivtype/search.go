@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
-type QueryResult struct {
+type EntityData struct {
 	Key       common.Hash    `json:"key"`
 	Value     hexutil.Bytes  `json:"value"`
 	ExpiresAt uint64         `json:"expires_at"`

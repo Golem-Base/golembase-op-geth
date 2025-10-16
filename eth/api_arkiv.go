@@ -89,11 +89,15 @@ func NewArkivAPI(eth *Ethereum, store *sqlstore.SQLStore) *arkivAPI {
 	}
 }
 
+type QueryResponse struct {
+	Data []arkivtype.EntityData `json:"data"`
+}
+
 func (api *arkivAPI) Query(
 	ctx context.Context,
 	req string,
 	op *QueryOptions,
-) ([]arkivtype.QueryResult, error) {
+) (*QueryResponse, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -128,7 +132,9 @@ func (api *arkivAPI) Query(
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	return results, nil
+	return &QueryResponse{
+		Data: results,
+	}, nil
 }
 
 // GetEntityCount returns the total number of entities in the storage.

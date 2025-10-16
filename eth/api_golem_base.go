@@ -37,11 +37,11 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	if len(entities) != 1 {
-		return nil, fmt.Errorf("expected a single result but got %d", len(entities))
+	if len(entities.Data) != 1 {
+		return nil, fmt.Errorf("expected a single result but got %d", len(entities.Data))
 	}
 
-	return []byte(entities[0].Value), nil
+	return []byte(entities.Data[0].Value), nil
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
@@ -62,11 +62,11 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 		return nil, err
 	}
 
-	if len(rows) != 1 {
-		return nil, fmt.Errorf("expected a single result row but got %d", len(rows))
+	if len(rows.Data) != 1 {
+		return nil, fmt.Errorf("expected a single result row but got %d", len(rows.Data))
 	}
 
-	metadata := rows[0]
+	metadata := rows.Data[0]
 
 	return &entity.EntityMetaData{
 		ExpiresAtBlock:     metadata.ExpiresAt,
@@ -87,8 +87,8 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirat
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	results := make([]common.Hash, 0, len(entities))
-	for _, entity := range entities {
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, entity := range entities.Data {
 		results = append(results, entity.Key)
 	}
 
@@ -106,8 +106,8 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	results := make([]common.Hash, 0, len(entities))
-	for _, entity := range entities {
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, entity := range entities.Data {
 		results = append(results, entity.Key)
 	}
 
@@ -125,8 +125,8 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	results := make([]common.Hash, 0, len(entities))
-	for _, entity := range entities {
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, entity := range entities.Data {
 		results = append(results, entity.Key)
 	}
 
@@ -146,7 +146,7 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 
 	searchResults := make([]golemtype.SearchResult, 0)
 
-	for _, entity := range entities {
+	for _, entity := range entities.Data {
 		searchResults = append(searchResults, golemtype.SearchResult{
 			Key:   entity.Key,
 			Value: []byte(entity.Value),
@@ -169,8 +169,8 @@ func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Ad
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	results := make([]common.Hash, 0, len(entities))
-	for _, entity := range entities {
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, entity := range entities.Data {
 		results = append(results, entity.Key)
 	}
 

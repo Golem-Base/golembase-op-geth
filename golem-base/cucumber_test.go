@@ -371,7 +371,7 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(v))
 	}
 
-	var e []arkivtype.QueryResult
+	var e []arkivtype.EntityData
 	if err := rcpClient.CallContext(
 		ctx,
 		&e,
@@ -423,7 +423,7 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", toExpire[0].Hex(), key.Hex())
 	}
 
-	var result []arkivtype.QueryResult
+	var result []arkivtype.EntityData
 	if err := rcpClient.CallContext(
 		ctx,
 		&result,
@@ -471,7 +471,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", keys[0].Hex(), key.Hex())
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
@@ -518,7 +518,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", keys[0].Hex(), key.Hex())
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
@@ -631,7 +631,7 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 	}
 	w.SearchResult = res
 
-	res2 := []arkivtype.QueryResult{}
+	res2 := []arkivtype.EntityData{}
 	if err := rcpClient.CallContext(
 		ctx,
 		&res2,
@@ -711,7 +711,7 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 	}
 	w.SearchResult = res
 
-	res2 := []arkivtype.QueryResult{}
+	res2 := []arkivtype.EntityData{}
 	if err = rcpClient.CallContext(
 		ctx,
 		&res2,
@@ -837,7 +837,7 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(v))
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -911,7 +911,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), res[0].Key.Hex())
 	}
 
-	res2 := []arkivtype.QueryResult{}
+	res2 := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&res2,
@@ -1026,7 +1026,7 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", toExpire[0].Hex(), key.Hex())
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
@@ -1104,7 +1104,7 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 	}
 	w.SearchResult = res
 
-	res2 := []arkivtype.QueryResult{}
+	res2 := []arkivtype.EntityData{}
 	if err := rcpClient.CallContext(
 		ctx,
 		&res2,
@@ -1268,7 +1268,7 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 		return fmt.Errorf("expected %d entities, but got %d", expected, count)
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1304,7 +1304,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 		return fmt.Errorf("entity with key %s not found in the list of all entities", w.CreatedEntityKey.Hex())
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1345,7 +1345,7 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1386,7 +1386,7 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 		return fmt.Errorf("entity with key %s not found in the list of entities of the owner", w.CreatedEntityKey.Hex())
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1427,7 +1427,7 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ap.Owner.Hex())
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1470,7 +1470,7 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 		return fmt.Errorf("expected 0 entities, but got %d", len(entityKeys))
 	}
 
-	entities := []arkivtype.QueryResult{}
+	entities := []arkivtype.EntityData{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1691,7 +1691,7 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	}
 	w.SearchResult = res
 
-	res2 := []arkivtype.QueryResult{}
+	res2 := []arkivtype.EntityData{}
 	if err := w.GethInstance.RPCClient.CallContext(
 		ctx,
 		&res2,
