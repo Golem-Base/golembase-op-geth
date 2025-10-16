@@ -665,7 +665,7 @@ func (e *SQLStore) QueryEntities(
 			owner     *string
 		}{}
 		dest := []any{}
-		for _, column := range options.Columns {
+		for _, column := range options.AllColumns() {
 			switch column {
 			case "key":
 				var key string
@@ -683,6 +683,17 @@ func (e *SQLStore) QueryEntities(
 				var owner string
 				result.owner = &owner
 				dest = append(dest, result.owner)
+			case "last_modified_at_block":
+				var lastModifiedAtBlock uint64
+				dest = append(dest, &lastModifiedAtBlock)
+			case "transaction_index_in_block":
+				var transactionIndexInBlock uint64
+				dest = append(dest, &transactionIndexInBlock)
+			case "operation_index_in_transaction":
+				var operationIndexInTransaction uint64
+				dest = append(dest, &operationIndexInTransaction)
+			default:
+				return nil, fmt.Errorf("unknown column: %s", column)
 			}
 		}
 

@@ -25,12 +25,12 @@ type QueryOptions struct {
 	Columns            []string `json:"columns"`
 }
 
+func (opts *QueryOptions) AllColumns() []string {
+	return append(opts.Columns, "last_modified_at_block", "transaction_index_in_block", "operation_index_in_transaction")
+}
+
 func (opts *QueryOptions) columnString() string {
-	columns := opts.Columns
-	if len(columns) == 0 {
-		columns = COLUMNS
-	}
-	return strings.Join(columns, ", ")
+	return strings.Join(opts.AllColumns(), ", ")
 }
 
 // Define the lexer with distinct tokens for each operator and parentheses.
@@ -156,7 +156,7 @@ func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
 
 	tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
 	tableBuilder.WriteString(tableName)
-	tableBuilder.WriteString(" ORDER BY 1")
+	tableBuilder.WriteString(" ORDER BY last_modified_at_block, transaction_index_in_block, operation_index_in_transaction")
 
 	return &SelectQuery{
 		Query:   tableBuilder.String(),
