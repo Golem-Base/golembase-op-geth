@@ -41,7 +41,7 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 		return nil, fmt.Errorf("expected a single result but got %d", len(entities))
 	}
 
-	return entities[0].Value, nil
+	return []byte(entities[0].Value), nil
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
@@ -149,7 +149,7 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 	for _, entity := range entities {
 		searchResults = append(searchResults, golemtype.SearchResult{
 			Key:   entity.Key,
-			Value: entity.Value,
+			Value: []byte(entity.Value),
 		})
 	}
 

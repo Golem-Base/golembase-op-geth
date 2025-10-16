@@ -595,7 +595,7 @@ func (e *SQLStore) QueryEntities(
 	query string,
 	args []any,
 	options query.QueryOptions,
-) ([]arkivtype.SearchResult, error) {
+) ([]arkivtype.QueryResult, error) {
 	log.Info("Executing query", "query", query, "args", args)
 
 	// Begin a read-only transaction for consistency
@@ -613,7 +613,7 @@ func (e *SQLStore) QueryEntities(
 	}
 	defer rows.Close()
 
-	results := make([]arkivtype.SearchResult, 0)
+	results := make([]arkivtype.QueryResult, 0)
 	for rows.Next() {
 
 		result := struct {
@@ -665,7 +665,7 @@ func (e *SQLStore) QueryEntities(
 			owner = common.HexToAddress(*result.owner)
 		}
 
-		r := arkivtype.SearchResult{
+		r := arkivtype.QueryResult{
 			Key:                key,
 			ExpiresAt:          expiresAt,
 			Value:              payload,

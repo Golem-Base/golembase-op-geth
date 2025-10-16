@@ -92,7 +92,7 @@ func (api *arkivAPI) Query(
 	ctx context.Context,
 	req string,
 	op *QueryOptions,
-) ([]arkivtype.SearchResult, error) {
+) ([]arkivtype.QueryResult, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {

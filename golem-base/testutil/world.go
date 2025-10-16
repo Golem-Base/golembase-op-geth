@@ -20,7 +20,7 @@ type World struct {
 	SecondFundedAccount    *FundedAccount
 	LastReceipt            *types.Receipt
 	SearchResult           []golemtype.SearchResult
-	ArkivSearchResult      []arkivtype.SearchResult
+	ArkivSearchResult      []arkivtype.QueryResult
 	CreatedEntityKey       common.Hash
 	SecondCreatedEntityKey common.Hash
 	LastError              error
