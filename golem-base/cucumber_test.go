@@ -375,7 +375,7 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 	if err := rcpClient.CallContext(
 		ctx,
 		&e,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
 		struct{}{},
 	); err != nil {
@@ -427,7 +427,7 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 	if err := rcpClient.CallContext(
 		ctx,
 		&result,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf("$expiration = %d", blockNumber256.Uint64()),
 		struct{}{},
 	); err != nil {
@@ -475,7 +475,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		`test_key = "test_value"`,
 		struct{}{},
 	); err != nil {
@@ -522,7 +522,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		"test_number = 42",
 		struct{}{},
 	); err != nil {
@@ -635,7 +635,7 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 	if err := rcpClient.CallContext(
 		ctx,
 		&res2,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(`%s="%s"`, key, value),
 		struct{}{},
 	); err != nil {
@@ -715,7 +715,7 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 	if err = rcpClient.CallContext(
 		ctx,
 		&res2,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(`%s=%d`, key, value),
 		struct{}{},
 	); err != nil {
@@ -841,7 +841,7 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf("$key = %s", w.CreatedEntityKey),
 		struct{}{},
 	); err != nil {
@@ -915,7 +915,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&res2,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		`test_key1="test_value1" && test_number1=43`,
 		struct{}{},
 	); err != nil {
@@ -947,7 +947,7 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 	if err := rpcClient.CallContext(
 		ctx,
 		&res,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		`test_key = "test_value" && test_number=42`,
 		struct {
 			AtBlock uint64 `json:"at_block"`
@@ -1030,7 +1030,7 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf("$expiration = %d", receipt.BlockNumber.Uint64()+200),
 		struct{}{},
 	); err != nil {
@@ -1108,7 +1108,7 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 	if err := rcpClient.CallContext(
 		ctx,
 		&res2,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		queryDoc.Content,
 		struct{}{},
 	); err != nil {
@@ -1272,7 +1272,7 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf("$owner = %s || $owner != %s",
 			"0x4200000000000000000000000000000000000015",
 			"0x4200000000000000000000000000000000000015",
@@ -1308,7 +1308,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf("$owner = %s || $owner != %s",
 			"0x4200000000000000000000000000000000000015",
 			"0x4200000000000000000000000000000000000015",
@@ -1349,7 +1349,7 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf("$owner = %s || $owner != %s",
 			"0x4200000000000000000000000000000000000015",
 			"0x4200000000000000000000000000000000000015",
@@ -1390,7 +1390,7 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(
 			"$owner = %s",
 			w.FundedAccount.Address,
@@ -1431,7 +1431,7 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(
 			"$key = %s",
 			w.CreatedEntityKey.Hex(),
@@ -1474,7 +1474,7 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(
 			"$owner = %s",
 			w.FundedAccount.Address,
@@ -1662,7 +1662,7 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address),
 		struct{}{},
 	); err != nil {
@@ -1695,7 +1695,7 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	if err := w.GethInstance.RPCClient.CallContext(
 		ctx,
 		&res2,
-		"arkiv_queryEntities",
+		"arkiv_query",
 		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address.Hex()),
 		struct{}{},
 	); err != nil {

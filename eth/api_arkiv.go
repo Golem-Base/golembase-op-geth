@@ -33,7 +33,7 @@ func NewArkivAPI(eth *Ethereum, store *sqlstore.SQLStore) *arkivAPI {
 	}
 }
 
-func (api *arkivAPI) QueryEntities(
+func (api *arkivAPI) Query(
 	ctx context.Context,
 	req string,
 	options QueryOptions,
