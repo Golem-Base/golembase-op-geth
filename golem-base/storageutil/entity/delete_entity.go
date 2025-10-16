@@ -5,7 +5,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
 
@@ -28,11 +27,6 @@ func Delete(access StateAccess, toDelete common.Hash) (common.Address, error) {
 	err = entityexpiration.RemoveFromEntitiesToExpire(access, md.ExpiresAtBlock, toDelete)
 	if err != nil {
 		return common.Address{}, fmt.Errorf("failed to remove entity from entities to expire: %w", err)
-	}
-
-	err = entitiesofowner.RemoveEntity(access, md.Owner, toDelete)
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to remove entity from owner entities: %w", err)
 	}
 
 	DeletePayload(access, toDelete)

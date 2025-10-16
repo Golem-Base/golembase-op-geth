@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
 
@@ -30,11 +29,6 @@ func Store(
 	err := allentities.AddEntity(access, key)
 	if err != nil {
 		return fmt.Errorf("failed to add entity to all entities: %w", err)
-	}
-
-	err = entitiesofowner.AddEntity(access, sender, key)
-	if err != nil {
-		return fmt.Errorf("failed to add entity to owner entities: %w", err)
 	}
 
 	err = StoreEntityMetaData(access, key, emd)
