@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -21,8 +22,9 @@ type IncludeData struct {
 }
 
 type QueryOptions struct {
-	AtBlock     *uint64      `json:"at_block"`
-	IncludeData *IncludeData `json:"include_data"`
+	AtBlock     *uint64      `json:"atBlock"`
+	IncludeData *IncludeData `json:"includeData"`
+	Offset      uint64       `json:"Offset"`
 }
 
 var allColumns = []string{"key", "expires_at", "owner_address", "payload"}
@@ -43,11 +45,13 @@ func (options *QueryOptions) toInternalQueryOptions() internalQueryOptions {
 			Columns:            allColumns,
 			IncludeAnnotations: true,
 			AtBlock:            options.AtBlock,
+			Offset:             options.Offset,
 		}
 	default:
 		iq := internalQueryOptions{
 			Columns: []string{},
 			AtBlock: options.AtBlock,
+			Offset:  options.Offset,
 		}
 		if options.IncludeData.Annotations {
 			iq.IncludeAnnotations = true
@@ -74,6 +78,7 @@ type internalQueryOptions struct {
 	// After that we can use it in GetEntityMetaData
 	IncludeAnnotations bool     `json:"include_annotations"`
 	Columns            []string `json:"columns"`
+	Offset             uint64   `json:"offset"`
 }
 
 type arkivAPI struct {
@@ -114,10 +119,24 @@ func (api *arkivAPI) Query(
 		AtBlock:            block,
 		IncludeAnnotations: options.IncludeAnnotations,
 		Columns:            columns,
+		Offset:             options.Offset,
 	}
 	query := expr.Evaluate(queryOptions)
 
-	response := &arkivtype.QueryResponse{}
+	response := &arkivtype.QueryResponse{
+		BlockNumber:    block,
+		Data:           make([]json.RawMessage, 0),
+		NextPageOffset: 0,
+	}
+
+	offset := options.Offset
+
+	// 256 bytes is for the overhead of the 'envelope' around the entity data
+	// and the separator characters in between
+	responseSize := 256
+
+	// 256 kb
+	maxResponseSize := 256 * 1024 * 1024
 
 	err = api.store.QueryEntitiesInternalIterator(
 		ctx,
@@ -125,7 +144,19 @@ func (api *arkivAPI) Query(
 		query.Args,
 		queryOptions,
 		func(entity arkivtype.EntityData) error {
-			response.Data = append(response.Data, entity)
+
+			ed, err := json.Marshal(entity)
+			if err != nil {
+				return fmt.Errorf("failed to marshal entity: %w", err)
+			}
+
+			newLen := responseSize + len(ed) + 1
+			if newLen > maxResponseSize {
+				response.NextPageOffset = offset
+				return sqlstore.ErrStopIteration
+			}
+			response.Data = append(response.Data, ed)
+			offset++
 			return nil
 		},
 	)

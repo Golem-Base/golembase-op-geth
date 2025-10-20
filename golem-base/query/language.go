@@ -23,6 +23,7 @@ type QueryOptions struct {
 	AtBlock            uint64   `json:"at_block"`
 	IncludeAnnotations bool     `json:"include_annotations"`
 	Columns            []string `json:"columns"`
+	Offset             uint64   `json:"offset"`
 }
 
 func (opts *QueryOptions) AllColumns() []string {
@@ -157,6 +158,10 @@ func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
 	tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
 	tableBuilder.WriteString(tableName)
 	tableBuilder.WriteString(" ORDER BY last_modified_at_block, transaction_index_in_block, operation_index_in_transaction")
+
+	if options.Offset > 0 {
+		tableBuilder.WriteString(fmt.Sprintf(" OFFSET %d ROWS", options.Offset))
+	}
 
 	return &SelectQuery{
 		Query:   tableBuilder.String(),

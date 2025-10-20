@@ -2,9 +2,11 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
@@ -41,7 +43,14 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 		return nil, fmt.Errorf("expected a single result but got %d", len(entities.Data))
 	}
 
-	return []byte(entities.Data[0].Value), nil
+	var metadata arkivtype.EntityData
+
+	err = json.Unmarshal(entities.Data[0], &metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	return []byte(metadata.Value), nil
 }
 
 // GetAllEntityKeys returns all entity keys in the storage.
@@ -76,7 +85,12 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 		return nil, fmt.Errorf("expected a single result row but got %d", len(rows.Data))
 	}
 
-	metadata := rows.Data[0]
+	var metadata arkivtype.EntityData
+
+	err = json.Unmarshal(rows.Data[0], &metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
 
 	return &entity.EntityMetaData{
 		ExpiresAtBlock:     metadata.ExpiresAt,
@@ -98,8 +112,16 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirat
 	}
 
 	results := make([]common.Hash, 0, len(entities.Data))
-	for _, entity := range entities.Data {
-		results = append(results, entity.Key)
+	for _, ed := range entities.Data {
+
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+
+		results = append(results, metadata.Key)
 	}
 
 	return results, nil
@@ -117,8 +139,15 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context
 	}
 
 	results := make([]common.Hash, 0, len(entities.Data))
-	for _, entity := range entities.Data {
-		results = append(results, entity.Key)
+	for _, ed := range entities.Data {
+
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		results = append(results, metadata.Key)
 	}
 
 	return results, nil
@@ -136,8 +165,14 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 	}
 
 	results := make([]common.Hash, 0, len(entities.Data))
-	for _, entity := range entities.Data {
-		results = append(results, entity.Key)
+	for _, ed := range entities.Data {
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		results = append(results, metadata.Key)
 	}
 
 	return results, nil
@@ -156,10 +191,18 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 
 	searchResults := make([]golemtype.SearchResult, 0)
 
-	for _, entity := range entities.Data {
+	for _, ed := range entities.Data {
+
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+
 		searchResults = append(searchResults, golemtype.SearchResult{
-			Key:   entity.Key,
-			Value: []byte(entity.Value),
+			Key:   metadata.Key,
+			Value: []byte(metadata.Value),
 		})
 	}
 
@@ -180,8 +223,14 @@ func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Ad
 	}
 
 	results := make([]common.Hash, 0, len(entities.Data))
-	for _, entity := range entities.Data {
-		results = append(results, entity.Key)
+	for _, ed := range entities.Data {
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		results = append(results, metadata.Key)
 	}
 
 	return results, nil

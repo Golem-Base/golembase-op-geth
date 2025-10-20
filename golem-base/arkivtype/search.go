@@ -1,21 +1,25 @@
 package arkivtype
 
 import (
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
 type QueryResponse struct {
-	Data []EntityData `json:"data"`
+	Data           []json.RawMessage `json:"data"`
+	BlockNumber    uint64            `json:"blockNumber"`
+	NextPageOffset uint64            `json:"nextPageOffset,omitempty"`
 }
 
 type EntityData struct {
-	Key       common.Hash    `json:"key"`
-	Value     hexutil.Bytes  `json:"value"`
-	ExpiresAt uint64         `json:"expires_at"`
-	Owner     common.Address `json:"owner"`
+	Key       common.Hash    `json:"key,omitempty"`
+	Value     hexutil.Bytes  `json:"value,omitempty"`
+	ExpiresAt uint64         `json:"expiresAt,omitempty"`
+	Owner     common.Address `json:"owner,omitempty"`
 
-	StringAnnotations  []entity.StringAnnotation  `json:"string_annotations"`
-	NumericAnnotations []entity.NumericAnnotation `json:"numeric_annotations"`
+	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations,omitempty"`
+	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations,omitempty"`
 }
