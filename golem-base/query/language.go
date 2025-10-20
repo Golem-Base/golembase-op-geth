@@ -9,25 +9,55 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
-var COLUMNS []string = []string{
-	"key",
-	"payload",
-	"expires_at",
-	"owner_address",
+// ALLCOLUMNS is used to verify user-supplied columns to protect against SQL injection
+var ALLCOLUMNS map[string]string = map[string]string{
+	"key":                            "key",
+	"payload":                        "payload",
+	"expires_at":                     "expires_at",
+	"owner_address":                  "owner_address",
+	"last_modified_at_block":         "last_modified_at_block",
+	"transaction_index_in_block":     "transaction_index_in_block",
+	"operation_index_in_transaction": "operation_index_in_transaction",
+}
+
+func GetColumn(name string) (string, error) {
+	column, exists := ALLCOLUMNS[name]
+	if !exists {
+		return "", fmt.Errorf("invalid column name: %s", column)
+	}
+	return column, nil
+}
+
+// GetColumnOrPanic is used for non user-supplied columns, to detect wrong literals early
+func GetColumnOrPanic(name string) string {
+	column, err := GetColumn(name)
+	if err != nil {
+		panic(fmt.Sprintf("invalid column name: %s", column))
+	}
+	return column
 }
 
 type QueryOptions struct {
-	AtBlock            uint64   `json:"at_block"`
-	IncludeAnnotations bool     `json:"include_annotations"`
-	Columns            []string `json:"columns"`
-	Offset             uint64   `json:"offset"`
+	AtBlock            uint64           `json:"at_block"`
+	IncludeAnnotations bool             `json:"include_annotations"`
+	Columns            []string         `json:"columns"`
+	Offset             arkivtype.Offset `json:"offset"`
 }
 
 func (opts *QueryOptions) AllColumns() []string {
-	return append(opts.Columns, "last_modified_at_block", "transaction_index_in_block", "operation_index_in_transaction")
+	return append(opts.Columns, opts.OrderByColumns()...)
+}
+
+func (opts *QueryOptions) OrderByColumns() []string {
+	return []string{
+		GetColumnOrPanic("last_modified_at_block"),
+		GetColumnOrPanic("transaction_index_in_block"),
+		GetColumnOrPanic("operation_index_in_transaction"),
+	}
 }
 
 func (opts *QueryOptions) columnString() string {
@@ -86,6 +116,42 @@ func (b *QueryBuilder) writeComma() {
 	} else {
 		b.needsComma = true
 	}
+}
+
+func (b *QueryBuilder) getPaginationArguments() (string, []any) {
+	args := []any{}
+	paginationConditions := []string{}
+
+	for i := range b.options.Offset {
+		subcondition := []string{}
+		for j, from := range b.options.Offset {
+			if j > i {
+				break
+			}
+			var operator string
+			if j < i {
+				operator = "="
+			} else {
+				// TODO: if we ever support DESC, we need to optionally invert this
+				operator = ">"
+			}
+
+			args = append(args, from.Value)
+
+			subcondition = append(
+				subcondition,
+				fmt.Sprintf("%s %s ?", from.ColumnName, operator),
+			)
+		}
+
+		paginationConditions = append(
+			paginationConditions,
+			fmt.Sprintf("(%s)", strings.Join(subcondition, " AND ")),
+		)
+	}
+
+	paginationCondition := strings.Join(paginationConditions, " OR ")
+	return paginationCondition, args
 }
 
 func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
@@ -155,13 +221,22 @@ func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
 
 	tableName := e.Or.Evaluate(&builder)
 
+	// TODO: check if it is more performant to push this into the different
+	// subqueries instead of only having this condition on the outer query
+	paginationCondition, paginationArgs := builder.getPaginationArguments()
+
+	builder.args = append(builder.args, paginationArgs...)
+
+	p := ""
+	if len(paginationCondition) > 0 {
+		p = fmt.Sprintf(" WHERE ( %s )", paginationCondition)
+	}
+
 	tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
 	tableBuilder.WriteString(tableName)
-	tableBuilder.WriteString(" ORDER BY last_modified_at_block, transaction_index_in_block, operation_index_in_transaction")
-
-	if options.Offset > 0 {
-		tableBuilder.WriteString(fmt.Sprintf(" LIMIT 5000 OFFSET %d ", options.Offset))
-	}
+	tableBuilder.WriteString(p)
+	tableBuilder.WriteString(" ORDER BY ")
+	tableBuilder.WriteString(strings.Join(options.OrderByColumns(), ", "))
 
 	return &SelectQuery{
 		Query:   tableBuilder.String(),

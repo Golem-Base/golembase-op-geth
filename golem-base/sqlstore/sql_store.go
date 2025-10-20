@@ -785,7 +785,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 	query string,
 	args []any,
 	options query.QueryOptions,
-	iterator func(arkivtype.EntityData) error,
+	iterator func(arkivtype.EntityData, arkivtype.Offset) error,
 ) error {
 	log.Info("Executing query", "query", query, "args", args)
 
@@ -812,39 +812,53 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		}
 
 		result := struct {
-			key       *string
-			expiresAt *uint64
-			payload   *[]byte
-			owner     *string
+			key                         *string
+			expiresAt                   *uint64
+			payload                     *[]byte
+			owner                       *string
+			lastModifiedAtBlock         *uint64
+			transactionIndexInBlock     *uint64
+			operationIndexInTransaction *uint64
 		}{}
 		dest := []any{}
+		columns := map[string]any{}
 		for _, column := range options.AllColumns() {
 			switch column {
 			case "key":
 				var key string
 				result.key = &key
 				dest = append(dest, result.key)
+				columns["key"] = result.key
 			case "expires_at":
 				var expiration uint64
 				result.expiresAt = &expiration
 				dest = append(dest, result.expiresAt)
+				columns["expires_at"] = result.expiresAt
 			case "payload":
 				var payload []byte
 				result.payload = &payload
 				dest = append(dest, result.payload)
+				columns["payload"] = result.payload
 			case "owner_address":
 				var owner string
 				result.owner = &owner
 				dest = append(dest, result.owner)
+				columns["owner_address"] = result.owner
 			case "last_modified_at_block":
 				var lastModifiedAtBlock uint64
-				dest = append(dest, &lastModifiedAtBlock)
+				result.lastModifiedAtBlock = &lastModifiedAtBlock
+				dest = append(dest, result.lastModifiedAtBlock)
+				columns["last_modified_at_block"] = result.lastModifiedAtBlock
 			case "transaction_index_in_block":
 				var transactionIndexInBlock uint64
-				dest = append(dest, &transactionIndexInBlock)
+				result.transactionIndexInBlock = &transactionIndexInBlock
+				dest = append(dest, result.transactionIndexInBlock)
+				columns["transaction_index_in_block"] = result.transactionIndexInBlock
 			case "operation_index_in_transaction":
 				var operationIndexInTransaction uint64
-				dest = append(dest, &operationIndexInTransaction)
+				result.operationIndexInTransaction = &operationIndexInTransaction
+				dest = append(dest, result.operationIndexInTransaction)
+				columns["operation_index_in_transaction"] = result.operationIndexInTransaction
 			default:
 				return fmt.Errorf("unknown column: %s", column)
 			}
@@ -878,6 +892,15 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			Owner:              owner,
 			StringAnnotations:  []entity.StringAnnotation{},
 			NumericAnnotations: []entity.NumericAnnotation{},
+		}
+
+		offset := []arkivtype.OffsetValue{}
+
+		for _, column := range options.OrderByColumns() {
+			offset = append(offset, arkivtype.OffsetValue{
+				ColumnName: column,
+				Value:      columns[column],
+			})
 		}
 
 		if options.IncludeAnnotations {
@@ -916,7 +939,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			}
 		}
 
-		err = iterator(r)
+		err = iterator(r, offset)
 		if errors.Is(err, ErrStopIteration) {
 			break
 		}

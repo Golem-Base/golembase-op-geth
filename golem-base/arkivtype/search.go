@@ -1,7 +1,9 @@
 package arkivtype
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -11,7 +13,41 @@ import (
 type QueryResponse struct {
 	Data        []json.RawMessage `json:"data"`
 	BlockNumber uint64            `json:"blockNumber"`
-	Cursor      uint64            `json:"cursor,omitempty,string"`
+	Cursor      string            `json:"cursor,omitempty"`
+}
+
+type Offset []OffsetValue
+
+func (o Offset) Encode() (string, error) {
+	s, err := json.Marshal(o)
+	if err != nil {
+		return "", fmt.Errorf("could not marshal offset: %w", err)
+	}
+
+	return hex.EncodeToString([]byte(s)), nil
+}
+
+func (o *Offset) Decode(s string) error {
+	if len(s) == 0 {
+		return nil
+	}
+
+	bs, err := hex.DecodeString(s)
+	if err != nil {
+		return fmt.Errorf("could not decode offset: %w", err)
+	}
+
+	err = json.Unmarshal(bs, o)
+	if err != nil {
+		return fmt.Errorf("could not unmarshal offset: %w (%s)", err, string(bs))
+	}
+
+	return nil
+}
+
+type OffsetValue struct {
+	ColumnName string `json:"columnName"`
+	Value      any    `json:"value"`
 }
 
 type EntityData struct {
