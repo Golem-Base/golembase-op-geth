@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
@@ -1017,15 +1018,14 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 		return fmt.Errorf("failed to get block number: %w", err)
 	}
 
+	atBlock := block - 1
 	err = rpcClient.CallContext(
 		ctx,
 		&res,
 		"arkiv_query",
 		`test_key = "test_value" && test_number=42`,
-		struct {
-			AtBlock uint64 `json:"atBlock"`
-		}{
-			AtBlock: block - 1,
+		eth.QueryOptions{
+			AtBlock: &atBlock,
 		},
 	)
 	if err != nil {
