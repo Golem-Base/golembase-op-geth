@@ -560,10 +560,52 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			log.Info("extend BTL", "params", extendParams)
 
+			// Fetch the existing annotations before we update the entity, so that we
+			// can re-insert them with the new block number.
+			numericAnnotations, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
+				EntityKey: op.Extend.EntityKey.Hex(),
+				Block:     int64(blockWal.BlockInfo.Number),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to fetch annotations: %w", err)
+			}
+
+			stringAnnotations, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
+				EntityKey: op.Extend.EntityKey.Hex(),
+				Block:     int64(blockWal.BlockInfo.Number),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to fetch annotations: %w", err)
+			}
+
 			// Update the entity with the new expiry time
 			err = txDB.UpdateEntityExpiresAt(ctx, extendParams)
 			if err != nil {
 				return fmt.Errorf("failed to extend entity BTL: %w", err)
+			}
+
+			for _, annotation := range numericAnnotations {
+				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
+					EntityKey:                 op.Extend.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.AnnotationKey,
+					Value:                     int64(annotation.Value),
+				})
+				if err != nil {
+					return fmt.Errorf("failed to insert numeric annotation: %w", err)
+				}
+			}
+
+			for _, annotation := range stringAnnotations {
+				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+					EntityKey:                 op.Extend.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.AnnotationKey,
+					Value:                     annotation.Value,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to insert string annotation: %w", err)
+				}
 			}
 		}
 
