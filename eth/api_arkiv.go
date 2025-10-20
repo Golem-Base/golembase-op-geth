@@ -22,9 +22,10 @@ type IncludeData struct {
 }
 
 type QueryOptions struct {
-	AtBlock     *uint64      `json:"atBlock"`
-	IncludeData *IncludeData `json:"includeData"`
-	Offset      uint64       `json:"Offset"`
+	AtBlock        *uint64      `json:"atBlock"`
+	IncludeData    *IncludeData `json:"includeData"`
+	ResultsPerPage uint64       `json:"resultsPerPage"`
+	Offset         uint64       `json:"offset"`
 }
 
 var allColumns = []string{"key", "expires_at", "owner_address", "payload"}
@@ -137,6 +138,11 @@ func (api *arkivAPI) Query(
 
 	// 256 kb
 	maxResponseSize := 256 * 1024 * 1024
+	maxResultsPerPage := 0
+
+	if op != nil {
+		maxResultsPerPage = int(op.ResultsPerPage)
+	}
 
 	err = api.store.QueryEntitiesInternalIterator(
 		ctx,
@@ -157,6 +163,12 @@ func (api *arkivAPI) Query(
 			}
 			response.Data = append(response.Data, ed)
 			offset++
+
+			if maxResultsPerPage > 0 && len(response.Data) >= maxResultsPerPage {
+				response.NextPageOffset = offset
+				return sqlstore.ErrStopIteration
+			}
+
 			return nil
 		},
 	)

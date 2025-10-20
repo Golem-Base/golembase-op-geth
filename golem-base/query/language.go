@@ -160,7 +160,7 @@ func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
 	tableBuilder.WriteString(" ORDER BY last_modified_at_block, transaction_index_in_block, operation_index_in_transaction")
 
 	if options.Offset > 0 {
-		tableBuilder.WriteString(fmt.Sprintf(" OFFSET %d ROWS", options.Offset))
+		tableBuilder.WriteString(fmt.Sprintf(" LIMIT 5000 OFFSET %d ", options.Offset))
 	}
 
 	return &SelectQuery{
