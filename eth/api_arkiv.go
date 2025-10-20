@@ -25,7 +25,7 @@ type QueryOptions struct {
 	AtBlock        *uint64      `json:"atBlock"`
 	IncludeData    *IncludeData `json:"includeData"`
 	ResultsPerPage uint64       `json:"resultsPerPage"`
-	Offset         uint64       `json:"offset"`
+	Cursor         uint64       `json:"cursor,string"`
 }
 
 var allColumns = []string{"key", "expires_at", "owner_address", "payload"}
@@ -46,13 +46,13 @@ func (options *QueryOptions) toInternalQueryOptions() internalQueryOptions {
 			Columns:            allColumns,
 			IncludeAnnotations: true,
 			AtBlock:            options.AtBlock,
-			Offset:             options.Offset,
+			Cursor:             options.Cursor,
 		}
 	default:
 		iq := internalQueryOptions{
 			Columns: []string{},
 			AtBlock: options.AtBlock,
-			Offset:  options.Offset,
+			Cursor:  options.Cursor,
 		}
 		if options.IncludeData.Annotations {
 			iq.IncludeAnnotations = true
@@ -74,12 +74,12 @@ func (options *QueryOptions) toInternalQueryOptions() internalQueryOptions {
 }
 
 type internalQueryOptions struct {
-	AtBlock *uint64 `json:"at_block"`
+	AtBlock *uint64
 	// TODO Ramses: implement this
 	// After that we can use it in GetEntityMetaData
-	IncludeAnnotations bool     `json:"include_annotations"`
-	Columns            []string `json:"columns"`
-	Offset             uint64   `json:"offset"`
+	IncludeAnnotations bool
+	Columns            []string
+	Cursor             uint64
 }
 
 type arkivAPI struct {
@@ -120,17 +120,17 @@ func (api *arkivAPI) Query(
 		AtBlock:            block,
 		IncludeAnnotations: options.IncludeAnnotations,
 		Columns:            columns,
-		Offset:             options.Offset,
+		Offset:             options.Cursor,
 	}
 	query := expr.Evaluate(queryOptions)
 
 	response := &arkivtype.QueryResponse{
-		BlockNumber:    block,
-		Data:           make([]json.RawMessage, 0),
-		NextPageOffset: 0,
+		BlockNumber: block,
+		Data:        make([]json.RawMessage, 0),
+		Cursor:      0,
 	}
 
-	offset := options.Offset
+	offset := options.Cursor
 
 	// 256 bytes is for the overhead of the 'envelope' around the entity data
 	// and the separator characters in between
@@ -158,14 +158,14 @@ func (api *arkivAPI) Query(
 
 			newLen := responseSize + len(ed) + 1
 			if newLen > maxResponseSize {
-				response.NextPageOffset = offset
+				response.Cursor = offset
 				return sqlstore.ErrStopIteration
 			}
 			response.Data = append(response.Data, ed)
 			offset++
 
 			if maxResultsPerPage > 0 && len(response.Data) >= maxResultsPerPage {
-				response.NextPageOffset = offset
+				response.Cursor = offset
 				return sqlstore.ErrStopIteration
 			}
 

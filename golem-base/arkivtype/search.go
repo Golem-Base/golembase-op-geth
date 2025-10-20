@@ -9,9 +9,9 @@ import (
 )
 
 type QueryResponse struct {
-	Data           []json.RawMessage `json:"data"`
-	BlockNumber    uint64            `json:"blockNumber"`
-	NextPageOffset uint64            `json:"nextPageOffset,omitempty"`
+	Data        []json.RawMessage `json:"data"`
+	BlockNumber uint64            `json:"blockNumber"`
+	Cursor      uint64            `json:"cursor,omitempty,string"`
 }
 
 type EntityData struct {
