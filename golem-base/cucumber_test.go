@@ -358,12 +358,13 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	rcpClient := w.GethInstance.RPCClient
 
-	if err := rcpClient.CallContext(
+	err := rcpClient.CallContext(
 		ctx,
 		&v,
 		"golembase_getStorageValue",
 		key.Hex(),
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
@@ -372,18 +373,26 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 	}
 
 	var e arkivtype.QueryResponse
-	if err := rcpClient.CallContext(
+	err = rcpClient.CallContext(
 		ctx,
 		&e,
 		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
-	if string(e.Data[0].Value) != "test payload" {
-		return fmt.Errorf("unexpected storage value: %s", string(e.Data[0].Value))
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(e.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if string(ed.Value) != "test payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
 	}
 
 	return nil
@@ -438,8 +447,15 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(result.Data))
 	}
 
-	if result.Data[0].Key != key {
-		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", result.Data[0].Key.Hex(), key.Hex())
+	ed := arkivtype.EntityData{}
+
+	err := json.Unmarshal(result.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if ed.Key != key {
+		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -472,13 +488,14 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 	}
 
 	entities := arkivtype.QueryResponse{}
-	if err := rcpClient.CallContext(
+	err := rcpClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
 		`test_key = "test_value"`,
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities by string anotation: %w", err)
 	}
 
@@ -486,8 +503,15 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	if entities.Data[0].Key != key {
-		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", entities.Data[0].Key.Hex(), key.Hex())
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if ed.Key != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -519,13 +543,14 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 	}
 
 	entities := arkivtype.QueryResponse{}
-	if err := rcpClient.CallContext(
+	err := rcpClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
 		"test_number = 42",
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
@@ -533,8 +558,15 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	if entities.Data[0].Key != key {
-		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", entities.Data[0].Key.Hex(), key.Hex())
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if ed.Key != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -632,16 +664,29 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 	w.SearchResult = res
 
 	res2 := arkivtype.QueryResponse{}
-	if err := rcpClient.CallContext(
+	err := rcpClient.CallContext(
 		ctx,
 		&res2,
 		"arkiv_query",
 		fmt.Sprintf(`%s="%s"`, key, value),
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
-	w.ArkivSearchResult = res2.Data
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
 
 	return nil
 }
@@ -721,7 +766,19 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 	); err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
-	w.ArkivSearchResult = res2.Data
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
 
 	return nil
 }
@@ -838,13 +895,14 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 	}
 
 	entities := arkivtype.QueryResponse{}
-	if err := rpcClient.CallContext(
+	err := rpcClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
 		fmt.Sprintf("$key = %s", w.CreatedEntityKey),
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
@@ -852,8 +910,15 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	if string(entities.Data[0].Value) != "new payload" {
-		return fmt.Errorf("unexpected storage value: %s", string(entities.Data[0].Value))
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if string(ed.Value) != "new payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
 	}
 
 	return nil
@@ -912,13 +977,14 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	}
 
 	res2 := arkivtype.QueryResponse{}
-	if err := rpcClient.CallContext(
+	err := rpcClient.CallContext(
 		ctx,
 		&res2,
 		"arkiv_query",
 		`test_key1="test_value1" && test_number1=43`,
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
@@ -926,8 +992,15 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("could not find any result when searching by new annotations")
 	}
 
-	if res2.Data[0].Key != w.CreatedEntityKey {
-		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), res2.Data[0].Key.Hex())
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(res2.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if ed.Key != w.CreatedEntityKey {
+		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), ed.Key.Hex())
 	}
 
 	return nil
@@ -944,17 +1017,18 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 		return fmt.Errorf("failed to get block number: %w", err)
 	}
 
-	if err := rpcClient.CallContext(
+	err = rpcClient.CallContext(
 		ctx,
 		&res,
 		"arkiv_query",
 		`test_key = "test_value" && test_number=42`,
 		struct {
-			AtBlock uint64 `json:"at_block"`
+			AtBlock uint64 `json:"atBlock"`
 		}{
 			AtBlock: block - 1,
 		},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
@@ -962,11 +1036,18 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 		return fmt.Errorf("could not find any result when searching by new annotations")
 	}
 
-	if res.Data[0].Key != w.CreatedEntityKey {
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(res.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if ed.Key != w.CreatedEntityKey {
 		return fmt.Errorf(
 			"expected entity hash %s but got %s",
 			w.CreatedEntityKey.Hex(),
-			res.Data[0].Key.Hex(),
+			ed.Key.Hex(),
 		)
 	}
 
@@ -1027,13 +1108,14 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 	}
 
 	entities := arkivtype.QueryResponse{}
-	if err := rcpClient.CallContext(
+	err := rcpClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
 		fmt.Sprintf("$expiration = %d", receipt.BlockNumber.Uint64()+200),
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities to expire: %w", err)
 	}
 
@@ -1041,8 +1123,15 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(entities.Data))
 	}
 
-	if entities.Data[0].Key != key {
-		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", entities.Data[0].Key.Hex(), key.Hex())
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if ed.Key != key {
+		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -1105,16 +1194,29 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 	w.SearchResult = res
 
 	res2 := arkivtype.QueryResponse{}
-	if err := rcpClient.CallContext(
+	err := rcpClient.CallContext(
 		ctx,
 		&res2,
 		"arkiv_query",
 		queryDoc.Content,
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
-	w.ArkivSearchResult = res2.Data
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
 
 	return nil
 }
@@ -1320,7 +1422,15 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 
 	found = false
 	for _, entity := range entities.Data {
-		if entity.Key == w.CreatedEntityKey {
+
+		ed := arkivtype.EntityData{}
+
+		err := json.Unmarshal(entity, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+
+		if ed.Key == w.CreatedEntityKey {
 			found = true
 		}
 	}
@@ -1402,7 +1512,15 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 
 	found = false
 	for _, entity := range entities.Data {
-		if entity.Key == w.CreatedEntityKey {
+
+		ed := arkivtype.EntityData{}
+
+		err := json.Unmarshal(entity, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+
+		if ed.Key == w.CreatedEntityKey {
 			found = true
 		}
 	}
@@ -1428,7 +1546,7 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	}
 
 	entities := arkivtype.QueryResponse{}
-	if err := rpcClient.CallContext(
+	err := rpcClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
@@ -1437,7 +1555,8 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 			w.CreatedEntityKey.Hex(),
 		),
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
 
@@ -1445,8 +1564,15 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	if entities.Data[0].Owner != w.FundedAccount.Address {
-		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), entities.Data[0].Owner.Hex())
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if ed.Owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ed.Owner.Hex())
 	}
 
 	return nil
@@ -1694,16 +1820,29 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	w.SearchResult = res
 
 	res2 := arkivtype.QueryResponse{}
-	if err := w.GethInstance.RPCClient.CallContext(
+	err := w.GethInstance.RPCClient.CallContext(
 		ctx,
 		&res2,
 		"arkiv_query",
 		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address.Hex()),
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
-	w.ArkivSearchResult = res2.Data
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
 
 	return nil
 }
