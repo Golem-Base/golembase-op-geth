@@ -70,9 +70,7 @@ func (options *QueryOptions) toInternalQueryOptions() internalQueryOptions {
 }
 
 type internalQueryOptions struct {
-	AtBlock *uint64
-	// TODO Ramses: implement this
-	// After that we can use it in GetEntityMetaData
+	AtBlock            *uint64
 	IncludeAnnotations bool
 	Columns            []string
 	Cursor             uint64
