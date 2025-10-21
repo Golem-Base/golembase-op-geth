@@ -59,7 +59,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 				BlockNumber: blockNumber,
 			},
 			&types.Log{
-				Address: common.Address(address.GolemBaseStorageProcessorAddress),
+				Address: common.Address(address.ArkivProcessorAddress),
 				Topics: []common.Hash{
 					arkivlogs.ArkivEntityExpired,
 					toDelete,

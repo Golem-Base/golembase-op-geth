@@ -17,21 +17,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
-//go:generate go run ../../rlp/rlpgen -type StorageTransaction -out gen_storage_transaction_rlp.go
+//go:generate go run ../../rlp/rlpgen -type ArkivTransaction -out gen_arkiv_transaction_rlp.go
 
-// GolemBaseStorageEntityCreated is the event signature for entity creation logs.
-var GolemBaseStorageEntityCreated = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityCreated(uint256,uint256)"))
-
-// GolemBaseStorageEntityDeleted is the event signature for entity deletion logs.
-var GolemBaseStorageEntityDeleted = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityDeleted(uint256)"))
-
-// GolemBaseStorageEntityUpdated is the event signature for entity update logs.
-var GolemBaseStorageEntityUpdated = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityUpdated(uint256,uint256)"))
-
-// GolemBaseStorageEntityBTLExtended is the event signature for extending BTL of an entity.
-var GolemBaseStorageEntityBTLExtended = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityBTLExtended(uint256,uint256,uint256)"))
-
-// StorageTransaction represents a transaction that can be applied to the storage layer.
+// ArkivTransaction represents a transaction that can be applied to the storage layer.
 // It contains a list of Create operations, a list of Update operations and a list of Delete operations.
 //
 // Semantics of the transaction operations are as follows:
@@ -44,14 +32,15 @@ var GolemBaseStorageEntityBTLExtended = crypto.Keccak256Hash([]byte("GolemBaseSt
 // Annotations are key-value pairs where the key is a string and the value is either a string or a number.
 // The key-value pairs are used to build indexes and to query the storage layer.
 // Same key can have both string and numeric annotation, but not multiple values of the same type.
-type StorageTransaction struct {
-	Create []Create      `json:"create"`
-	Update []Update      `json:"update"`
-	Delete []common.Hash `json:"delete"`
-	Extend []ExtendBTL   `json:"extend"`
+type ArkivTransaction struct {
+	Create      []ArkivCreate      `json:"create"`
+	Update      []ArkivUpdate      `json:"update"`
+	Delete      []common.Hash      `json:"delete"`
+	Extend      []ExtendBTL        `json:"extend"`
+	ChangeOwner []ArkivChangeOwner `json:"changeOwner"`
 }
 
-func (tx *StorageTransaction) Validate() error {
+func (tx *ArkivTransaction) Validate() error {
 
 	for i, create := range tx.Create {
 		if create.BTL == 0 {
@@ -60,6 +49,10 @@ func (tx *StorageTransaction) Validate() error {
 
 		seenStringAnnotations := make(map[string]bool)
 		seenNumericAnnotations := make(map[string]bool)
+
+		if create.ContentType == "" {
+			return fmt.Errorf("create[%d] contentType is empty", i)
+		}
 
 		// Validate the annotation identifiers
 		for _, annotation := range create.StringAnnotations {
@@ -94,6 +87,10 @@ func (tx *StorageTransaction) Validate() error {
 	for i, update := range tx.Update {
 		if update.BTL == 0 {
 			return fmt.Errorf("update[%d] BTL is 0", i)
+		}
+
+		if update.ContentType == "" {
+			return fmt.Errorf("update[%d] contentType is empty", i)
 		}
 
 		seenStringAnnotations := make(map[string]bool)
@@ -136,33 +133,29 @@ func (tx *StorageTransaction) Validate() error {
 
 }
 
-type Create struct {
+type ArkivCreate struct {
 	BTL                uint64                     `json:"btl"`
+	ContentType        string                     `json:"contentType"`
 	Payload            []byte                     `json:"payload"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 }
 
-type Update struct {
+type ArkivUpdate struct {
 	EntityKey          common.Hash                `json:"entityKey"`
+	ContentType        string                     `json:"contentType"`
 	BTL                uint64                     `json:"btl"`
 	Payload            []byte                     `json:"payload"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 }
 
-type ExtendBTL struct {
-	EntityKey      common.Hash `json:"entityKey"`
-	NumberOfBlocks uint64      `json:"numberOfBlocks"`
+type ArkivChangeOwner struct {
+	EntityKey common.Hash    `json:"entityKey"`
+	NewOwner  common.Address `json:"newOwner"`
 }
 
-func addressToHash(a common.Address) common.Hash {
-	h := common.Hash{}
-	copy(h[12:], a[:])
-	return h
-}
-
-func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
+func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
 
 	defer func() {
 		if err != nil {
@@ -229,7 +222,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 		key := crypto.Keccak256Hash(txHash.Bytes(), create.Payload, paddedI)
 
 		ap := &entity.EntityMetaData{
-			ContentType:         "application/octet-stream",
+			ContentType:         create.ContentType,
 			Owner:               sender,
 			ExpiresAtBlock:      blockNumber + create.BTL,
 			StringAnnotations:   create.StringAnnotations,
@@ -316,7 +309,6 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 		}
 
 		ap := &entity.EntityMetaData{
-			ContentType:         oldMetaData.ContentType,
 			ExpiresAtBlock:      blockNumber + update.BTL,
 			StringAnnotations:   update.StringAnnotations,
 			NumericAnnotations:  update.NumericAnnotations,
@@ -406,8 +398,8 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, txIx i
 	return logs, nil
 }
 
-func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
-	tx := &StorageTransaction{}
+func ExecuteArkivTransaction(d []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
+	tx := &ArkivTransaction{}
 	err := rlp.DecodeBytes(d, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode storage transaction: %w", err)
