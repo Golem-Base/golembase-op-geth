@@ -31,10 +31,6 @@ type QueryOptions struct {
 var allColumns = []string{"key", "expires_at", "owner_address", "payload"}
 
 func (options *QueryOptions) toInternalQueryOptions() internalQueryOptions {
-
-	if options == nil {
-
-	}
 	switch {
 	case options == nil:
 		return internalQueryOptions{
