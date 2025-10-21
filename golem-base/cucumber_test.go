@@ -2575,8 +2575,8 @@ func theEntityOwnerChangeLogShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("expected ArkivEntityOwnerChanged log, got %s", log.Topics[0].Hex())
 	}
 
-	if len(log.Topics) != 3 {
-		return fmt.Errorf("expected 3 topics, got %d", len(log.Topics))
+	if len(log.Topics) != 4 {
+		return fmt.Errorf("expected 4 topics, got %d", len(log.Topics))
 	}
 
 	if log.Topics[1] != w.CreatedEntityKey {
