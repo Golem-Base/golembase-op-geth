@@ -54,6 +54,10 @@ func (tx *ArkivTransaction) Validate() error {
 			return fmt.Errorf("create[%d] contentType is empty", i)
 		}
 
+		if len(create.ContentType) > 128 {
+			return fmt.Errorf("create[%d] contentType is too long", i)
+		}
+
 		// Validate the annotation identifiers
 		for _, annotation := range create.StringAnnotations {
 			if !entity.AnnotationIdentRegexCompiled.MatchString(annotation.Key) {
@@ -91,6 +95,10 @@ func (tx *ArkivTransaction) Validate() error {
 
 		if update.ContentType == "" {
 			return fmt.Errorf("update[%d] contentType is empty", i)
+		}
+
+		if len(update.ContentType) > 128 {
+			return fmt.Errorf("update[%d] contentType is too long", i)
 		}
 
 		seenStringAnnotations := make(map[string]bool)
