@@ -403,6 +403,40 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 		)
 	}
 
+	for _, changeOwner := range tx.ChangeOwner {
+		md, err := entity.GetEntityMetaData(access, changeOwner.EntityKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get entity meta data for change owner %s: %w", changeOwner.EntityKey.Hex(), err)
+		}
+
+		if md.Owner != sender {
+			return nil, fmt.Errorf("failed to change owner of entity %s: %s is not the owner", changeOwner.EntityKey.Hex(), sender.Hex())
+		}
+
+		oldOwner := md.Owner
+
+		md.Owner = changeOwner.NewOwner
+		err = entity.StoreEntityMetaData(access, changeOwner.EntityKey, *md)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store entity meta data for change owner %s: %w", changeOwner.EntityKey.Hex(), err)
+		}
+
+		logs = append(
+			logs,
+			&types.Log{
+				Address: common.Address(address.ArkivProcessorAddress),
+				Topics: []common.Hash{
+					arkivlogs.ArkivEntityOwnerChanged,
+					changeOwner.EntityKey,
+					addressToHash(oldOwner),
+					addressToHash(md.Owner),
+				},
+				Data:        []byte{},
+				BlockNumber: blockNumber,
+			},
+		)
+	}
+
 	return logs, nil
 }
 
