@@ -402,6 +402,10 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
 	}
 
+	if string(ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(ed.ContentType))
+	}
+
 	return nil
 
 }
@@ -926,6 +930,10 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	if string(ed.Value) != "new payload" {
 		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	if string(ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(ed.ContentType))
 	}
 
 	return nil
@@ -2599,7 +2607,41 @@ func theEntityOwnerChangeLogShouldBeRecorded(ctx context.Context) error {
 }
 
 func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
-	// TODO: Implement this when we have a way to get the owner of an entity
+
+	w := testutil.GetWorld(ctx)
+	rcpClient := w.GethInstance.RPCClient
+
+	key := w.CreatedEntityKey
+
+	var e arkivtype.QueryResponse
+	err := rcpClient.CallContext(
+		ctx,
+		&e,
+		"arkiv_query",
+		fmt.Sprintf(`$key = %s`, key.Hex()),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get storage value: %w", err)
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(e.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if string(ed.Value) != "test payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	newOwner := ed.Owner
+
+	if newOwner != common.HexToAddress("0x1234567890123456789012345678901234567890") {
+		return fmt.Errorf("expected new owner to be %s, got %s", common.HexToAddress("0x1234567890123456789012345678901234567890").Hex(), newOwner.Hex())
+	}
+
 	return nil
 }
 

@@ -70,8 +70,6 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 			},
 		)
 
-		// logs = append(logs, log)
-
 		return nil
 	}
 

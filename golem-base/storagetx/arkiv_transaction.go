@@ -229,8 +229,13 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 
 		key := crypto.Keccak256Hash(txHash.Bytes(), create.Payload, paddedI)
 
+		contentType := "application/octet-stream"
+		if len(create.ContentType) > 0 {
+			contentType = create.ContentType
+		}
+
 		ap := &entity.EntityMetaData{
-			ContentType:         create.ContentType,
+			ContentType:         contentType,
 			Owner:               sender,
 			ExpiresAtBlock:      blockNumber + create.BTL,
 			StringAnnotations:   create.StringAnnotations,
