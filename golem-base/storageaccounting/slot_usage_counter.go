@@ -7,7 +7,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var UsedSlotsKey = crypto.Keccak256Hash([]byte("golem_base_used_slots"))
+var UsedSlotsKey = crypto.Keccak256Hash([]byte("arkivUsedSlots"))
 
 type SlotUsageCounter struct {
 	UsedSlots   map[common.Address]*uint256.Int
