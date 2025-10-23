@@ -16,7 +16,10 @@ type QueryResponse struct {
 	Cursor      string            `json:"cursor,omitempty"`
 }
 
-type Offset []OffsetValue
+type Offset struct {
+	BlockNumber  uint64        `json:"blockNumber"`
+	ColumnValues []OffsetValue `json:"columnValues"`
+}
 
 func (o Offset) Encode() (string, error) {
 	s, err := json.Marshal(o)

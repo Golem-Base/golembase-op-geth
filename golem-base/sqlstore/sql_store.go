@@ -832,10 +832,13 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			NumericAnnotations: []entity.NumericAnnotation{},
 		}
 
-		offset := []arkivtype.OffsetValue{}
+		offset := arkivtype.Offset{
+			BlockNumber:  options.AtBlock,
+			ColumnValues: make([]arkivtype.OffsetValue, 0, len(options.OrderByColumns())),
+		}
 
 		for _, column := range options.OrderByColumns() {
-			offset = append(offset, arkivtype.OffsetValue{
+			offset.ColumnValues = append(offset.ColumnValues, arkivtype.OffsetValue{
 				ColumnName: column,
 				Value:      columns[column],
 			})

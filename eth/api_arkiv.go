@@ -26,7 +26,7 @@ type QueryOptions struct {
 	AtBlock        *uint64      `json:"atBlock"`
 	IncludeData    *IncludeData `json:"includeData"`
 	ResultsPerPage uint64       `json:"resultsPerPage"`
-	Cursor         string       `json:"cursor"`
+	Cursor         *string      `json:"cursor"`
 }
 
 var allColumns = []string{
@@ -45,21 +45,25 @@ func verifyColumn(column string) (string, error) {
 	return verified, nil
 }
 
-func (options *QueryOptions) getQueryOffset() (arkivtype.Offset, error) {
+func (options *QueryOptions) getQueryOffset() (*arkivtype.Offset, error) {
+	if options.Cursor == nil {
+		return nil, nil
+	}
+
 	offset := arkivtype.Offset{}
-	err := offset.Decode(options.Cursor)
+	err := offset.Decode(*options.Cursor)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, val := range offset {
+	for _, val := range offset.ColumnValues {
 		_, err := verifyColumn(val.ColumnName)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return offset, nil
+	return &offset, nil
 }
 
 func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, error) {
@@ -113,10 +117,10 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 }
 
 type internalQueryOptions struct {
-	AtBlock            *uint64          `json:"at_block"`
-	IncludeAnnotations bool             `json:"include_annotations"`
-	Columns            []string         `json:"columns"`
-	Offset             arkivtype.Offset `json:"offset"`
+	AtBlock            *uint64           `json:"at_block"`
+	IncludeAnnotations bool              `json:"include_annotations"`
+	Columns            []string          `json:"columns"`
+	Offset             *arkivtype.Offset `json:"offset"`
 }
 
 type arkivAPI struct {
@@ -148,19 +152,28 @@ func (api *arkivAPI) Query(
 	}
 
 	block := api.eth.blockchain.CurrentBlock().Number.Uint64()
+	if options.Offset != nil {
+		block = options.Offset.BlockNumber
+	}
 	if options.AtBlock != nil {
 		block = *options.AtBlock
 	}
+
 	columns := allColumns
 	if len(options.Columns) > 0 {
 		columns = options.Columns
+	}
+
+	columnOffsets := []arkivtype.OffsetValue{}
+	if options.Offset != nil {
+		columnOffsets = options.Offset.ColumnValues
 	}
 
 	queryOptions := query.QueryOptions{
 		AtBlock:            block,
 		IncludeAnnotations: options.IncludeAnnotations,
 		Columns:            columns,
-		Offset:             options.Offset,
+		Offset:             columnOffsets,
 	}
 	query := expr.Evaluate(queryOptions)
 
