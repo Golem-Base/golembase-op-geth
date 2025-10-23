@@ -87,7 +87,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL", dbFile))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
