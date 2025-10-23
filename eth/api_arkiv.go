@@ -32,15 +32,15 @@ type QueryOptions struct {
 }
 
 var allColumns = []string{
-	query.GetColumnOrPanic("key"),
-	query.GetColumnOrPanic("expires_at"),
-	query.GetColumnOrPanic("owner_address"),
-	query.GetColumnOrPanic("payload"),
-	query.GetColumnOrPanic("content_type"),
+	arkivtype.GetColumnOrPanic("key"),
+	arkivtype.GetColumnOrPanic("expires_at"),
+	arkivtype.GetColumnOrPanic("owner_address"),
+	arkivtype.GetColumnOrPanic("payload"),
+	arkivtype.GetColumnOrPanic("content_type"),
 }
 
 func verifyColumn(column string) (string, error) {
-	verified, err := query.GetColumn(column)
+	verified, err := arkivtype.GetColumn(column)
 	if err != nil {
 		return "", fmt.Errorf("invalid column supplied in query: %s", column)
 	}
@@ -100,19 +100,19 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 			iq.IncludeAnnotations = true
 		}
 		if options.IncludeData.Payload {
-			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("payload"))
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("payload"))
 		}
 		if options.IncludeData.ContentType {
-			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("content_type"))
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("content_type"))
 		}
 		if options.IncludeData.Expiration {
-			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("expires_at"))
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("expires_at"))
 		}
 		if options.IncludeData.Owner {
-			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("owner_address"))
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("owner_address"))
 		}
 		if options.IncludeData.Key {
-			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("key"))
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("key"))
 		}
 		return &iq, nil
 	}
