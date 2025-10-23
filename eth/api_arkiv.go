@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type IncludeData struct {
@@ -235,7 +236,7 @@ func (api *arkivAPI) Query(
 				if err != nil {
 					return fmt.Errorf("could not encode offset: %w", err)
 				}
-				response.Cursor = cursor
+				response.Cursor = &cursor
 				return sqlstore.ErrStopIteration
 			}
 			response.Data = append(response.Data, ed)
@@ -245,7 +246,7 @@ func (api *arkivAPI) Query(
 				if err != nil {
 					return fmt.Errorf("could not encode offset: %w", err)
 				}
-				response.Cursor = cursor
+				response.Cursor = &cursor
 				return sqlstore.ErrStopIteration
 			}
 
@@ -256,6 +257,11 @@ func (api *arkivAPI) Query(
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
+	cursorStr := "nil"
+	if response.Cursor != nil {
+		cursorStr = *response.Cursor
+	}
+	log.Info("query response", "number_of_entities", len(response.Data), "cursor", cursorStr)
 	return response, nil
 }
 

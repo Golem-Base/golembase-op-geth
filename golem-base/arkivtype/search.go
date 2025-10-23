@@ -13,7 +13,7 @@ import (
 type QueryResponse struct {
 	Data        []json.RawMessage `json:"data"`
 	BlockNumber uint64            `json:"blockNumber"`
-	Cursor      string            `json:"cursor,omitempty"`
+	Cursor      *string           `json:"cursor,omitempty"`
 }
 
 type Offset struct {
