@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
@@ -151,7 +152,9 @@ func (api *arkivAPI) Query(
 		return nil, err
 	}
 
-	block := api.eth.blockchain.CurrentBlock().Number.Uint64()
+	latestsHead := api.eth.blockchain.CurrentBlock()
+
+	block := latestsHead.Number.Uint64()
 	if options.Offset != nil {
 		block = options.Offset.BlockNumber
 	}
@@ -180,6 +183,26 @@ func (api *arkivAPI) Query(
 	response := &arkivtype.QueryResponse{
 		BlockNumber: block,
 		Data:        make([]json.RawMessage, 0),
+	}
+
+	// In case the query should be run on a block that we don't have yet,
+	// we wait for a little bit to see if we receive the block.
+	if block > latestsHead.Number.Uint64() {
+		var cadence time.Duration
+		if latestsHead.Number.Uint64() <= 1 {
+			// For block 1, we cannot deduce the cadence, so we just assume 2 seconds
+			cadence = 2 * time.Second
+		} else {
+			cadence = time.Duration(
+				latestsHead.Time-api.eth.blockchain.GetHeaderByHash(latestsHead.ParentHash).Time,
+			) * time.Second
+		}
+
+		time.Sleep(2 * time.Duration(cadence) * time.Second)
+		latestsHead = api.eth.blockchain.CurrentBlock()
+		if block > latestsHead.Number.Uint64() {
+			return nil, fmt.Errorf("requested block is in the future")
+		}
 	}
 
 	// 256 bytes is for the overhead of the 'envelope' around the entity data
