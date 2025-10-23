@@ -7,16 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
 type StateAccess = storageutil.StateAccess
 
 func SetBlob(db StateAccess, key common.Hash, value []byte) {
-
-	log.Info("stateutil", "key", key, "value", common.BytesToHash(value).Hex())
-
 	keyInt := new(uint256.Int).SetBytes(key[:])
 
 	for v := range BytesTo32ByteSequence(value) {
