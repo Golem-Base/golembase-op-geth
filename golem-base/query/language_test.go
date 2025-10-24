@@ -387,7 +387,7 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("owner", func(t *testing.T) {
-		owner := common.HexToAddress("0x1")
+		owner := common.HexToAddress("0x1").Hex()
 		v, err := query.Parse(fmt.Sprintf(`$owner = %s`, owner))
 		require.NoError(t, err)
 
@@ -397,9 +397,38 @@ func TestParse(t *testing.T) {
 				Or: query.OrExpression{
 					Left: query.AndExpression{
 						Left: query.EqualExpr{
-							Owner: &query.Ownership{
+							Assign: &query.Equality{
+								Var:   "$owner",
 								IsNot: false,
-								Owner: owner.Hex(),
+								Value: query.Value{
+									String: &owner,
+								},
+							},
+						},
+					},
+				},
+			},
+			v,
+		)
+	})
+
+	t.Run("owner quoted", func(t *testing.T) {
+		owner := common.HexToAddress("0x1").Hex()
+		v, err := query.Parse(fmt.Sprintf(`$owner = "%s"`, owner))
+		require.NoError(t, err)
+
+		require.Equal(
+			t,
+			&query.Expression{
+				Or: query.OrExpression{
+					Left: query.AndExpression{
+						Left: query.EqualExpr{
+							Assign: &query.Equality{
+								Var:   "$owner",
+								IsNot: false,
+								Value: query.Value{
+									String: &owner,
+								},
 							},
 						},
 					},
@@ -410,7 +439,7 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("not owner", func(t *testing.T) {
-		owner := common.HexToAddress("0x1")
+		owner := common.HexToAddress("0x1").Hex()
 		v, err := query.Parse(fmt.Sprintf(`$owner != %s`, owner))
 		require.NoError(t, err)
 
@@ -420,9 +449,12 @@ func TestParse(t *testing.T) {
 				Or: query.OrExpression{
 					Left: query.AndExpression{
 						Left: query.EqualExpr{
-							Owner: &query.Ownership{
+							Assign: &query.Equality{
+								Var:   "$owner",
 								IsNot: true,
-								Owner: owner.Hex(),
+								Value: query.Value{
+									String: &owner,
+								},
 							},
 						},
 					},

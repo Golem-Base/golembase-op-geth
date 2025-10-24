@@ -6,7 +6,6 @@ import (
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
@@ -412,11 +411,8 @@ func (e *AndRHS) Evaluate(b *QueryBuilder) string {
 
 // EqualExpr can be either an equality or a parenthesized expression.
 type EqualExpr struct {
-	Paren        *Paren              `parser:"  @@"`
-	Owner        *Ownership          `parser:"| @@"`
-	KeyEq        *KeyEquality        `parser:"| @@"`
-	ExpirationEq *ExpirationEquality `parser:"| @@"`
-	Assign       *Equality           `parser:"| @@"`
+	Paren  *Paren    `parser:"  @@"`
+	Assign *Equality `parser:"| @@"`
 
 	LessThan           *LessThan           `parser:"| @@"`
 	LessOrEqualThan    *LessOrEqualThan    `parser:"| @@"`
@@ -451,18 +447,6 @@ func (e *EqualExpr) invert() *EqualExpr {
 		return &EqualExpr{Paren: e.Paren.invert()}
 	}
 
-	if e.Owner != nil {
-		return &EqualExpr{Owner: e.Owner.invert()}
-	}
-
-	if e.KeyEq != nil {
-		return &EqualExpr{KeyEq: e.KeyEq.invert()}
-	}
-
-	if e.ExpirationEq != nil {
-		return &EqualExpr{ExpirationEq: e.ExpirationEq.invert()}
-	}
-
 	if e.LessThan != nil {
 		return &EqualExpr{GreaterOrEqualThan: e.LessThan.invert()}
 	}
@@ -493,18 +477,6 @@ func (e *EqualExpr) invert() *EqualExpr {
 func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 	if e.Paren != nil {
 		return e.Paren.Evaluate(b)
-	}
-
-	if e.Owner != nil {
-		return e.Owner.Evaluate(b)
-	}
-
-	if e.KeyEq != nil {
-		return e.KeyEq.Evaluate(b)
-	}
-
-	if e.ExpirationEq != nil {
-		return e.ExpirationEq.Evaluate(b)
 	}
 
 	if e.LessThan != nil {
@@ -819,106 +791,9 @@ func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 	}
 }
 
-// Ownership represents an ownership query, $owner = 0x....
-type Ownership struct {
-	IsNot bool `parser:"Owner (Eq | @Neq)"`
-	//Owner string `parser:"@Address | \"@Address\""`
-	Owner string `parser:"@Address"`
-}
-
-type KeyEquality struct {
-	IsNot bool   `parser:"Key (Eq | @Neq)"`
-	Key   string `parser:"@EntityKey"`
-}
-
-type ExpirationEquality struct {
-	IsNot      bool   `parser:"Expiration (Eq | @Neq)"`
-	Expiration uint64 `parser:"@Number"`
-}
-
-func (e *Ownership) invert() *Ownership {
-	return &Ownership{
-		IsNot: !e.IsNot,
-		Owner: e.Owner,
-	}
-}
-
-func (e *KeyEquality) invert() *KeyEquality {
-	return &KeyEquality{
-		IsNot: !e.IsNot,
-		Key:   e.Key,
-	}
-}
-
-func (e *ExpirationEquality) invert() *ExpirationEquality {
-	return &ExpirationEquality{
-		IsNot:      !e.IsNot,
-		Expiration: e.Expiration,
-	}
-}
-func (b *QueryBuilder) createEntityQuery(
-	whereClause string,
-	arguments ...any,
-) string {
-	args := make([]any, 0, len(arguments)+2)
-	args = append(args, b.options.AtBlock, b.options.AtBlock)
-	args = append(args, arguments...)
-
-	return b.createLeafQuery(
-		strings.Join(
-			[]string{
-				"SELECT DISTINCT",
-				b.options.columnString(),
-				"FROM entities AS e",
-				"WHERE e.deleted = FALSE",
-				"AND e.last_modified_at_block <= ?",
-				"AND NOT EXISTS (",
-				"SELECT 1",
-				"FROM entities AS e2",
-				"WHERE e2.key = e.key",
-				"AND e2.last_modified_at_block > e.last_modified_at_block",
-				"AND e2.last_modified_at_block <= ?",
-				")",
-				"AND",
-				whereClause,
-			},
-			" ",
-		),
-		args...,
-	)
-}
-
-func (e *Ownership) Evaluate(b *QueryBuilder) string {
-	var address = common.Address{}
-	if common.IsHexAddress(e.Owner) {
-		address = common.HexToAddress(e.Owner)
-	}
-	if !e.IsNot {
-		return b.createEntityQuery("e.owner_address = ?", address.Hex())
-	} else {
-		return b.createEntityQuery("e.owner_address != ?", address.Hex())
-	}
-}
-func (e *KeyEquality) Evaluate(b *QueryBuilder) string {
-	key := common.HexToHash(e.Key)
-	if !e.IsNot {
-		return b.createEntityQuery("e.key = ?", key.Hex())
-	} else {
-		return b.createEntityQuery("e.key != ?", key.Hex())
-	}
-}
-
-func (e *ExpirationEquality) Evaluate(b *QueryBuilder) string {
-	if !e.IsNot {
-		return b.createEntityQuery("e.expires_at = ?", e.Expiration)
-	} else {
-		return b.createEntityQuery("e.expires_at != ?", e.Expiration)
-	}
-}
-
 // Equality represents a simple equality (e.g. name = 123).
 type Equality struct {
-	Var   string `parser:"@Ident"`
+	Var   string `parser:"(@Ident | @Key | @Owner | @Expiration)"`
 	IsNot bool   `parser:"(Eq | @Neq)"`
 	Value Value  `parser:"@@"`
 }
@@ -993,7 +868,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 
 // Value is a literal value (a number or a string).
 type Value struct {
-	String *string `parser:"  @String"`
+	String *string `parser:"  (@String | @EntityKey | @Address)"`
 	Number *uint64 `parser:"| @Number"`
 }
 
