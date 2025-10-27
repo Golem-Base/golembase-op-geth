@@ -807,62 +807,53 @@ func (e *Equality) invert() *Equality {
 }
 
 func (e *Equality) Evaluate(b *QueryBuilder) string {
-	if !e.IsNot {
-		if e.Value.String != nil {
-			return b.createAnnotationQuery(
-				"string_annotations",
-				strings.Join(
-					[]string{
-						"a.annotation_key = ?",
-						"AND a.value = ?",
-					},
-					" ",
-				),
-				e.Var,
-				*e.Value.String,
-			)
-		} else {
-			return b.createAnnotationQuery(
-				"numeric_annotations",
-				strings.Join(
-					[]string{
-						"a.annotation_key = ?",
-						"AND a.value = ?",
-					},
-					" ",
-				),
-				e.Var,
-				*e.Value.Number,
-			)
+	if e.Value.String != nil {
+
+		value := *e.Value.String
+		if e.Var == "$owner" || e.Var == "$key" {
+			value = strings.ToLower(value)
 		}
+
+		condition := "a.value = ?"
+		if e.IsNot {
+			condition = "a.value != ?"
+		}
+
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"a.annotation_key = ?",
+					"AND",
+					condition,
+				},
+				" ",
+			),
+			e.Var,
+			value,
+		)
+
 	} else {
-		if e.Value.String != nil {
-			return b.createAnnotationQuery(
-				"string_annotations",
-				strings.Join(
-					[]string{
-						"a.annotation_key = ?",
-						"AND a.value != ?",
-					},
-					" ",
-				),
-				e.Var,
-				*e.Value.String,
-			)
-		} else {
-			return b.createAnnotationQuery(
-				"numeric_annotations",
-				strings.Join(
-					[]string{
-						"a.annotation_key = ?",
-						"AND a.value != ?",
-					},
-					" ",
-				),
-				e.Var,
-				*e.Value.Number,
-			)
+
+		condition := "a.value = ?"
+		if e.IsNot {
+			condition = "a.value != ?"
 		}
+
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			strings.Join(
+				[]string{
+					"a.annotation_key = ?",
+					"AND",
+					condition,
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.Number,
+		)
+
 	}
 }
 
