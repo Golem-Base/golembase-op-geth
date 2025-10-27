@@ -1,7 +1,9 @@
 package storagetx
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -446,13 +448,21 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 	return logs, nil
 }
 
-var decoder, _ = zstd.NewReader(nil)
+const maxCompressedSize = 1024 * 1024 * 20 // 10MB
 
 func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
 
-	d, err := decoder.DecodeAll(compressed, nil)
+	reader, err := zstd.NewReader(bytes.NewReader(compressed))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode compressed storage transaction: %w", err)
+		return nil, fmt.Errorf("failed to create zstd reader: %w", err)
+	}
+	defer reader.Close()
+
+	lr := io.LimitReader(reader, maxCompressedSize)
+
+	d, err := io.ReadAll(lr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read compressed storage transaction: %w", err)
 	}
 
 	tx := &ArkivTransaction{}
