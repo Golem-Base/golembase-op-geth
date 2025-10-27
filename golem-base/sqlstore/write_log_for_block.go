@@ -18,7 +18,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	"github.com/klauspost/compress/zstd"
 )
+
+var decoder, _ = zstd.NewReader(nil)
 
 func WriteLogForBlockSqlite(
 	sqlStore *SQLStore,
@@ -198,8 +201,13 @@ func WriteLogForBlockSqlite(
 
 			case toAddr == address.ArkivProcessorAddress:
 
+				d, err := decoder.DecodeAll(tx.Data(), nil)
+				if err != nil {
+					return fmt.Errorf("failed to decode compressed storage transaction: %w", err)
+				}
+
 				stx := storagetx.ArkivTransaction{}
-				err := rlp.DecodeBytes(tx.Data(), &stx)
+				err = rlp.DecodeBytes(d, &stx)
 				if err != nil {
 					return fmt.Errorf("failed to decode storage transaction: %w", err)
 				}

@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	"github.com/klauspost/compress/zstd"
 )
 
 //go:generate go run ../../rlp/rlpgen -type ArkivTransaction -out gen_arkiv_transaction_rlp.go
@@ -445,9 +446,17 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 	return logs, nil
 }
 
-func ExecuteArkivTransaction(d []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
+var decoder, _ = zstd.NewReader(nil)
+
+func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
+
+	d, err := decoder.DecodeAll(compressed, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode compressed storage transaction: %w", err)
+	}
+
 	tx := &ArkivTransaction{}
-	err := rlp.DecodeBytes(d, tx)
+	err = rlp.DecodeBytes(d, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode storage transaction: %w", err)
 	}
