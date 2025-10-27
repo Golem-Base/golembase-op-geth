@@ -9,6 +9,7 @@ import (
 var PayloadSalt = []byte("arkivPayload")
 
 func StorePayload(access StateAccess, key common.Hash, payload []byte) {
+	compressed := encoder.EncodeAll(payload, nil)
 	hash := crypto.Keccak256Hash(PayloadSalt, key[:])
-	stateblob.SetBlob(access, hash, payload)
+	stateblob.SetBlob(access, hash, compressed)
 }

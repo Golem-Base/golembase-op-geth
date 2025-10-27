@@ -102,7 +102,11 @@ func WriteLogForBlockSqlite(
 						yield(nil, fmt.Errorf("failed to get entity metadata for key %s: %w", entityKey.Hex(), err))
 						return
 					}
-					payload := entity.GetPayload(statedb, entityKey)
+					payload, err := entity.GetPayload(statedb, entityKey)
+					if err != nil {
+						yield(nil, fmt.Errorf("failed to get payload for key %s: %w", entityKey.Hex(), err))
+						return
+					}
 
 					if !yield(&struct {
 						Key      common.Hash
