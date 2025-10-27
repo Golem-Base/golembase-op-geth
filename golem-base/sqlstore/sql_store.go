@@ -316,11 +316,6 @@ func (e *SQLStore) SnapSyncToBlock(
 	}
 
 	// Clear all existing entities, annotations for a clean snap sync
-	err = txDB.DeleteAllEntities(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to clear entities: %w", err)
-	}
-
 	err = txDB.DeleteAllStringAnnotations(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to clear string annotations: %w", err)
@@ -329,6 +324,11 @@ func (e *SQLStore) SnapSyncToBlock(
 	err = txDB.DeleteAllNumericAnnotations(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to clear numeric annotations: %w", err)
+	}
+
+	err = txDB.DeleteAllEntities(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to clear entities: %w", err)
 	}
 
 	// Insert all entities from the snapshot
