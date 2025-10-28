@@ -9,6 +9,7 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -87,7 +88,8 @@ type Delete struct {
 
 // SQLStore encapsulates the SQLite SQLStore functionality
 type SQLStore struct {
-	db                  *sql.DB
+	writeDB             *sql.DB
+	readDB              *sql.DB
 	historicBlocksCount uint64
 }
 
@@ -99,10 +101,12 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true", dbFile))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	db.SetMaxOpenConns(1)
 
 	// Check if schema exists and apply if needed
 	ctx := context.Background()
@@ -205,21 +209,33 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to recreate schema: %w", err)
 	}
 
+	readDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=ro&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true", dbFile))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+	readDB.SetMaxOpenConns(runtime.NumCPU())
+
 	log.Info("arkiv: database ready", "entitySchemaVersion", entitiesSchemaVersion)
 	return &SQLStore{
-		db:                  db,
+		writeDB:             db,
+		readDB:              readDB,
 		historicBlocksCount: historicBlocksCount,
 	}, nil
 }
 
 // Close closes the database connection
 func (e *SQLStore) Close() error {
-	return e.db.Close()
+	return errors.Join(e.readDB.Close(), e.writeDB.Close())
 }
 
 // GetQueries returns a new sqlitegolem.Queries instance for autocommit operations
 func (e *SQLStore) GetQueries() *sqlitegolem.Queries {
-	return sqlitegolem.New(e.db)
+	return sqlitegolem.New(e.readDB)
+}
+
+// GetQueries returns a new sqlitegolem.Queries instance for autocommit operations
+func (e *SQLStore) GetWriteQueries() *sqlitegolem.Queries {
+	return sqlitegolem.New(e.writeDB)
 }
 
 func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*sqlitegolem.GetProcessingStatusRow, error) {
@@ -279,7 +295,7 @@ func (e *SQLStore) SnapSyncToBlock(
 	log.Info("snap syncing to block start", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
 	defer log.Info("snap syncing to block end", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
 
-	tx, err := e.db.BeginTx(ctx, nil)
+	tx, err := e.writeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -417,7 +433,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 	log.Info("processing block", "block", blockWal.BlockInfo.Number)
 	defer log.Info("processing block end", "block", blockWal.BlockInfo.Number)
 
-	tx, err := e.db.BeginTx(ctx, nil)
+	tx, err := e.writeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -778,7 +794,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 	log.Info("Executing query", "query", query, "args", args)
 
 	// Begin a read-only transaction for consistency
-	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := e.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
