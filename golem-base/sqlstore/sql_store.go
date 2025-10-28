@@ -936,18 +936,22 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 
 			// Convert string annotations
 			for _, row := range stringAnnotRows {
-				r.StringAnnotations = append(r.StringAnnotations, entity.StringAnnotation{
-					Key:   row.AnnotationKey,
-					Value: row.Value,
-				})
+				if row.AnnotationKey != "$key" && row.AnnotationKey != "$owner" {
+					r.StringAnnotations = append(r.StringAnnotations, entity.StringAnnotation{
+						Key:   row.AnnotationKey,
+						Value: row.Value,
+					})
+				}
 			}
 
 			// Convert numeric annotations
 			for _, row := range numericAnnotRows {
-				r.NumericAnnotations = append(r.NumericAnnotations, entity.NumericAnnotation{
-					Key:   row.AnnotationKey,
-					Value: uint64(row.Value),
-				})
+				if row.AnnotationKey != "$expiration" {
+					r.NumericAnnotations = append(r.NumericAnnotations, entity.NumericAnnotation{
+						Key:   row.AnnotationKey,
+						Value: uint64(row.Value),
+					})
+				}
 			}
 		}
 
