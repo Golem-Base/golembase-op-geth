@@ -205,8 +205,8 @@ func (api *arkivAPI) Query(
 	// and the separator characters in between
 	responseSize := 256
 
-	// 256 kb
-	maxResponseSize := 256 * 1024 * 1024
+	// 512 kb
+	maxResponseSize := 512 * 1024 * 1024
 	maxResultsPerPage := 0
 
 	if op != nil {

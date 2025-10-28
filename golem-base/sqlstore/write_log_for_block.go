@@ -102,11 +102,7 @@ func WriteLogForBlockSqlite(
 						yield(nil, fmt.Errorf("failed to get entity metadata for key %s: %w", entityKey.Hex(), err))
 						return
 					}
-					payload, err := entity.GetPayload(statedb, entityKey)
-					if err != nil {
-						yield(nil, fmt.Errorf("failed to get payload for key %s: %w", entityKey.Hex(), err))
-						return
-					}
+					payload := entity.GetCompressedPayload(statedb, entityKey)
 
 					if !yield(&struct {
 						Key      common.Hash
@@ -269,6 +265,8 @@ func WriteLogForBlockSqlite(
 	return nil
 }
 
+var encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
+
 func extractArkivOperations(
 	stx *storagetx.ArkivTransaction,
 	txIx int,
@@ -314,7 +312,7 @@ func extractArkivOperations(
 		cr := Create{
 			EntityKey:          key,
 			ExpiresAtBlock:     expiresAtBlock,
-			Payload:            create.Payload,
+			Payload:            encoder.EncodeAll(create.Payload, nil),
 			ContentType:        create.ContentType,
 			StringAnnotations:  create.StringAnnotations,
 			NumericAnnotations: create.NumericAnnotations,
@@ -349,7 +347,7 @@ func extractArkivOperations(
 		ur := Update{
 			EntityKey:          key,
 			ExpiresAtBlock:     expiresAtBlock,
-			Payload:            update.Payload,
+			Payload:            encoder.EncodeAll(update.Payload, nil),
 			ContentType:        update.ContentType,
 			StringAnnotations:  update.StringAnnotations,
 			NumericAnnotations: update.NumericAnnotations,

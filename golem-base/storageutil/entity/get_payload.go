@@ -17,3 +17,9 @@ func GetPayload(access StateAccess, key common.Hash) ([]byte, error) {
 	}
 	return decoded, nil
 }
+
+func GetCompressedPayload(access StateAccess, key common.Hash) []byte {
+	hash := crypto.Keccak256Hash(PayloadSalt, key[:])
+	d := stateblob.GetBlob(access, hash)
+	return d
+}

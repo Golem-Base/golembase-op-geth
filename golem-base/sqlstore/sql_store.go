@@ -897,7 +897,13 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		}
 		var payload []byte
 		if result.payload != nil {
-			payload = *result.payload
+
+			decoded, err := decoder.DecodeAll(*result.payload, nil)
+			if err != nil {
+				return fmt.Errorf("failed to decode compressed payload: %w", err)
+			}
+
+			payload = decoded
 		}
 		var owner *common.Address
 		if result.owner != nil {
