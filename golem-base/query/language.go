@@ -14,8 +14,8 @@ import (
 )
 
 type QueryOptions struct {
-	AtBlock            uint64                  `json:"at_block"`
-	IncludeAnnotations bool                    `json:"include_annotations"`
+	AtBlock            uint64                  `json:"atBlock"`
+	IncludeAnnotations bool                    `json:"includeAnnotations"`
 	Columns            []string                `json:"columns"`
 	Offset             []arkivtype.OffsetValue `json:"offset"`
 }
@@ -145,7 +145,7 @@ func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
 
 type TopLevel struct {
 	Expression *Expression `parser:"@@"`
-	All        bool        `parser:"| @All"`
+	All        bool        `parser:"| @(All | '*')"`
 }
 
 func (t *TopLevel) Normalise() *TopLevel {
@@ -181,7 +181,7 @@ func (t *TopLevel) Evaluate(options QueryOptions) *SelectQuery {
 	return &SelectQuery{
 		Query:   builder.tableBuilder.String(),
 		Args:    builder.args,
-		Columns: builder.options.Columns,
+		Columns: builder.options.AllColumns(),
 	}
 }
 
@@ -320,7 +320,7 @@ func (e *OrExpression) Evaluate(b *QueryBuilder) string {
 
 // OrRHS represents the right-hand side of an OR.
 type OrRHS struct {
-	Expr AndExpression `parser:"Or @@"`
+	Expr AndExpression `parser:"(Or | 'OR' | 'or') @@"`
 }
 
 func (e *OrRHS) Normalise() *OrRHS {
@@ -416,7 +416,7 @@ func (e *AndExpression) Evaluate(b *QueryBuilder) string {
 
 // AndRHS represents the right-hand side of an AND.
 type AndRHS struct {
-	Expr EqualExpr `parser:"And @@"`
+	Expr EqualExpr `parser:"(And | 'AND' | 'and') @@"`
 }
 
 func (e *AndRHS) Normalise() *AndRHS {
@@ -544,7 +544,7 @@ func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 }
 
 type Paren struct {
-	IsNot  bool       `parser:"@Not?"`
+	IsNot  bool       `parser:"@(Not | 'NOT' | 'not')?"`
 	Nested Expression `parser:"LParen @@ RParen"`
 }
 
@@ -618,7 +618,7 @@ func (b *QueryBuilder) createAnnotationQuery(
 
 type Glob struct {
 	Var   string `parser:"@Ident"`
-	IsNot bool   `parser:"(Glob | @NotGlob)"`
+	IsNot bool   `parser:"((Glob | @NotGlob) | (@('NOT' | 'not')? ('GLOB' | 'glob')))"`
 	Value string `parser:"@String"`
 }
 

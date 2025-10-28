@@ -32,6 +32,11 @@ Feature: Search
       (foo = "bar" || foo = "baz") && foo = "bar"
       """
     Then I should find 2 entities
+    When I search for entities with the query
+      """
+      (foo = "bar" or foo = "baz") and foo = "bar"
+      """
+    Then I should find 2 entities
 
   Scenario: invalid query
     When I search for entities with the invalid query
@@ -73,6 +78,11 @@ Feature: Search
     When I search for entities with the query
       """
       foo <= 50 && foo > 3
+      """
+    Then I should find 2 entities
+    When I search for entities with the query
+      """
+      foo <= 50 and foo > 3
       """
     Then I should find 2 entities
 
@@ -203,5 +213,10 @@ Feature: Search
     When I search for entities with the query
       """
       !(foo != "bar" || foo = "foo") && !(foo = "a" || foo ~ "foob?rquz")
+      """
+    Then I should find 1 entities
+    When I search for entities with the query
+      """
+      not (foo != "bar" or foo = "foo") and not (foo = "a" or foo glob "foob?rquz")
       """
     Then I should find 1 entities

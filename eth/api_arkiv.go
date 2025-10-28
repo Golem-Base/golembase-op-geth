@@ -119,8 +119,8 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 }
 
 type internalQueryOptions struct {
-	AtBlock            *uint64           `json:"at_block"`
-	IncludeAnnotations bool              `json:"include_annotations"`
+	AtBlock            *uint64           `json:"atBlock"`
+	IncludeAnnotations bool              `json:"includeAnnotations"`
 	Columns            []string          `json:"columns"`
 	Offset             *arkivtype.Offset `json:"offset"`
 }
@@ -163,8 +163,6 @@ func (api *arkivAPI) Query(
 		block = *options.AtBlock
 	}
 
-	columns := options.Columns
-
 	columnOffsets := []arkivtype.OffsetValue{}
 	if options.Offset != nil {
 		columnOffsets = options.Offset.ColumnValues
@@ -173,7 +171,7 @@ func (api *arkivAPI) Query(
 	queryOptions := query.QueryOptions{
 		AtBlock:            block,
 		IncludeAnnotations: options.IncludeAnnotations,
-		Columns:            columns,
+		Columns:            options.Columns,
 		Offset:             columnOffsets,
 	}
 	query := expr.Evaluate(queryOptions)
