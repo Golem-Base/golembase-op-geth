@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var EntityMetaDataSalt = []byte("golemBaseEntityMetaData")
+var EntityMetaDataSalt = []byte("arkivEntityMetaData")
 
 func GetEntityMetaData(access StateAccess, key common.Hash) (*EntityMetaData, error) {
 

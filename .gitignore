@@ -10,6 +10,7 @@
 .DS_Store
 */**/.DS_Store
 .direnv
+*result
 
 #*
 .#*
@@ -54,3 +55,6 @@ cmd/evm/evm
 cmd/geth/geth
 cmd/rlpdump/rlpdump
 cmd/workload/workload
+
+**/sqlstate.db
+**/golem-base.db*

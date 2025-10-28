@@ -6,10 +6,37 @@ import (
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
+
+type QueryOptions struct {
+	AtBlock            uint64                  `json:"at_block"`
+	IncludeAnnotations bool                    `json:"include_annotations"`
+	Columns            []string                `json:"columns"`
+	Offset             []arkivtype.OffsetValue `json:"offset"`
+}
+
+func (opts *QueryOptions) AllColumns() []string {
+	return append(opts.Columns, opts.OrderByColumns()...)
+}
+
+func (opts *QueryOptions) OrderByColumns() []string {
+	return []string{
+		arkivtype.GetColumnOrPanic("last_modified_at_block"),
+		arkivtype.GetColumnOrPanic("transaction_index_in_block"),
+		arkivtype.GetColumnOrPanic("operation_index_in_transaction"),
+	}
+}
+
+func (opts *QueryOptions) columnString() string {
+	if len(opts.AllColumns()) == 0 {
+		return "1"
+	}
+	return strings.Join(opts.AllColumns(), ", ")
+}
 
 // Define the lexer with distinct tokens for each operator and parentheses.
 var lex = lexer.MustSimple([]lexer.SimpleRule{
@@ -18,23 +45,31 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "RParen", Pattern: `\)`},
 	{Name: "And", Pattern: `&&`},
 	{Name: "Or", Pattern: `\|\|`},
+	{Name: "Neq", Pattern: `!=`},
 	{Name: "Eq", Pattern: `=`},
 	{Name: "Geqt", Pattern: `>=`},
 	{Name: "Leqt", Pattern: `<=`},
 	{Name: "Gt", Pattern: `>`},
 	{Name: "Lt", Pattern: `<`},
+	{Name: "NotGlob", Pattern: `!~`},
 	{Name: "Glob", Pattern: `~`},
 	{Name: "Not", Pattern: `!`},
+	{Name: "EntityKey", Pattern: `0x[a-fA-F0-9]{64}`},
+	{Name: "Address", Pattern: `0x[a-fA-F0-9]{40}`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
 	{Name: "Number", Pattern: `[0-9]+`},
 	{Name: "Ident", Pattern: entity.AnnotationIdentRegex},
 	// Meta-annotations, should start with $
 	{Name: "Owner", Pattern: `\$owner`},
+	{Name: "Key", Pattern: `\$key`},
+	{Name: "Expiration", Pattern: `\$expiration`},
+	{Name: "All", Pattern: `\$all`},
 })
 
 type SelectQuery struct {
-	Query string
-	Args  []any
+	Query   string
+	Args    []any
+	Columns []string
 }
 
 type QueryBuilder struct {
@@ -42,6 +77,7 @@ type QueryBuilder struct {
 	args         []any
 	needsComma   bool
 	tableCounter uint64
+	options      QueryOptions
 }
 
 func (b *QueryBuilder) nextTableName() string {
@@ -57,6 +93,42 @@ func (b *QueryBuilder) writeComma() {
 	}
 }
 
+func (b *QueryBuilder) getPaginationArguments() (string, []any) {
+	args := []any{}
+	paginationConditions := []string{}
+
+	for i := range b.options.Offset {
+		subcondition := []string{}
+		for j, from := range b.options.Offset {
+			if j > i {
+				break
+			}
+			var operator string
+			if j < i {
+				operator = "="
+			} else {
+				// TODO: if we ever support DESC, we need to optionally invert this
+				operator = ">"
+			}
+
+			args = append(args, from.Value)
+
+			subcondition = append(
+				subcondition,
+				fmt.Sprintf("%s %s ?", from.ColumnName, operator),
+			)
+		}
+
+		paginationConditions = append(
+			paginationConditions,
+			fmt.Sprintf("(%s)", strings.Join(subcondition, " AND ")),
+		)
+	}
+
+	paginationCondition := strings.Join(paginationConditions, " OR ")
+	return paginationCondition, args
+}
+
 func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
 	tableName := b.nextTableName()
 	b.writeComma()
@@ -70,45 +142,153 @@ func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
 	return tableName
 }
 
-// Expression is the top-level rule.
-type Expression struct {
-	Or *OrExpression `parser:"@@"`
+type TopLevel struct {
+	Expression *Expression `parser:"@@"`
+	All        bool        `parser:"| @All"`
 }
 
-func (e *Expression) Evaluate() *SelectQuery {
+func (t *TopLevel) Normalise() *TopLevel {
+	if t.All {
+		return t
+	}
+	return &TopLevel{
+		Expression: t.Expression.Normalise(),
+		All:        t.All,
+	}
+}
+
+func (t *TopLevel) Evaluate(options QueryOptions) *SelectQuery {
 	tableBuilder := strings.Builder{}
 	args := []any{}
 
-	tableBuilder.WriteString("WITH ")
-
 	builder := QueryBuilder{
+		options:      options,
 		tableBuilder: &tableBuilder,
 		args:         args,
 		needsComma:   false,
 	}
 
-	tableName := e.Or.Evaluate(&builder)
-
-	tableBuilder.WriteString(" SELECT * FROM ")
-	tableBuilder.WriteString(tableName)
-	tableBuilder.WriteString(" ORDER BY 1")
+	if t.All {
+		builder.tableBuilder.WriteString(" SELECT DISTINCT ")
+		builder.tableBuilder.WriteString(builder.options.columnString())
+		builder.tableBuilder.WriteString(" FROM entities ORDER BY ")
+		builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
+	} else {
+		t.Expression.Evaluate(&builder)
+	}
 
 	return &SelectQuery{
-		Query: tableBuilder.String(),
-		Args:  builder.args,
+		Query:   builder.tableBuilder.String(),
+		Args:    builder.args,
+		Columns: builder.options.Columns,
 	}
 }
 
-func (e *Expression) Recurse(b *QueryBuilder) string {
-	// We don't have to do anything here, the parsing order is already taking care
-	// of precedence since the nested OR node will create a subquery
-	return e.Or.Evaluate(b)
+// Expression is the top-level rule.
+type Expression struct {
+	Or OrExpression `parser:"@@"`
+}
+
+func (e *Expression) Normalise() *Expression {
+	normalised := e.Or.Normalise()
+	// Remove unneeded OR+AND nodes that both only contain a single child
+	// when that child is a parenthesised expression
+	if len(normalised.Right) == 0 && len(normalised.Left.Right) == 0 && normalised.Left.Left.Paren != nil {
+		// This has already been normalised by the call above, so any negation has
+		// been pushed into the leaf expressions and we can safely strip away the
+		// parentheses
+		return &normalised.Left.Left.Paren.Nested
+	}
+	return &Expression{
+		Or: *normalised,
+	}
+}
+
+func (e *Expression) invert() *Expression {
+
+	newLeft := e.Or.invert()
+
+	if len(newLeft.Right) == 0 {
+		// By construction, this will always be a Paren
+		if newLeft.Left.Paren == nil {
+			panic("This should never happen!")
+		}
+		return &newLeft.Left.Paren.Nested
+	}
+
+	return &Expression{
+		Or: OrExpression{
+			Left: *newLeft,
+		},
+	}
+}
+
+func (e *Expression) Evaluate(builder *QueryBuilder) {
+	builder.tableBuilder.WriteString("WITH ")
+
+	tableName := e.Or.Evaluate(builder)
+
+	paginationCondition, paginationArgs := builder.getPaginationArguments()
+
+	builder.args = append(builder.args, paginationArgs...)
+
+	p := ""
+	if len(paginationCondition) > 0 {
+		p = fmt.Sprintf(" WHERE ( %s )", paginationCondition)
+	}
+
+	builder.tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
+	builder.tableBuilder.WriteString(tableName)
+	builder.tableBuilder.WriteString(p)
+	builder.tableBuilder.WriteString(" ORDER BY ")
+	builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
 }
 
 // OrExpression handles expressions connected with ||.
 type OrExpression struct {
-	Left  *AndExpression `parser:"@@"`
-	Right []*OrRHS       `parser:"@@*"`
+	Left  AndExpression `parser:"@@"`
+	Right []*OrRHS      `parser:"@@*"`
+}
+
+func (e *OrExpression) Normalise() *OrExpression {
+	var newRight []*OrRHS = nil
+
+	if e.Right != nil {
+		newRight = make([]*OrRHS, 0, len(e.Right))
+		for _, rhs := range e.Right {
+			newRight = append(newRight, rhs.Normalise())
+		}
+	}
+
+	return &OrExpression{
+		Left:  *e.Left.Normalise(),
+		Right: newRight,
+	}
+}
+
+func (e *OrExpression) invert() *AndExpression {
+	newLeft := EqualExpr{
+		Paren: &Paren{
+			IsNot: false,
+			Nested: Expression{
+				Or: *e.Left.invert(),
+			},
+		},
+	}
+
+	var newRight []*AndRHS = nil
+
+	if e.Right != nil {
+		newRight = make([]*AndRHS, 0, len(e.Right))
+		for _, rhs := range e.Right {
+			newRight = append(newRight, rhs.invert())
+		}
+	}
+
+	return &AndExpression{
+		Left:  newLeft,
+		Right: newRight,
+	}
 }
 
 func (e *OrExpression) Evaluate(b *QueryBuilder) string {
@@ -130,7 +310,8 @@ func (e *OrExpression) Evaluate(b *QueryBuilder) string {
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
-		leftTable = rightTable
+		// Carry forward the cumulative result of the UNION
+		leftTable = tableName
 	}
 
 	return tableName
@@ -138,7 +319,26 @@ func (e *OrExpression) Evaluate(b *QueryBuilder) string {
 
 // OrRHS represents the right-hand side of an OR.
 type OrRHS struct {
-	Expr *AndExpression `parser:"Or @@"`
+	Expr AndExpression `parser:"Or @@"`
+}
+
+func (e *OrRHS) Normalise() *OrRHS {
+	return &OrRHS{
+		Expr: *e.Expr.Normalise(),
+	}
+}
+
+func (e *OrRHS) invert() *AndRHS {
+	return &AndRHS{
+		Expr: EqualExpr{
+			Paren: &Paren{
+				IsNot: false,
+				Nested: Expression{
+					Or: *e.Expr.invert(),
+				},
+			},
+		},
+	}
 }
 
 func (e *OrRHS) Evaluate(b *QueryBuilder) string {
@@ -147,8 +347,44 @@ func (e *OrRHS) Evaluate(b *QueryBuilder) string {
 
 // AndExpression handles expressions connected with &&.
 type AndExpression struct {
-	Left  *EqualExpr `parser:"@@"`
-	Right []*AndRHS  `parser:"@@*"`
+	Left  EqualExpr `parser:"@@"`
+	Right []*AndRHS `parser:"@@*"`
+}
+
+func (e *AndExpression) Normalise() *AndExpression {
+	var newRight []*AndRHS = nil
+
+	if e.Right != nil {
+		newRight = make([]*AndRHS, 0, len(e.Right))
+		for _, rhs := range e.Right {
+			newRight = append(newRight, rhs.Normalise())
+		}
+	}
+
+	return &AndExpression{
+		Left:  *e.Left.Normalise(),
+		Right: newRight,
+	}
+}
+
+func (e *AndExpression) invert() *OrExpression {
+	newLeft := AndExpression{
+		Left: *e.Left.invert(),
+	}
+
+	var newRight []*OrRHS = nil
+
+	if e.Right != nil {
+		newRight = make([]*OrRHS, 0, len(e.Right))
+		for _, rhs := range e.Right {
+			newRight = append(newRight, rhs.invert())
+		}
+	}
+
+	return &OrExpression{
+		Left:  newLeft,
+		Right: newRight,
+	}
 }
 
 func (e *AndExpression) Evaluate(b *QueryBuilder) string {
@@ -170,7 +406,8 @@ func (e *AndExpression) Evaluate(b *QueryBuilder) string {
 		b.tableBuilder.WriteString(rightTable)
 		b.tableBuilder.WriteString(")")
 
-		leftTable = rightTable
+		// Carry forward the cumulative result of the INTERSECT
+		leftTable = tableName
 	}
 
 	return tableName
@@ -178,7 +415,21 @@ func (e *AndExpression) Evaluate(b *QueryBuilder) string {
 
 // AndRHS represents the right-hand side of an AND.
 type AndRHS struct {
-	Expr *EqualExpr `parser:"And @@"`
+	Expr EqualExpr `parser:"And @@"`
+}
+
+func (e *AndRHS) Normalise() *AndRHS {
+	return &AndRHS{
+		Expr: *e.Expr.Normalise(),
+	}
+}
+
+func (e *AndRHS) invert() *OrRHS {
+	return &OrRHS{
+		Expr: AndExpression{
+			Left: *e.Expr.invert(),
+		},
+	}
 }
 
 func (e *AndRHS) Evaluate(b *QueryBuilder) string {
@@ -187,9 +438,8 @@ func (e *AndRHS) Evaluate(b *QueryBuilder) string {
 
 // EqualExpr can be either an equality or a parenthesized expression.
 type EqualExpr struct {
-	Paren  *Expression `parser:"  \"(\" @@ \")\""`
-	Owner  *Ownership  `parser:"| @@"`
-	Assign *Equality   `parser:"| @@"`
+	Paren  *Paren    `parser:"  @@"`
+	Assign *Equality `parser:"| @@"`
 
 	LessThan           *LessThan           `parser:"| @@"`
 	LessOrEqualThan    *LessOrEqualThan    `parser:"| @@"`
@@ -198,13 +448,62 @@ type EqualExpr struct {
 	Glob               *Glob               `parser:"| @@"`
 }
 
-func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
+func (e *EqualExpr) Normalise() *EqualExpr {
+	normalised := e
+
 	if e.Paren != nil {
-		return e.Paren.Recurse(b)
+		p := e.Paren.Normalise()
+
+		// Remove parentheses that only contain a single nested expression
+		// (i.e. no OR or AND with multiple children)
+		if len(p.Nested.Or.Right) == 0 && len(p.Nested.Or.Left.Right) == 0 {
+			// This expression should already be properly normalised, we don't need to
+			// call Normalise again here
+			normalised = &p.Nested.Or.Left.Left
+		} else {
+			normalised = &EqualExpr{Paren: p}
+		}
 	}
 
-	if e.Owner != nil {
-		return e.Owner.Evaluate(b)
+	// Everything other than parenthesised expressions do not require further normalisation
+	return normalised
+}
+
+func (e *EqualExpr) invert() *EqualExpr {
+	if e.Paren != nil {
+		return &EqualExpr{Paren: e.Paren.invert()}
+	}
+
+	if e.LessThan != nil {
+		return &EqualExpr{GreaterOrEqualThan: e.LessThan.invert()}
+	}
+
+	if e.LessOrEqualThan != nil {
+		return &EqualExpr{GreaterThan: e.LessOrEqualThan.invert()}
+	}
+
+	if e.GreaterThan != nil {
+		return &EqualExpr{LessOrEqualThan: e.GreaterThan.invert()}
+	}
+
+	if e.GreaterOrEqualThan != nil {
+		return &EqualExpr{LessThan: e.GreaterOrEqualThan.invert()}
+	}
+
+	if e.Glob != nil {
+		return &EqualExpr{Glob: e.Glob.invert()}
+	}
+
+	if e.Assign != nil {
+		return &EqualExpr{Assign: e.Assign.invert()}
+	}
+
+	panic("This should not happen!")
+}
+
+func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
+	if e.Paren != nil {
+		return e.Paren.Evaluate(b)
 	}
 
 	if e.LessThan != nil {
@@ -234,143 +533,375 @@ func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 	panic("This should not happen!")
 }
 
+type Paren struct {
+	IsNot  bool       `parser:"@Not?"`
+	Nested Expression `parser:"LParen @@ RParen"`
+}
+
+func (e *Paren) Normalise() *Paren {
+	nested := e.Nested
+
+	if e.IsNot {
+		nested = *nested.invert()
+	}
+
+	return &Paren{
+		IsNot:  false,
+		Nested: *nested.Normalise(),
+	}
+}
+
+func (e *Paren) invert() *Paren {
+	return &Paren{
+		IsNot:  !e.IsNot,
+		Nested: e.Nested,
+	}
+}
+
+func (e *Paren) Evaluate(b *QueryBuilder) string {
+	expr := e.Nested
+	// If we have a negation, we will push it down into the expression
+	if e.IsNot {
+		expr = *e.Nested.invert()
+	}
+	// We don't have to do anything here regarding precedence, the parsing order
+	// is already taking care of precedence since the nested OR node will create a subquery
+	return expr.Or.Evaluate(b)
+}
+
+func (b *QueryBuilder) createAnnotationQuery(
+	tableName string,
+	whereClause string,
+	arguments ...any,
+) string {
+	args := make([]any, 0, len(arguments)+2)
+	args = append(args, b.options.AtBlock, b.options.AtBlock)
+	args = append(args, arguments...)
+
+	return b.createLeafQuery(
+		strings.Join(
+			[]string{
+				"SELECT DISTINCT",
+				b.options.columnString(),
+				"FROM",
+				tableName,
+				"AS a INNER JOIN entities AS e",
+				"ON a.entity_key = e.key",
+				"AND a.entity_last_modified_at_block = e.last_modified_at_block",
+				"AND e.deleted = FALSE",
+				"AND e.last_modified_at_block <= ?",
+				"AND NOT EXISTS (",
+				"SELECT 1",
+				"FROM entities AS e2",
+				"WHERE e2.key = e.key",
+				"AND e2.last_modified_at_block > e.last_modified_at_block",
+				"AND e2.last_modified_at_block <= ?",
+				")",
+				"WHERE",
+				whereClause,
+			},
+			" ",
+		),
+		args...,
+	)
+}
+
 type Glob struct {
-	Var   string `parser:"@Ident Glob"`
+	Var   string `parser:"@Ident"`
+	IsNot bool   `parser:"(Glob | @NotGlob)"`
 	Value string `parser:"@String"`
 }
 
+func (e *Glob) invert() *Glob {
+	return &Glob{
+		Var:   e.Var,
+		IsNot: !e.IsNot,
+		Value: e.Value,
+	}
+}
+
 func (e *Glob) Evaluate(b *QueryBuilder) string {
-	return b.createLeafQuery(
-		"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value GLOB ?",
-		e.Var, e.Value,
-	)
+	if !e.IsNot {
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value GLOB ?",
+				},
+				" ",
+			),
+			e.Var,
+			e.Value,
+		)
+	} else {
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value NOT GLOB ?",
+				},
+				" ",
+			),
+			e.Var,
+			e.Value,
+		)
+	}
 }
 
 type LessThan struct {
 	Var   string `parser:"@Ident Lt"`
-	Value *Value `parser:"@@"`
+	Value Value  `parser:"@@"`
+}
+
+func (e *LessThan) invert() *GreaterOrEqualThan {
+	return &GreaterOrEqualThan{
+		Var:   e.Var,
+		Value: e.Value,
+	}
 }
 
 func (e *LessThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value < ?",
-			e.Var, *e.Value.String,
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value < ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value < ?",
-			e.Var, *e.Value.Number,
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value < ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.Number,
 		)
 	}
 }
 
 type LessOrEqualThan struct {
 	Var   string `parser:"@Ident Leqt"`
-	Value *Value `parser:"@@"`
+	Value Value  `parser:"@@"`
+}
+
+func (e *LessOrEqualThan) invert() *GreaterThan {
+	return &GreaterThan{
+		Var:   e.Var,
+		Value: e.Value,
+	}
 }
 
 func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value <= ?",
-			e.Var, *e.Value.String,
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value <= ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value <= ?",
-			e.Var, *e.Value.Number,
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value <= ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.Number,
 		)
 	}
 }
 
 type GreaterThan struct {
 	Var   string `parser:"@Ident Gt"`
-	Value *Value `parser:"@@"`
+	Value Value  `parser:"@@"`
+}
+
+func (e *GreaterThan) invert() *LessOrEqualThan {
+	return &LessOrEqualThan{
+		Var:   e.Var,
+		Value: e.Value,
+	}
 }
 
 func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value > ?",
-			e.Var, *e.Value.String,
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value > ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value > ?",
-			e.Var, *e.Value.Number,
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value > ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.Number,
 		)
 	}
 }
 
 type GreaterOrEqualThan struct {
 	Var   string `parser:"@Ident Geqt"`
-	Value *Value `parser:"@@"`
+	Value Value  `parser:"@@"`
+}
+
+func (e *GreaterOrEqualThan) invert() *LessThan {
+	return &LessThan{
+		Var:   e.Var,
+		Value: e.Value,
+	}
 }
 
 func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value >= ?",
-			e.Var, *e.Value.String,
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value >= ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.String,
 		)
 	} else {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value >= ?",
-			e.Var, *e.Value.Number,
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			strings.Join(
+				[]string{
+					"annotation_key = ?",
+					"AND value >= ?",
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.Number,
 		)
 	}
-}
-
-// Ownership represents an ownership query, $owner = 0x....
-type Ownership struct {
-	Owner string `parser:"Owner Eq @String"`
-}
-
-func (e *Ownership) Evaluate(b *QueryBuilder) string {
-	var address = common.Address{}
-	if common.IsHexAddress(e.Owner) {
-		address = common.HexToAddress(e.Owner)
-	}
-	return b.createLeafQuery(
-		"SELECT key FROM entities WHERE owner_address = ?",
-		address.Hex(),
-	)
 }
 
 // Equality represents a simple equality (e.g. name = 123).
 type Equality struct {
-	Var   string `parser:"@Ident \"=\""`
-	Value *Value `parser:"@@"`
+	Var   string `parser:"(@Ident | @Key | @Owner | @Expiration)"`
+	IsNot bool   `parser:"(Eq | @Neq)"`
+	Value Value  `parser:"@@"`
+}
+
+func (e *Equality) invert() *Equality {
+	return &Equality{
+		Var:   e.Var,
+		IsNot: !e.IsNot,
+		Value: e.Value,
+	}
 }
 
 func (e *Equality) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?",
-			e.Var, *e.Value.String,
+
+		value := *e.Value.String
+		if e.Var == "$owner" || e.Var == "$key" {
+			value = strings.ToLower(value)
+		}
+
+		condition := "a.value = ?"
+		if e.IsNot {
+			condition = "a.value != ?"
+		}
+
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"a.annotation_key = ?",
+					"AND",
+					condition,
+				},
+				" ",
+			),
+			e.Var,
+			value,
 		)
+
 	} else {
-		return b.createLeafQuery(
-			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?",
-			e.Var, *e.Value.Number,
+
+		condition := "a.value = ?"
+		if e.IsNot {
+			condition = "a.value != ?"
+		}
+
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			strings.Join(
+				[]string{
+					"a.annotation_key = ?",
+					"AND",
+					condition,
+				},
+				" ",
+			),
+			e.Var,
+			*e.Value.Number,
 		)
+
 	}
 }
 
 // Value is a literal value (a number or a string).
 type Value struct {
-	String *string `parser:"  @String"`
+	String *string `parser:"  (@String | @EntityKey | @Address)"`
 	Number *uint64 `parser:"| @Number"`
 }
 
-var Parser = participle.MustBuild[Expression](
+var Parser = participle.MustBuild[TopLevel](
 	participle.Lexer(lex),
 	participle.Elide("Whitespace"),
 	participle.Unquote("String"),
 )
 
-func Parse(s string) (*Expression, error) {
+func Parse(s string) (*TopLevel, error) {
+	log.Info("Parsing query", "query", s)
+
 	v, err := Parser.ParseString("", s)
-	return v, err
+	if err != nil {
+		return nil, err
+	}
+	return v.Normalise(), err
 }
