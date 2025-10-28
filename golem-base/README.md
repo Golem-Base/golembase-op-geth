@@ -45,7 +45,7 @@ The transaction is atomic - all operations succeed or the entire transaction fai
 When storage transactions are executed, the system emits logs to track entity lifecycle events:
 
 - **GolemBaseStorageEntityCreated**: Emitted when a new entity is created
-  - Event signature: `GolemBaseStorageEntityCreated(bytes32 entityKey, uint256 expirationBlock)`
+  - Event signature: `GolemBaseStorageEntityCreated(uint256 entityKey, uint256 expirationBlock)`
   - Event topic: `0xce4b4ad6891d716d0b1fba2b4aeb05ec20edadb01df512263d0dde423736bbb9`
   - Topics: `[GolemBaseStorageEntityCreated, entityKey]`
   - Data: Contains the expiration block number
