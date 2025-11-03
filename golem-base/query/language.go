@@ -170,10 +170,28 @@ func (t *TopLevel) Evaluate(options QueryOptions) *SelectQuery {
 	}
 
 	if t.All {
-		builder.tableBuilder.WriteString(" SELECT DISTINCT ")
-		builder.tableBuilder.WriteString(builder.options.columnString())
-		builder.tableBuilder.WriteString(" FROM entities ORDER BY ")
-		builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
+		builder.tableBuilder.WriteString(
+			strings.Join([]string{
+				" SELECT DISTINCT",
+				builder.options.columnString(),
+				"FROM entities AS e",
+				"WHERE e.deleted = FALSE",
+				"AND e.last_modified_at_block <= ?",
+				"AND NOT EXISTS (",
+				"SELECT 1",
+				"FROM entities AS e2",
+				"WHERE e2.key = e.key",
+				"AND e2.last_modified_at_block > e.last_modified_at_block",
+				"AND e2.last_modified_at_block <= ?",
+				")",
+				"ORDER BY",
+				strings.Join(builder.options.OrderByColumns(), ", "),
+			},
+				" ",
+			),
+		)
+		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
+
 	} else {
 		t.Expression.Evaluate(&builder)
 	}
