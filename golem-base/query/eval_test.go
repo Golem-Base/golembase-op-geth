@@ -5,17 +5,19 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/stretchr/testify/require"
 )
 
-var queryOptions = query.QueryOptions{}
+var queryOptions = &query.QueryOptions{}
 
 func TestEqualExpr(t *testing.T) {
 	expr, err := query.Parse("name = \"test\"")
 	require.NoError(t, err)
 
-	res := expr.Evaluate(queryOptions)
+	res, err := expr.Evaluate(queryOptions)
+	require.NoError(t, err)
 
 	block := uint64(0)
 
@@ -24,6 +26,7 @@ func TestEqualExpr(t *testing.T) {
 			block, block,
 			"name",
 			"test",
+			block, block,
 		},
 		res.Args,
 	)
@@ -32,13 +35,15 @@ func TestEqualExpr(t *testing.T) {
 	expr, err = query.Parse("déçevant = \"non\"")
 	require.NoError(t, err)
 
-	res = expr.Evaluate(queryOptions)
+	res, err = expr.Evaluate(queryOptions)
+	require.NoError(t, err)
 
 	require.ElementsMatch(t,
 		[]any{
 			block, block,
 			"déçevant",
 			"non",
+			block, block,
 		},
 		res.Args,
 	)
@@ -46,7 +51,7 @@ func TestEqualExpr(t *testing.T) {
 	expr, err = query.Parse("بروح = \"ايوة\"")
 	require.NoError(t, err)
 
-	res = expr.Evaluate(queryOptions)
+	res, err = expr.Evaluate(queryOptions)
 	require.NoError(t, err)
 
 	require.ElementsMatch(t,
@@ -54,6 +59,7 @@ func TestEqualExpr(t *testing.T) {
 			block, block,
 			"بروح",
 			"ايوة",
+			block, block,
 		},
 		res.Args,
 	)
@@ -136,4 +142,23 @@ func TestMixedAndOr_NoParens(t *testing.T) {
 	require.NoError(t, err)
 
 	expr.Evaluate(queryOptions)
+}
+
+func TestSorting(t *testing.T) {
+	expr, err := query.Parse(`a = 1`)
+	require.NoError(t, err)
+
+	_, err = expr.Evaluate(&query.QueryOptions{
+		OrderBy: []arkivtype.OrderByAnnotation{
+			{
+				Name: "foo",
+				Type: "string",
+			},
+			{
+				Name: "bar",
+				Type: "numeric",
+			},
+		},
+	})
+	require.NoError(t, err)
 }

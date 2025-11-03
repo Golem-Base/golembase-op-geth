@@ -780,7 +780,14 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 		&res2,
 		"arkiv_query",
 		fmt.Sprintf(`%s="%s"`, key, value),
-		struct{}{},
+		eth.QueryOptions{
+			OrderBy: []arkivtype.OrderByAnnotation{
+				{
+					Name: key,
+					Type: "string",
+				},
+			},
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)

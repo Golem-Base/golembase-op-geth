@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"iter"
@@ -24,7 +25,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const entitiesSchemaVersion = uint64(3)
+const entitiesSchemaVersion = uint64(4)
 
 type BlockWal struct {
 	BlockInfo  BlockInfo
@@ -770,7 +771,8 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 			}
 		}
 
-		log.Info("operation", "operation", op)
+		marshalled, _ := json.Marshal(op)
+		log.Info("operation", "operation", string(marshalled))
 	}
 
 	err = txDB.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
@@ -800,7 +802,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 	query string,
 	args []any,
 	options query.QueryOptions,
-	iterator func(arkivtype.EntityData, arkivtype.Offset) error,
+	iterator func(arkivtype.EntityData, arkivtype.Cursor) error,
 ) error {
 	log.Info("Executing query", "query", query, "args", args)
 
@@ -873,7 +875,9 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 				dest = append(dest, &operationIndexInTransaction)
 				columns["operation_index_in_transaction"] = &operationIndexInTransaction
 			default:
-				return fmt.Errorf("unknown column: %s", column)
+				var value any
+				dest = append(dest, &value)
+				columns[column] = &value
 			}
 		}
 
@@ -882,7 +886,9 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		}
 
 		var keyHash *common.Hash
-		if key != nil {
+		// We check whether the key was actually requested, since it's always included
+		// in the query because of sorting
+		if key != nil && slices.Contains(options.Columns, "key") {
 			hash := common.HexToHash(*key)
 			keyHash = &hash
 		}
@@ -915,13 +921,13 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			NumericAttributes:           []entity.NumericAnnotation{},
 		}
 
-		offset := arkivtype.Offset{
+		offset := arkivtype.Cursor{
 			BlockNumber:  options.AtBlock,
-			ColumnValues: make([]arkivtype.OffsetValue, 0, len(options.OrderByColumns())),
+			ColumnValues: make([]arkivtype.CursorValue, 0, len(options.OrderByColumns())),
 		}
 
 		for _, column := range options.OrderByColumns() {
-			offset.ColumnValues = append(offset.ColumnValues, arkivtype.OffsetValue{
+			offset.ColumnValues = append(offset.ColumnValues, arkivtype.CursorValue{
 				ColumnName: column,
 				Value:      columns[column],
 			})

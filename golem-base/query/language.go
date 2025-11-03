@@ -1,6 +1,8 @@
 package query
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -14,22 +16,151 @@ import (
 )
 
 type QueryOptions struct {
-	AtBlock            uint64                  `json:"atBlock"`
-	IncludeAnnotations bool                    `json:"includeAnnotations"`
-	Columns            []string                `json:"columns"`
-	Offset             []arkivtype.OffsetValue `json:"offset"`
+	AtBlock            uint64
+	IncludeAnnotations bool
+	Columns            []string
+	OrderBy            []arkivtype.OrderByAnnotation
+	Offset             []arkivtype.CursorValue
+
+	// Cache the sorted list of unique columns to fetch
+	allColumnsSorted []string
+	orderByColumns   []string
+}
+
+// EncodedCursor is a type to encode the cursor in a small json document to avoid overhead
+type encodedCursor struct {
+	BlockNumber  uint64  `json:"b"`
+	ColumnValues [][]any `json:"v"`
+}
+
+func (opts *QueryOptions) GetColumnIndex(column string) (int, error) {
+	ix, found := slices.BinarySearch(opts.AllColumns(), column)
+
+	if !found {
+		return -1, fmt.Errorf("unknown column %s", column)
+	}
+	return ix, nil
+}
+
+func (opts *QueryOptions) EncodeCursor(cursor *arkivtype.Cursor) (string, error) {
+	encodedOffset := encodedCursor{
+		BlockNumber:  cursor.BlockNumber,
+		ColumnValues: make([][]any, 0, len(cursor.ColumnValues)),
+	}
+
+	for _, c := range cursor.ColumnValues {
+		columnIx, err := opts.GetColumnIndex(c.ColumnName)
+		if err != nil {
+			return "", err
+		}
+		encodedOffset.ColumnValues = append(encodedOffset.ColumnValues, []any{
+			columnIx, c.Value,
+		})
+	}
+
+	s, err := json.Marshal(encodedOffset)
+	if err != nil {
+		return "", fmt.Errorf("could not marshal offset: %w", err)
+	}
+
+	log.Info("query response", "encoded_cursor", string(s))
+
+	return hex.EncodeToString([]byte(s)), nil
+}
+
+func (opts *QueryOptions) DecodeCursor(cursorStr string) (*arkivtype.Cursor, error) {
+	if len(cursorStr) == 0 {
+		return nil, nil
+	}
+
+	bs, err := hex.DecodeString(cursorStr)
+	if err != nil {
+		return nil, fmt.Errorf("could not decode offset: %w", err)
+	}
+
+	encoded := encodedCursor{}
+	err = json.Unmarshal(bs, &encoded)
+	if err != nil {
+		return nil, fmt.Errorf("could not unmarshal offset: %w (%s)", err, string(bs))
+	}
+
+	cursor := &arkivtype.Cursor{}
+	cursor.BlockNumber = encoded.BlockNumber
+	cursor.ColumnValues = make([]arkivtype.CursorValue, 0, len(encoded.ColumnValues))
+
+	for _, c := range encoded.ColumnValues {
+		if len(c) != 2 {
+			return nil, fmt.Errorf("invalid length of cursor array: %d", len(c))
+		}
+
+		firstValue, ok := c[0].(float64)
+		if !ok {
+			return nil, fmt.Errorf("unknown column index: %d", c[0])
+		}
+
+		columnIx := int(firstValue)
+		if columnIx >= len(opts.AllColumns()) {
+			return nil, fmt.Errorf("unknown column index: %d", columnIx)
+		}
+
+		cursor.ColumnValues = append(cursor.ColumnValues, arkivtype.CursorValue{
+			ColumnName: opts.AllColumns()[columnIx],
+			Value:      c[1],
+		})
+	}
+
+	jsonCursor, err := json.Marshal(cursor)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Decoded cursor", "cursor", string(jsonCursor))
+
+	return cursor, nil
 }
 
 func (opts *QueryOptions) AllColumns() []string {
-	return append(opts.Columns, opts.OrderByColumns()...)
+	if opts.allColumnsSorted == nil {
+
+		columns := opts.Columns
+
+		for i := range opts.OrderBy {
+			columns = append(columns, fmt.Sprintf("arkiv_annotation_sorting%d.value", i))
+		}
+
+		// We need the primary key of the entity table because of sorting
+		columns = append(
+			columns,
+			arkivtype.GetColumnOrPanic("key"),
+			arkivtype.GetColumnOrPanic("last_modified_at_block"),
+			arkivtype.GetColumnOrPanic("transaction_index_in_block"),
+			arkivtype.GetColumnOrPanic("operation_index_in_transaction"),
+		)
+
+		slices.Sort(columns)
+		opts.allColumnsSorted = slices.Compact(columns)
+	}
+
+	return opts.allColumnsSorted
+}
+
+func (opts *QueryOptions) annotationSortingColumns() []string {
+	columns := make([]string, 0, len(opts.OrderBy))
+	for i := range opts.OrderBy {
+		columns = append(columns, fmt.Sprintf("arkiv_annotation_sorting%d.value", i))
+	}
+	return columns
 }
 
 func (opts *QueryOptions) OrderByColumns() []string {
-	return []string{
-		arkivtype.GetColumnOrPanic("last_modified_at_block"),
-		arkivtype.GetColumnOrPanic("transaction_index_in_block"),
-		arkivtype.GetColumnOrPanic("operation_index_in_transaction"),
+	if opts.orderByColumns == nil {
+		opts.orderByColumns = append(
+			opts.annotationSortingColumns(),
+			arkivtype.GetColumnOrPanic("last_modified_at_block"),
+			arkivtype.GetColumnOrPanic("transaction_index_in_block"),
+			arkivtype.GetColumnOrPanic("operation_index_in_transaction"),
+		)
 	}
+	return opts.orderByColumns
 }
 
 func (opts *QueryOptions) columnString() string {
@@ -68,15 +199,15 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 })
 
 type SelectQuery struct {
-	Query   string
-	Args    []any
-	Columns []string
+	Query string
+	Args  []any
 }
 
 type QueryBuilder struct {
 	tableBuilder *strings.Builder
 	args         []any
 	needsComma   bool
+	needsWhere   bool
 	tableCounter uint64
 	options      QueryOptions
 }
@@ -94,40 +225,51 @@ func (b *QueryBuilder) writeComma() {
 	}
 }
 
-func (b *QueryBuilder) getPaginationArguments() (string, []any) {
+func (b *QueryBuilder) addPaginationArguments() {
 	args := []any{}
 	paginationConditions := []string{}
 
-	for i := range b.options.Offset {
-		subcondition := []string{}
-		for j, from := range b.options.Offset {
-			if j > i {
-				break
-			}
-			var operator string
-			if j < i {
-				operator = "="
-			} else {
-				// TODO: if we ever support DESC, we need to optionally invert this
-				operator = ">"
+	if len(b.options.Offset) > 0 {
+		for i := range b.options.Offset {
+			subcondition := []string{}
+			for j, from := range b.options.Offset {
+				if j > i {
+					break
+				}
+				var operator string
+				if j < i {
+					operator = "="
+				} else {
+					// TODO: if we ever support DESC, we need to optionally invert this
+					operator = ">"
+				}
+
+				args = append(args, from.Value)
+
+				subcondition = append(
+					subcondition,
+					fmt.Sprintf("%s %s ?", from.ColumnName, operator),
+				)
 			}
 
-			args = append(args, from.Value)
-
-			subcondition = append(
-				subcondition,
-				fmt.Sprintf("%s %s ?", from.ColumnName, operator),
+			paginationConditions = append(
+				paginationConditions,
+				fmt.Sprintf("(%s)", strings.Join(subcondition, " AND ")),
 			)
 		}
 
-		paginationConditions = append(
-			paginationConditions,
-			fmt.Sprintf("(%s)", strings.Join(subcondition, " AND ")),
-		)
-	}
+		paginationCondition := strings.Join(paginationConditions, " OR ")
 
-	paginationCondition := strings.Join(paginationConditions, " OR ")
-	return paginationCondition, args
+		if b.needsWhere {
+			b.tableBuilder.WriteString(" WHERE ")
+			b.needsWhere = false
+		} else {
+			b.tableBuilder.WriteString(" AND ")
+		}
+
+		b.tableBuilder.WriteString(paginationCondition)
+		b.args = append(b.args, args...)
+	}
 }
 
 func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
@@ -158,60 +300,103 @@ func (t *TopLevel) Normalise() *TopLevel {
 	}
 }
 
-func (t *TopLevel) Evaluate(options QueryOptions) *SelectQuery {
+func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 	tableBuilder := strings.Builder{}
 	args := []any{}
 
 	builder := QueryBuilder{
-		options:      options,
+		options:      *options,
 		tableBuilder: &tableBuilder,
 		args:         args,
 		needsComma:   false,
+		needsWhere:   true,
 	}
 
-	if t.All {
-		builder.tableBuilder.WriteString(
-			strings.Join([]string{
-				" SELECT DISTINCT",
-				builder.options.columnString(),
-				"FROM entities AS e",
-				"WHERE e.deleted = FALSE",
-				"AND e.last_modified_at_block <= ?",
-				"AND NOT EXISTS (",
-				"SELECT 1",
-				"FROM entities AS e2",
-				"WHERE e2.key = e.key",
-				"AND e2.last_modified_at_block <= ?",
-				"AND (",
-				"e2.last_modified_at_block > e.last_modified_at_block",
-				"OR (",
-				"e2.last_modified_at_block = e.last_modified_at_block",
-				"AND e2.transaction_index_in_block > e.transaction_index_in_block",
-				")",
-				"OR (",
-				"e2.last_modified_at_block = e.last_modified_at_block",
-				"AND e2.transaction_index_in_block = e.transaction_index_in_block",
-				"AND e2.operation_index_in_transaction > e.operation_index_in_transaction",
-				")",
-				")",
-				")",
-				"ORDER BY",
-				strings.Join(builder.options.OrderByColumns(), ", "),
-			},
-				" ",
-			),
+	tableName := "entities"
+	if !t.All {
+		tableName = t.Expression.Evaluate(&builder)
+	}
+
+	builder.tableBuilder.WriteString(strings.Join(
+		[]string{
+			" SELECT DISTINCT",
+			builder.options.columnString(),
+			"FROM",
+			tableName,
+			"AS e",
+		},
+		" ",
+	))
+
+	for i, orderBy := range builder.options.OrderBy {
+		tableName := ""
+		switch orderBy.Type {
+		case "string":
+			tableName = "string_annotations"
+		case "numeric":
+			tableName = "numeric_annotations"
+		default:
+			return nil, fmt.Errorf("a type of either 'string' or 'numeric' needs to be provided for the annotation '%s'", orderBy.Name)
+		}
+
+		sortingTable := fmt.Sprintf("arkiv_annotation_sorting%d", i)
+		fmt.Fprintf(builder.tableBuilder,
+			" LEFT JOIN %s AS %s"+
+				" ON %s.entity_key = e.key"+
+				" AND %s.entity_last_modified_at_block = e.last_modified_at_block"+
+				" AND %s.annotation_key = ?",
+
+			tableName,
+			sortingTable,
+			sortingTable,
+			sortingTable,
+			sortingTable,
 		)
-		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
-
-	} else {
-		t.Expression.Evaluate(&builder)
+		builder.args = append(builder.args, orderBy.Name)
 	}
+
+	builder.addPaginationArguments()
+
+	if builder.needsWhere {
+		builder.tableBuilder.WriteString(" WHERE ")
+		builder.needsWhere = false
+	} else {
+		builder.tableBuilder.WriteString(" AND ")
+	}
+	builder.tableBuilder.WriteString(strings.Join(
+		[]string{
+			"e.last_modified_at_block <= ?",
+			"AND e.deleted = FALSE",
+			"AND NOT EXISTS (",
+			"SELECT 1",
+			"FROM entities AS e2",
+			"WHERE e2.key = e.key",
+			"AND e2.last_modified_at_block <= ?",
+			"AND (",
+			"e2.last_modified_at_block > e.last_modified_at_block",
+			"OR (",
+			"e2.last_modified_at_block = e.last_modified_at_block",
+			"AND e2.transaction_index_in_block > e.transaction_index_in_block",
+			")",
+			"OR (",
+			"e2.last_modified_at_block = e.last_modified_at_block",
+			"AND e2.transaction_index_in_block = e.transaction_index_in_block",
+			"AND e2.operation_index_in_transaction > e.operation_index_in_transaction",
+			")",
+			")",
+			")",
+		},
+		" ",
+	))
+	builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
+
+	builder.tableBuilder.WriteString(" ORDER BY ")
+	builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
 
 	return &SelectQuery{
-		Query:   builder.tableBuilder.String(),
-		Args:    builder.args,
-		Columns: builder.options.AllColumns(),
-	}
+		Query: builder.tableBuilder.String(),
+		Args:  builder.args,
+	}, nil
 }
 
 // Expression is the top-level rule.
@@ -253,25 +438,9 @@ func (e *Expression) invert() *Expression {
 	}
 }
 
-func (e *Expression) Evaluate(builder *QueryBuilder) {
+func (e *Expression) Evaluate(builder *QueryBuilder) string {
 	builder.tableBuilder.WriteString("WITH ")
-
-	tableName := e.Or.Evaluate(builder)
-
-	paginationCondition, paginationArgs := builder.getPaginationArguments()
-
-	builder.args = append(builder.args, paginationArgs...)
-
-	p := ""
-	if len(paginationCondition) > 0 {
-		p = fmt.Sprintf(" WHERE ( %s )", paginationCondition)
-	}
-
-	builder.tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
-	builder.tableBuilder.WriteString(tableName)
-	builder.tableBuilder.WriteString(p)
-	builder.tableBuilder.WriteString(" ORDER BY ")
-	builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
+	return e.Or.Evaluate(builder)
 }
 
 // OrExpression handles expressions connected with ||.
@@ -620,9 +789,7 @@ func (b *QueryBuilder) createAnnotationQuery(
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
-				"SELECT DISTINCT",
-				b.options.columnString(),
-				"FROM",
+				"SELECT DISTINCT e.* FROM",
 				tableName,
 				"AS a INNER JOIN entities AS e",
 				"ON a.entity_key = e.key",

@@ -28,10 +28,11 @@ type IncludeData struct {
 }
 
 type QueryOptions struct {
-	AtBlock        *uint64      `json:"atBlock"`
-	IncludeData    *IncludeData `json:"includeData"`
-	ResultsPerPage uint64       `json:"resultsPerPage"`
-	Cursor         *string      `json:"cursor"`
+	AtBlock        *uint64                       `json:"atBlock"`
+	IncludeData    *IncludeData                  `json:"includeData"`
+	OrderBy        []arkivtype.OrderByAnnotation `json:"orderBy"`
+	ResultsPerPage uint64                        `json:"resultsPerPage"`
+	Cursor         *string                       `json:"cursor"`
 }
 
 var allColumns = []string{
@@ -42,35 +43,6 @@ var allColumns = []string{
 	arkivtype.GetColumnOrPanic("content_type"),
 }
 
-func verifyColumn(column string) (string, error) {
-	verified, err := arkivtype.GetColumn(column)
-	if err != nil {
-		return "", fmt.Errorf("invalid column supplied in query: %s", column)
-	}
-	return verified, nil
-}
-
-func (options *QueryOptions) getQueryOffset() (*arkivtype.Offset, error) {
-	if options.Cursor == nil {
-		return nil, nil
-	}
-
-	offset := arkivtype.Offset{}
-	err := offset.Decode(*options.Cursor)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, val := range offset.ColumnValues {
-		_, err := verifyColumn(val.ColumnName)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &offset, nil
-}
-
 func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, error) {
 	switch {
 	case options == nil:
@@ -79,25 +51,19 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 			IncludeAnnotations: true,
 		}, nil
 	case options.IncludeData == nil:
-		offset, err := options.getQueryOffset()
-		if err != nil {
-			return nil, err
-		}
 		return &internalQueryOptions{
 			Columns:            allColumns,
 			IncludeAnnotations: true,
+			OrderBy:            options.OrderBy,
 			AtBlock:            options.AtBlock,
-			Offset:             offset,
+			Cursor:             options.Cursor,
 		}, nil
 	default:
-		offset, err := options.getQueryOffset()
-		if err != nil {
-			return nil, err
-		}
 		iq := internalQueryOptions{
 			Columns: []string{},
+			OrderBy: options.OrderBy,
 			AtBlock: options.AtBlock,
-			Offset:  offset,
+			Cursor:  options.Cursor,
 		}
 		if options.IncludeData.Attributes {
 			iq.IncludeAnnotations = true
@@ -131,10 +97,11 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 }
 
 type internalQueryOptions struct {
-	AtBlock            *uint64           `json:"atBlock"`
-	IncludeAnnotations bool              `json:"includeAnnotations"`
-	Columns            []string          `json:"columns"`
-	Offset             *arkivtype.Offset `json:"offset"`
+	AtBlock            *uint64                       `json:"atBlock"`
+	IncludeAnnotations bool                          `json:"includeAnnotations"`
+	Columns            []string                      `json:"columns"`
+	OrderBy            []arkivtype.OrderByAnnotation `json:"orderBy"`
+	Cursor             *string                       `json:"cursor"`
 }
 
 type arkivAPI struct {
@@ -155,6 +122,8 @@ func (api *arkivAPI) Query(
 	op *QueryOptions,
 ) (*arkivtype.QueryResponse, error) {
 
+	log.Info("arkiv API", "query_options", op)
+
 	expr, err := query.Parse(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse query: %w", err)
@@ -166,27 +135,33 @@ func (api *arkivAPI) Query(
 	}
 
 	latestsHead := api.eth.blockchain.CurrentBlock()
-
 	block := latestsHead.Number.Uint64()
-	if options.Offset != nil {
-		block = options.Offset.BlockNumber
+
+	queryOptions := query.QueryOptions{
+		IncludeAnnotations: options.IncludeAnnotations,
+		Columns:            options.Columns,
+		OrderBy:            options.OrderBy,
 	}
+
+	if options.Cursor != nil {
+		offset, err := queryOptions.DecodeCursor(*options.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		block = offset.BlockNumber
+		queryOptions.Offset = offset.ColumnValues
+	}
+
 	if options.AtBlock != nil {
 		block = *options.AtBlock
 	}
 
-	columnOffsets := []arkivtype.OffsetValue{}
-	if options.Offset != nil {
-		columnOffsets = options.Offset.ColumnValues
-	}
+	queryOptions.AtBlock = block
 
-	queryOptions := query.QueryOptions{
-		AtBlock:            block,
-		IncludeAnnotations: options.IncludeAnnotations,
-		Columns:            options.Columns,
-		Offset:             columnOffsets,
+	query, err := expr.Evaluate(&queryOptions)
+	if err != nil {
+		return nil, err
 	}
-	query := expr.Evaluate(queryOptions)
 
 	response := &arkivtype.QueryResponse{
 		BlockNumber: block,
@@ -223,6 +198,7 @@ func (api *arkivAPI) Query(
 
 	if op != nil {
 		maxResultsPerPage = int(op.ResultsPerPage)
+		log.Info("query", "max_results_per_page", maxResultsPerPage)
 	}
 
 	startTime := time.Now()
@@ -237,7 +213,7 @@ func (api *arkivAPI) Query(
 		query.Query,
 		query.Args,
 		queryOptions,
-		func(entity arkivtype.EntityData, offset arkivtype.Offset) error {
+		func(entity arkivtype.EntityData, cursor arkivtype.Cursor) error {
 
 			ed, err := json.Marshal(entity)
 			if err != nil {
@@ -246,7 +222,7 @@ func (api *arkivAPI) Query(
 
 			newLen := responseSize + len(ed) + 1
 			if newLen > maxResponseSize {
-				cursor, err := offset.Encode()
+				cursor, err := queryOptions.EncodeCursor(&cursor)
 				if err != nil {
 					return fmt.Errorf("could not encode offset: %w", err)
 				}
@@ -256,7 +232,7 @@ func (api *arkivAPI) Query(
 			response.Data = append(response.Data, ed)
 
 			if maxResultsPerPage > 0 && len(response.Data) >= maxResultsPerPage {
-				cursor, err := offset.Encode()
+				cursor, err := queryOptions.EncodeCursor(&cursor)
 				if err != nil {
 					return fmt.Errorf("could not encode offset: %w", err)
 				}
@@ -271,6 +247,7 @@ func (api *arkivAPI) Query(
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
+	log.Info("query", "num_of_results", len(response.Data))
 	return response, nil
 }
 
