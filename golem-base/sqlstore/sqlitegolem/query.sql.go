@@ -183,44 +183,6 @@ func (q *Queries) DeleteStringAnnotationsUntilBlock(ctx context.Context, block i
 	return err
 }
 
-const getAllEntityKeys = `-- name: GetAllEntityKeys :many
-SELECT key
-FROM entities AS e
-WHERE e.deleted = FALSE
-AND e.last_modified_at_block <= ?1
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?1
-)
-ORDER BY key
-`
-
-func (q *Queries) GetAllEntityKeys(ctx context.Context, block int64) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getAllEntityKeys, block)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, err
-		}
-		items = append(items, key)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getEntity = `-- name: GetEntity :one
 SELECT e1.expires_at, e1.payload, e1.owner_address, e1.created_at_block, e1.last_modified_at_block
 FROM entities AS e1

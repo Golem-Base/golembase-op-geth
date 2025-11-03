@@ -184,20 +184,6 @@ DELETE FROM numeric_annotations;
 -- name: DeleteAllProcessingStatus :exec
 DELETE FROM processing_status;
 
--- name: GetAllEntityKeys :many
-SELECT key
-FROM entities AS e
-WHERE e.deleted = FALSE
-AND e.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?1
-)
-ORDER BY key;
-
 -- name: GetEntityCount :one
 SELECT COUNT(*)
 FROM entities AS e
