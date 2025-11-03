@@ -976,6 +976,8 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		err = iterator(r, offset)
 		if errors.Is(err, ErrStopIteration) {
 			break
+		} else if err != nil {
+			return fmt.Errorf("error during query execution: %w", err)
 		}
 	}
 
