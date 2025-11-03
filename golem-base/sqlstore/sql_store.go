@@ -811,7 +811,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			return fmt.Errorf("failed to get entities for query: %s: %w", query, err)
 		}
 
-		result := struct {
+		var (
 			key                         *string
 			expiresAt                   *uint64
 			payload                     *[]byte
@@ -820,51 +820,35 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			lastModifiedAtBlock         *uint64
 			transactionIndexInBlock     *uint64
 			operationIndexInTransaction *uint64
-		}{}
+		)
 		dest := []any{}
 		columns := map[string]any{}
 		for _, column := range options.AllColumns() {
 			switch column {
 			case "key":
-				var key string
-				result.key = &key
-				dest = append(dest, result.key)
-				columns["key"] = result.key
+				dest = append(dest, &key)
+				columns["key"] = &key
 			case "expires_at":
-				var expiration uint64
-				result.expiresAt = &expiration
-				dest = append(dest, result.expiresAt)
-				columns["expires_at"] = result.expiresAt
+				dest = append(dest, &expiresAt)
+				columns["expires_at"] = &expiresAt
 			case "payload":
-				var payload []byte
-				result.payload = &payload
-				dest = append(dest, result.payload)
-				columns["payload"] = result.payload
+				dest = append(dest, &payload)
+				columns["payload"] = &payload
 			case "content_type":
-				var contentType string
-				result.contentType = &contentType
-				dest = append(dest, result.contentType)
-				columns["content_type"] = result.contentType
+				dest = append(dest, &contentType)
+				columns["content_type"] = &contentType
 			case "owner_address":
-				var owner string
-				result.owner = &owner
-				dest = append(dest, result.owner)
-				columns["owner_address"] = result.owner
+				dest = append(dest, &owner)
+				columns["owner_address"] = &owner
 			case "last_modified_at_block":
-				var lastModifiedAtBlock uint64
-				result.lastModifiedAtBlock = &lastModifiedAtBlock
-				dest = append(dest, result.lastModifiedAtBlock)
-				columns["last_modified_at_block"] = result.lastModifiedAtBlock
+				dest = append(dest, &lastModifiedAtBlock)
+				columns["last_modified_at_block"] = &lastModifiedAtBlock
 			case "transaction_index_in_block":
-				var transactionIndexInBlock uint64
-				result.transactionIndexInBlock = &transactionIndexInBlock
-				dest = append(dest, result.transactionIndexInBlock)
-				columns["transaction_index_in_block"] = result.transactionIndexInBlock
+				dest = append(dest, &transactionIndexInBlock)
+				columns["transaction_index_in_block"] = &transactionIndexInBlock
 			case "operation_index_in_transaction":
-				var operationIndexInTransaction uint64
-				result.operationIndexInTransaction = &operationIndexInTransaction
-				dest = append(dest, result.operationIndexInTransaction)
-				columns["operation_index_in_transaction"] = result.operationIndexInTransaction
+				dest = append(dest, &operationIndexInTransaction)
+				columns["operation_index_in_transaction"] = &operationIndexInTransaction
 			default:
 				return fmt.Errorf("unknown column: %s", column)
 			}
@@ -874,33 +858,33 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			return fmt.Errorf("failed to get entities for query: %s: %w", query, err)
 		}
 
-		var key *common.Hash
-		if result.key != nil {
-			hash := common.HexToHash(*result.key)
-			key = &hash
+		var keyHash *common.Hash
+		if key != nil {
+			hash := common.HexToHash(*key)
+			keyHash = &hash
 		}
-		var payload []byte
-		if result.payload != nil {
+		var value []byte
+		if payload != nil {
 
-			decoded, err := decoder.DecodeAll(*result.payload, nil)
+			decoded, err := decoder.DecodeAll(*payload, nil)
 			if err != nil {
 				return fmt.Errorf("failed to decode compressed payload: %w", err)
 			}
 
-			payload = decoded
+			value = decoded
 		}
-		var owner *common.Address
-		if result.owner != nil {
-			address := common.HexToAddress(*result.owner)
-			owner = &address
+		var ownerAddress *common.Address
+		if owner != nil {
+			address := common.HexToAddress(*owner)
+			ownerAddress = &address
 		}
 
 		r := arkivtype.EntityData{
-			Key:               key,
-			ExpiresAt:         result.expiresAt,
-			Value:             payload,
-			ContentType:       result.contentType,
-			Owner:             owner,
+			Key:               keyHash,
+			ExpiresAt:         expiresAt,
+			Value:             value,
+			ContentType:       contentType,
+			Owner:             ownerAddress,
 			StringAttributes:  []entity.StringAnnotation{},
 			NumericAttributes: []entity.NumericAnnotation{},
 		}
@@ -920,7 +904,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		if options.IncludeAnnotations {
 			// Get string annotations
 			stringAnnotRows, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
-				EntityKey: strings.ToLower(key.Hex()),
+				EntityKey: strings.ToLower(keyHash.Hex()),
 				Block:     int64(options.AtBlock),
 			})
 			if err != nil {
@@ -929,7 +913,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 
 			// Get numeric annotations
 			numericAnnotRows, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
-				EntityKey: strings.ToLower(key.Hex()),
+				EntityKey: strings.ToLower(keyHash.Hex()),
 				Block:     int64(options.AtBlock),
 			})
 			if err != nil {

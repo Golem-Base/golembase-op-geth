@@ -16,12 +16,15 @@ import (
 )
 
 type IncludeData struct {
-	Key         bool `json:"key"`
-	Attributes  bool `json:"attributes"`
-	Payload     bool `json:"payload"`
-	ContentType bool `json:"contentType"`
-	Expiration  bool `json:"expiration"`
-	Owner       bool `json:"owner"`
+	Key                         bool `json:"key"`
+	Attributes                  bool `json:"attributes"`
+	Payload                     bool `json:"payload"`
+	ContentType                 bool `json:"contentType"`
+	Expiration                  bool `json:"expiration"`
+	Owner                       bool `json:"owner"`
+	LastModifiedAtBlock         bool `json:"lastModifiedAtBlock"`
+	TransactionIndexInBlock     bool `json:"transactionIndexInBlock"`
+	OperationIndexInTransaction bool `json:"operationIndexInTransaction"`
 }
 
 type QueryOptions struct {
@@ -113,6 +116,15 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 		}
 		if options.IncludeData.Key {
 			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("key"))
+		}
+		if options.IncludeData.LastModifiedAtBlock {
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("last_modified_at_block"))
+		}
+		if options.IncludeData.TransactionIndexInBlock {
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("transaction_index_in_block"))
+		}
+		if options.IncludeData.OperationIndexInTransaction {
+			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("operation_index_in_transaction"))
 		}
 		return &iq, nil
 	}
