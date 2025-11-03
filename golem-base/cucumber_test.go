@@ -1486,10 +1486,7 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 		ctx,
 		&entities,
 		"arkiv_query",
-		fmt.Sprintf("$owner = %s || $owner != %s",
-			"0x4200000000000000000000000000000000000015",
-			"0x4200000000000000000000000000000000000015",
-		),
+		"$all",
 		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
@@ -1522,10 +1519,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 		ctx,
 		&entities,
 		"arkiv_query",
-		fmt.Sprintf("$owner = %s || $owner != %s",
-			"0x4200000000000000000000000000000000000015",
-			"0x4200000000000000000000000000000000000015",
-		),
+		"$all",
 		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
@@ -1571,10 +1565,7 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 		ctx,
 		&entities,
 		"arkiv_query",
-		fmt.Sprintf("$owner = %s || $owner != %s",
-			"0x4200000000000000000000000000000000000015",
-			"0x4200000000000000000000000000000000000015",
-		),
+		"$all",
 		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
