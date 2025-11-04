@@ -22,10 +22,12 @@ type Entity struct {
 }
 
 type NumericAnnotation struct {
-	EntityKey                 string
-	EntityLastModifiedAtBlock int64
-	AnnotationKey             string
-	Value                     int64
+	EntityKey                         string
+	EntityLastModifiedAtBlock         int64
+	EntityTransactionIndexInBlock     int64
+	EntityOperationIndexInTransaction int64
+	AnnotationKey                     string
+	Value                             int64
 }
 
 type ProcessingStatus struct {
@@ -40,8 +42,10 @@ type SchemaVersion struct {
 }
 
 type StringAnnotation struct {
-	EntityKey                 string
-	EntityLastModifiedAtBlock int64
-	AnnotationKey             string
-	Value                     string
+	EntityKey                         string
+	EntityLastModifiedAtBlock         int64
+	EntityTransactionIndexInBlock     int64
+	EntityOperationIndexInTransaction int64
+	AnnotationKey                     string
+	Value                             string
 }

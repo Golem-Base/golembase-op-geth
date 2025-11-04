@@ -99,7 +99,18 @@ AND NOT EXISTS (
   SELECT 1
   FROM entities AS e2
   WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
+  AND (
+    e2.last_modified_at_block > e.last_modified_at_block
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block > e.transaction_index_in_block
+    )
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block = e.transaction_index_in_block
+      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+    )
+  )
 )
 `
 
@@ -184,16 +195,27 @@ func (q *Queries) DeleteStringAnnotationsUntilBlock(ctx context.Context, block i
 }
 
 const getEntity = `-- name: GetEntity :one
-SELECT e1.expires_at, e1.payload, e1.owner_address, e1.created_at_block, e1.last_modified_at_block
-FROM entities AS e1
-WHERE e1.key = ?1
-AND e1.deleted = FALSE
-AND e1.last_modified_at_block <= ?2
+SELECT e.expires_at, e.payload, e.owner_address, e.created_at_block, e.last_modified_at_block
+FROM entities AS e
+WHERE e.key = ?1
+AND e.deleted = FALSE
+AND e.last_modified_at_block <= ?2
 AND NOT EXISTS (
   SELECT 1
   FROM entities AS e2
-  WHERE e2.key = e1.key
-  AND e2.last_modified_at_block > e1.last_modified_at_block
+  WHERE e2.key = e.key
+  AND (
+    e2.last_modified_at_block > e.last_modified_at_block
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block > e.transaction_index_in_block
+    )
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block = e.transaction_index_in_block
+      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+    )
+  )
   -- There is a bug in sqlc currently with repeated named args,
   -- so we resolve the named arg ourselves here.
   -- See https://github.com/sqlc-dev/sqlc/issues/4110
@@ -236,7 +258,18 @@ AND NOT EXISTS (
   SELECT 1
   FROM entities AS e2
   WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
+  AND (
+    e2.last_modified_at_block > e.last_modified_at_block
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block > e.transaction_index_in_block
+    )
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block = e.transaction_index_in_block
+      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+    )
+  )
   AND e2.last_modified_at_block <= ?1
 )
 `
@@ -252,16 +285,29 @@ const getNumericAnnotations = `-- name: GetNumericAnnotations :many
 SELECT a.annotation_key, a.value
 FROM numeric_annotations AS a INNER JOIN entities AS e
   ON a.entity_key = e.key
-AND a.entity_last_modified_at_block = e.last_modified_at_block
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= ?2
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?2
-)
+  AND a.entity_last_modified_at_block = e.last_modified_at_block
+  AND a.entity_transaction_index_in_block = e.transaction_index_in_block
+  AND a.entity_operation_index_in_transaction = e.operation_index_in_transaction
+  AND e.deleted = FALSE
+  AND e.last_modified_at_block <= ?2
+  AND NOT EXISTS (
+    SELECT 1
+    FROM entities AS e2
+    WHERE e2.key = e.key
+    AND (
+      e2.last_modified_at_block > e.last_modified_at_block
+      OR (
+        e2.last_modified_at_block = e.last_modified_at_block
+        AND e2.transaction_index_in_block > e.transaction_index_in_block
+      )
+      OR (
+        e2.last_modified_at_block = e.last_modified_at_block
+        AND e2.transaction_index_in_block = e.transaction_index_in_block
+        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+      )
+    )
+    AND e2.last_modified_at_block <= ?2
+  )
 WHERE a.entity_key = ?1
 `
 
@@ -318,16 +364,29 @@ const getStringAnnotations = `-- name: GetStringAnnotations :many
 SELECT a.annotation_key, a.value
 FROM string_annotations AS a INNER JOIN entities AS e
   ON a.entity_key = e.key
-AND a.entity_last_modified_at_block = e.last_modified_at_block
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= ?2
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND e2.last_modified_at_block <= ?2
-)
+  AND a.entity_last_modified_at_block = e.last_modified_at_block
+  AND a.entity_transaction_index_in_block = e.transaction_index_in_block
+  AND a.entity_operation_index_in_transaction = e.operation_index_in_transaction
+  AND e.deleted = FALSE
+  AND e.last_modified_at_block <= ?2
+  AND NOT EXISTS (
+    SELECT 1
+    FROM entities AS e2
+    WHERE e2.key = e.key
+    AND (
+      e2.last_modified_at_block > e.last_modified_at_block
+      OR (
+        e2.last_modified_at_block = e.last_modified_at_block
+        AND e2.transaction_index_in_block > e.transaction_index_in_block
+      )
+      OR (
+        e2.last_modified_at_block = e.last_modified_at_block
+        AND e2.transaction_index_in_block = e.transaction_index_in_block
+        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+      )
+    )
+    AND e2.last_modified_at_block <= ?2
+  )
 WHERE a.entity_key = ?1
 `
 
@@ -419,23 +478,31 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) erro
 
 const insertNumericAnnotation = `-- name: InsertNumericAnnotation :exec
 INSERT INTO numeric_annotations (
-  entity_key, entity_last_modified_at_block,  annotation_key, value
+  entity_key, entity_last_modified_at_block,
+  entity_transaction_index_in_block, entity_operation_index_in_transaction,
+  annotation_key, value
 ) VALUES (
-  ?, ?, ?, ?
+  ?, ?,
+  ?, ?,
+  ?, ?
 )
 `
 
 type InsertNumericAnnotationParams struct {
-	EntityKey                 string
-	EntityLastModifiedAtBlock int64
-	AnnotationKey             string
-	Value                     int64
+	EntityKey                         string
+	EntityLastModifiedAtBlock         int64
+	EntityTransactionIndexInBlock     int64
+	EntityOperationIndexInTransaction int64
+	AnnotationKey                     string
+	Value                             int64
 }
 
 func (q *Queries) InsertNumericAnnotation(ctx context.Context, arg InsertNumericAnnotationParams) error {
 	_, err := q.db.ExecContext(ctx, insertNumericAnnotation,
 		arg.EntityKey,
 		arg.EntityLastModifiedAtBlock,
+		arg.EntityTransactionIndexInBlock,
+		arg.EntityOperationIndexInTransaction,
 		arg.AnnotationKey,
 		arg.Value,
 	)
@@ -459,23 +526,31 @@ func (q *Queries) InsertProcessingStatus(ctx context.Context, arg InsertProcessi
 
 const insertStringAnnotation = `-- name: InsertStringAnnotation :exec
 INSERT INTO string_annotations (
-  entity_key, entity_last_modified_at_block,  annotation_key, value
+  entity_key, entity_last_modified_at_block,
+  entity_transaction_index_in_block, entity_operation_index_in_transaction,
+  annotation_key, value
 ) VALUES (
-  ?, ?, ?, ?
+  ?, ?,
+  ?, ?,
+  ?, ?
 )
 `
 
 type InsertStringAnnotationParams struct {
-	EntityKey                 string
-	EntityLastModifiedAtBlock int64
-	AnnotationKey             string
-	Value                     string
+	EntityKey                         string
+	EntityLastModifiedAtBlock         int64
+	EntityTransactionIndexInBlock     int64
+	EntityOperationIndexInTransaction int64
+	AnnotationKey                     string
+	Value                             string
 }
 
 func (q *Queries) InsertStringAnnotation(ctx context.Context, arg InsertStringAnnotationParams) error {
 	_, err := q.db.ExecContext(ctx, insertStringAnnotation,
 		arg.EntityKey,
 		arg.EntityLastModifiedAtBlock,
+		arg.EntityTransactionIndexInBlock,
+		arg.EntityOperationIndexInTransaction,
 		arg.AnnotationKey,
 		arg.Value,
 	)
@@ -507,6 +582,18 @@ AND NOT EXISTS (
   FROM entities AS e2
   WHERE e2.key = e.key
   AND e2.last_modified_at_block > e.last_modified_at_block
+  AND (
+    e2.last_modified_at_block > e.last_modified_at_block
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block > e.transaction_index_in_block
+    )
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block = e.transaction_index_in_block
+      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+    )
+  )
 )
 `
 
@@ -553,7 +640,18 @@ AND NOT EXISTS (
   SELECT 1
   FROM entities AS e2
   WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
+  AND (
+    e2.last_modified_at_block > e.last_modified_at_block
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block > e.transaction_index_in_block
+    )
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block = e.transaction_index_in_block
+      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+    )
+  )
 )
 `
 
