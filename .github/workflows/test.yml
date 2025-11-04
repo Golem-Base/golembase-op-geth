@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: 
+    runs-on:
       group: Default
       labels: cluster-runner
     steps:
@@ -25,4 +25,3 @@ jobs:
         # Some tests fail on the self-hosted runner, but because they're not relevant to our work, we disable them.
         run: |
           nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...
-
