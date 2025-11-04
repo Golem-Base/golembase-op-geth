@@ -921,15 +921,16 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			NumericAttributes:           []entity.NumericAnnotation{},
 		}
 
-		offset := arkivtype.Cursor{
+		cursor := arkivtype.Cursor{
 			BlockNumber:  options.AtBlock,
 			ColumnValues: make([]arkivtype.CursorValue, 0, len(options.OrderByColumns())),
 		}
 
 		for _, column := range options.OrderByColumns() {
-			offset.ColumnValues = append(offset.ColumnValues, arkivtype.CursorValue{
-				ColumnName: column,
-				Value:      columns[column],
+			cursor.ColumnValues = append(cursor.ColumnValues, arkivtype.CursorValue{
+				ColumnName: column.Name,
+				Value:      columns[column.Name],
+				Descending: column.Descending,
 			})
 		}
 
@@ -973,7 +974,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			}
 		}
 
-		err = iterator(r, offset)
+		err = iterator(r, cursor)
 		if errors.Is(err, ErrStopIteration) {
 			break
 		} else if err != nil {

@@ -149,7 +149,7 @@ func (api *arkivAPI) Query(
 			return nil, err
 		}
 		block = offset.BlockNumber
-		queryOptions.Offset = offset.ColumnValues
+		queryOptions.Cursor = offset.ColumnValues
 	}
 
 	if options.AtBlock != nil {

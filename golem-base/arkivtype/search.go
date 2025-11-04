@@ -82,6 +82,7 @@ type Cursor struct {
 type CursorValue struct {
 	ColumnName string `json:"columnName"`
 	Value      any    `json:"value"`
+	Descending bool   `json:"desc"`
 }
 
 type EntityData struct {

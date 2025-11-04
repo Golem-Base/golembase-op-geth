@@ -20,11 +20,16 @@ type QueryOptions struct {
 	IncludeAnnotations bool
 	Columns            []string
 	OrderBy            []arkivtype.OrderByAnnotation
-	Offset             []arkivtype.CursorValue
+	Cursor             []arkivtype.CursorValue
 
 	// Cache the sorted list of unique columns to fetch
 	allColumnsSorted []string
-	orderByColumns   []string
+	orderByColumns   []OrderBy
+}
+
+type OrderBy struct {
+	Name       string
+	Descending bool
 }
 
 // EncodedCursor is a type to encode the cursor in a small json document to avoid overhead
@@ -53,8 +58,12 @@ func (opts *QueryOptions) EncodeCursor(cursor *arkivtype.Cursor) (string, error)
 		if err != nil {
 			return "", err
 		}
+		descending := 0
+		if c.Descending {
+			descending = 1
+		}
 		encodedOffset.ColumnValues = append(encodedOffset.ColumnValues, []any{
-			columnIx, c.Value,
+			columnIx, c.Value, descending,
 		})
 	}
 
@@ -89,7 +98,7 @@ func (opts *QueryOptions) DecodeCursor(cursorStr string) (*arkivtype.Cursor, err
 	cursor.ColumnValues = make([]arkivtype.CursorValue, 0, len(encoded.ColumnValues))
 
 	for _, c := range encoded.ColumnValues {
-		if len(c) != 2 {
+		if len(c) != 3 {
 			return nil, fmt.Errorf("invalid length of cursor array: %d", len(c))
 		}
 
@@ -97,15 +106,31 @@ func (opts *QueryOptions) DecodeCursor(cursorStr string) (*arkivtype.Cursor, err
 		if !ok {
 			return nil, fmt.Errorf("unknown column index: %d", c[0])
 		}
+		thirdValue, ok := c[2].(float64)
+		if !ok {
+			return nil, fmt.Errorf("unknown value for descending: %d", c[3])
+		}
 
 		columnIx := int(firstValue)
 		if columnIx >= len(opts.AllColumns()) {
 			return nil, fmt.Errorf("unknown column index: %d", columnIx)
 		}
 
+		descendingInt := int(thirdValue)
+		descending := false
+		switch descendingInt {
+		case 0:
+			descending = false
+		case 1:
+			descending = true
+		default:
+			return nil, fmt.Errorf("unknown value for descending: %d", descendingInt)
+		}
+
 		cursor.ColumnValues = append(cursor.ColumnValues, arkivtype.CursorValue{
 			ColumnName: opts.AllColumns()[columnIx],
 			Value:      c[1],
+			Descending: descending,
 		})
 	}
 
@@ -143,21 +168,24 @@ func (opts *QueryOptions) AllColumns() []string {
 	return opts.allColumnsSorted
 }
 
-func (opts *QueryOptions) annotationSortingColumns() []string {
-	columns := make([]string, 0, len(opts.OrderBy))
-	for i := range opts.OrderBy {
-		columns = append(columns, fmt.Sprintf("arkiv_annotation_sorting%d.value", i))
+func (opts *QueryOptions) annotationSortingColumns() []OrderBy {
+	columns := make([]OrderBy, 0, len(opts.OrderBy))
+	for i, o := range opts.OrderBy {
+		columns = append(columns, OrderBy{
+			Name:       fmt.Sprintf("arkiv_annotation_sorting%d.value", i),
+			Descending: o.Descending,
+		})
 	}
 	return columns
 }
 
-func (opts *QueryOptions) OrderByColumns() []string {
+func (opts *QueryOptions) OrderByColumns() []OrderBy {
 	if opts.orderByColumns == nil {
 		opts.orderByColumns = append(
 			opts.annotationSortingColumns(),
-			arkivtype.GetColumnOrPanic("last_modified_at_block"),
-			arkivtype.GetColumnOrPanic("transaction_index_in_block"),
-			arkivtype.GetColumnOrPanic("operation_index_in_transaction"),
+			OrderBy{Name: arkivtype.GetColumnOrPanic("last_modified_at_block")},
+			OrderBy{Name: arkivtype.GetColumnOrPanic("transaction_index_in_block")},
+			OrderBy{Name: arkivtype.GetColumnOrPanic("operation_index_in_transaction")},
 		)
 	}
 	return opts.orderByColumns
@@ -229,18 +257,19 @@ func (b *QueryBuilder) addPaginationArguments() {
 	args := []any{}
 	paginationConditions := []string{}
 
-	if len(b.options.Offset) > 0 {
-		for i := range b.options.Offset {
+	if len(b.options.Cursor) > 0 {
+		for i := range b.options.Cursor {
 			subcondition := []string{}
-			for j, from := range b.options.Offset {
+			for j, from := range b.options.Cursor {
 				if j > i {
 					break
 				}
 				var operator string
 				if j < i {
 					operator = "="
+				} else if from.Descending {
+					operator = "<"
 				} else {
-					// TODO: if we ever support DESC, we need to optionally invert this
 					operator = ">"
 				}
 
@@ -391,7 +420,16 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 	builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
 
 	builder.tableBuilder.WriteString(" ORDER BY ")
-	builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
+
+	orderColumns := make([]string, 0, len(builder.options.OrderByColumns()))
+	for _, o := range builder.options.OrderByColumns() {
+		suffix := ""
+		if o.Descending {
+			suffix = " DESC"
+		}
+		orderColumns = append(orderColumns, o.Name+suffix)
+	}
+	builder.tableBuilder.WriteString(strings.Join(orderColumns, ", "))
 
 	return &SelectQuery{
 		Query: builder.tableBuilder.String(),
