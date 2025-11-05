@@ -35,7 +35,7 @@ type QueryOptions struct {
 	Cursor         string                        `json:"cursor"`
 }
 
-var allColumns = []string{
+var defaultColumns = []string{
 	arkivtype.GetColumnOrPanic("key"),
 	arkivtype.GetColumnOrPanic("expires_at"),
 	arkivtype.GetColumnOrPanic("owner_address"),
@@ -47,12 +47,12 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 	switch {
 	case options == nil:
 		return &internalQueryOptions{
-			Columns:            allColumns,
+			Columns:            defaultColumns,
 			IncludeAnnotations: true,
 		}, nil
 	case options.IncludeData == nil:
 		return &internalQueryOptions{
-			Columns:            allColumns,
+			Columns:            defaultColumns,
 			IncludeAnnotations: true,
 			OrderBy:            options.OrderBy,
 			AtBlock:            options.AtBlock,
