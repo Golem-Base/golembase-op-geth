@@ -43,11 +43,6 @@ func BrotliDecompress(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
-	buf := bytes.NewBuffer(nil)
-	reader := brotli.NewReader(buf)
-	_, err := io.Copy(buf, reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to copy data from brotli decompressor: %w", err)
-	}
-	return buf.Bytes(), nil
+	reader := brotli.NewReader(bytes.NewReader(data))
+	return io.ReadAll(reader)
 }
