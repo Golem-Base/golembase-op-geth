@@ -671,8 +671,6 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 	}
 
 	switch {
-	case to == nil:
-		return ErrNonGolembaseTransaction
 	case *to == address.GolemBaseStorageProcessorAddress:
 		if len(tx.Data()) == 0 {
 			return fmt.Errorf("golem base storage transaction data is empty")
