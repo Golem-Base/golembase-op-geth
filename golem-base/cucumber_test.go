@@ -227,6 +227,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the error should mention the first validation error encountered$`, theErrorShouldMentionTheFirstValidationErrorEncountered)
 	ctx.Step(`^I submit a storage transaction with no playload$`, iSubmitAStorageTransactionWithNoPlayload)
 	ctx.Step(`^I submit a storage transaction with unparseable data$`, iSubmitAStorageTransactionWithUnparseableData)
+	ctx.Step(`^the transaction submission should fail$`, theTransactionSubmissionShouldFail)
 
 }
 
@@ -2423,9 +2424,7 @@ func iSubmitAStorageTransactionWithNoPlayload(ctx context.Context) error {
 		address.GolemBaseStorageProcessorAddress,
 		nil,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to transfer: %w", err)
-	}
+	w.LastError = err
 	return nil
 }
 
@@ -2754,5 +2753,19 @@ func iSubmitATransactionToChangeTheOwnerOfTheEntityByNonowner(ctx context.Contex
 	if err != nil {
 		return fmt.Errorf("failed to send transaction: %w", err)
 	}
+	return nil
+}
+
+func theTransactionSubmissionShouldFail(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	if w.LastError == nil {
+		return fmt.Errorf("expected transaction submission to fail, but it succeeded")
+	}
+
+	if !strings.Contains(w.LastError.Error(), "golem base storage transaction data is empty") {
+		return fmt.Errorf("expected transaction submission to fail with 'golem base storage transaction data is empty', but got: %s", w.LastError.Error())
+	}
+
 	return nil
 }
