@@ -32,7 +32,7 @@ type QueryOptions struct {
 	IncludeData    *IncludeData                  `json:"includeData"`
 	OrderBy        []arkivtype.OrderByAnnotation `json:"orderBy"`
 	ResultsPerPage uint64                        `json:"resultsPerPage"`
-	Cursor         *string                       `json:"cursor"`
+	Cursor         string                        `json:"cursor"`
 }
 
 var allColumns = []string{
@@ -101,7 +101,7 @@ type internalQueryOptions struct {
 	IncludeAnnotations bool                          `json:"includeAnnotations"`
 	Columns            []string                      `json:"columns"`
 	OrderBy            []arkivtype.OrderByAnnotation `json:"orderBy"`
-	Cursor             *string                       `json:"cursor"`
+	Cursor             string                        `json:"cursor"`
 }
 
 type arkivAPI struct {
@@ -143,8 +143,8 @@ func (api *arkivAPI) Query(
 		OrderBy:            options.OrderBy,
 	}
 
-	if options.Cursor != nil {
-		offset, err := queryOptions.DecodeCursor(*options.Cursor)
+	if len(options.Cursor) != 0 {
+		offset, err := queryOptions.DecodeCursor(options.Cursor)
 		if err != nil {
 			return nil, err
 		}
