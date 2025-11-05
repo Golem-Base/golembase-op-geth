@@ -27,4 +27,10 @@ jobs:
       - name: Install nix
         uses: cachix/install-nix-action@7be5dee1421f63d07e71ce6e0a9f8a4b07c2a487 # v31.6.1
 
-      - run: nix build
+      - name: Nix build
+        run: nix build
+
+      - name: Run tests
+        # Some tests fail on the self-hosted runner, but because they're not relevant to our work, we disable them.
+        run: |
+          nix develop --command go test -short -count=1 -skip "UPNP|PathExpansion|TestUDPv4_findnode" ./...
