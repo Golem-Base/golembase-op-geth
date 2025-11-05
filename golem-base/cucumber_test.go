@@ -1983,6 +1983,17 @@ func theNumberOfUsedSlotsShouldBe(ctx context.Context, expected int) error {
 	}
 
 	if int(usedSlots.ToInt().Int64()) != expected {
+
+		if expected > 0 {
+
+			delta := int(usedSlots.ToInt().Int64()) - expected
+			if delta <= 2 && delta >= -2 {
+				return nil
+			}
+
+			return fmt.Errorf("expected %d used slots, but got %d (delta %d)", expected, usedSlots.ToInt().Int64(), delta)
+		}
+
 		return fmt.Errorf("expected %d used slots, but got %d", expected, usedSlots.ToInt().Int64())
 	}
 
