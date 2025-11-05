@@ -225,6 +225,7 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Owner", Pattern: `\$owner`},
 	{Name: "Key", Pattern: `\$key`},
 	{Name: "Expiration", Pattern: `\$expiration`},
+	{Name: "Sequence", Pattern: `\$sequence`},
 	{Name: "All", Pattern: `\$all`},
 })
 
@@ -1079,7 +1080,7 @@ func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 
 // Equality represents a simple equality (e.g. name = 123).
 type Equality struct {
-	Var   string `parser:"(@Ident | @Key | @Owner | @Expiration)"`
+	Var   string `parser:"@(Ident | Key | Owner | Expiration | Sequence)"`
 	IsNot bool   `parser:"(Eq | @Neq)"`
 	Value Value  `parser:"@@"`
 }
@@ -1144,7 +1145,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 }
 
 type Inclusion struct {
-	Var    string `parser:"(@Ident | @Key | @Owner | @Expiration)"`
+	Var    string `parser:"@(Ident | Key | Owner | Expiration | Sequence)"`
 	IsNot  bool   `parser:"(@('NOT'|'not')? ('IN'|'in'))"`
 	Values Values `parser:"@@"`
 }

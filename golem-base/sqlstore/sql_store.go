@@ -97,6 +97,10 @@ type SQLStore struct {
 	historicBlocksCount uint64
 }
 
+func getSequence(createdAtBlock uint64, transactionIndexInBlock uint64, operationIndexInTransaction uint64) uint64 {
+	return createdAtBlock<<32 | transactionIndexInBlock<<16 | operationIndexInTransaction
+}
+
 // NewStore creates a new ETL instance with database connection and schema setup
 func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 	dir := filepath.Dir(dbFile)
@@ -362,16 +366,16 @@ func (e *SQLStore) SnapSyncToBlock(
 		}
 
 		// Insert string annotations
-		strAnnotations := slices.Concat(entityToInsert.Metadata.StringAnnotations, []entity.StringAnnotation{
-			{
+		strAnnotations := append(entityToInsert.Metadata.StringAnnotations,
+			entity.StringAnnotation{
 				Key:   "$key",
 				Value: strings.ToLower(entityToInsert.Key.Hex()),
 			},
-			{
+			entity.StringAnnotation{
 				Key:   "$owner",
 				Value: strings.ToLower(entityToInsert.Metadata.Owner.Hex()),
 			},
-		})
+		)
 		for _, annotation := range strAnnotations {
 			err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
 				EntityKey:                         strings.ToLower(entityToInsert.Key.Hex()),
@@ -387,12 +391,20 @@ func (e *SQLStore) SnapSyncToBlock(
 		}
 
 		// Insert numeric annotations
-		numAnnotations := slices.Concat(entityToInsert.Metadata.NumericAnnotations, []entity.NumericAnnotation{
-			{
+		numAnnotations := append(entityToInsert.Metadata.NumericAnnotations,
+			entity.NumericAnnotation{
 				Key:   "$expiration",
 				Value: entityToInsert.Metadata.ExpiresAtBlock,
 			},
-		})
+			entity.NumericAnnotation{
+				Key: "$sequence",
+				Value: getSequence(
+					entityToInsert.Metadata.LastModifiedAtBlock,
+					entityToInsert.Metadata.TransactionIndex,
+					entityToInsert.Metadata.OperationIndex,
+				),
+			},
+		)
 		for _, annotation := range numAnnotations {
 			err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 				EntityKey:                         strings.ToLower(entityToInsert.Key.Hex()),
@@ -512,12 +524,20 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				return fmt.Errorf("failed to insert entity: %w", err)
 			}
 
-			numAnnotations := slices.Concat(op.Create.NumericAnnotations, []entity.NumericAnnotation{
-				{
+			numAnnotations := append(op.Create.NumericAnnotations,
+				entity.NumericAnnotation{
 					Key:   "$expiration",
 					Value: op.Create.ExpiresAtBlock,
 				},
-			})
+				entity.NumericAnnotation{
+					Key: "$sequence",
+					Value: getSequence(
+						blockWal.BlockInfo.Number,
+						op.Create.TransactionIndex,
+						op.Create.OperationIndex,
+					),
+				},
+			)
 			for _, annotation := range numAnnotations {
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 					EntityKey:                         strings.ToLower(op.Create.EntityKey.Hex()),
@@ -532,16 +552,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				}
 			}
 
-			strAnnotations := slices.Concat(op.Create.StringAnnotations, []entity.StringAnnotation{
-				{
+			strAnnotations := append(op.Create.StringAnnotations,
+				entity.StringAnnotation{
 					Key:   "$key",
 					Value: strings.ToLower(op.Create.EntityKey.Hex()),
 				},
-				{
+				entity.StringAnnotation{
 					Key:   "$owner",
 					Value: strings.ToLower(op.Create.Owner.Hex()),
 				},
-			})
+			)
 			for _, annotation := range strAnnotations {
 				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
 					EntityKey:                         strings.ToLower(op.Create.EntityKey.Hex()),
@@ -577,12 +597,20 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				OperationIndexInTransaction: int64(op.Update.OperationIndex),
 			})
 
-			numAnnotations := slices.Concat(op.Update.NumericAnnotations, []entity.NumericAnnotation{
-				{
+			numAnnotations := append(op.Update.NumericAnnotations,
+				entity.NumericAnnotation{
 					Key:   "$expiration",
 					Value: op.Update.ExpiresAtBlock,
 				},
-			})
+				entity.NumericAnnotation{
+					Key: "$sequence",
+					Value: getSequence(
+						blockWal.BlockInfo.Number,
+						op.Update.TransactionIndex,
+						op.Update.OperationIndex,
+					),
+				},
+			)
 			for _, annotation := range numAnnotations {
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 					EntityKey:                         strings.ToLower(op.Update.EntityKey.Hex()),
@@ -597,16 +625,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				}
 			}
 
-			strAnnotations := slices.Concat(op.Update.StringAnnotations, []entity.StringAnnotation{
-				{
+			strAnnotations := append(op.Update.StringAnnotations,
+				entity.StringAnnotation{
 					Key:   "$key",
 					Value: strings.ToLower(op.Update.EntityKey.Hex()),
 				},
-				{
+				entity.StringAnnotation{
 					Key:   "$owner",
 					Value: strings.ToLower(existingEntity.OwnerAddress),
 				},
-			})
+			)
 			for _, annotation := range strAnnotations {
 				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
 					EntityKey:                         strings.ToLower(op.Update.EntityKey.Hex()),
@@ -657,13 +685,21 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 			}
 
 			for _, annotation := range numericAnnotations {
+				value := uint64(annotation.Value)
+				if annotation.AnnotationKey == "$sequence" {
+					value = getSequence(
+						blockWal.BlockInfo.Number,
+						op.ChangeOwner.TransactionIndex,
+						op.ChangeOwner.OperationIndex,
+					)
+				}
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 					EntityKey:                         strings.ToLower(op.ChangeOwner.EntityKey.Hex()),
 					EntityLastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
 					EntityTransactionIndexInBlock:     int64(op.ChangeOwner.TransactionIndex),
 					EntityOperationIndexInTransaction: int64(op.ChangeOwner.OperationIndex),
 					AnnotationKey:                     annotation.AnnotationKey,
-					Value:                             int64(annotation.Value),
+					Value:                             int64(value),
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert numeric annotation: %w", err)
@@ -739,9 +775,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 			}
 
 			for _, annotation := range numericAnnotations {
-				value := annotation.Value
-				if annotation.AnnotationKey == "$expiration" {
-					value = int64(op.Extend.NewExpiresAt)
+				value := uint64(annotation.Value)
+				switch annotation.AnnotationKey {
+				case "$sequence":
+					value = getSequence(
+						blockWal.BlockInfo.Number,
+						op.Extend.TransactionIndex,
+						op.Extend.OperationIndex,
+					)
+				case "$expiration":
+					value = op.Extend.NewExpiresAt
 				}
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
 					EntityKey:                         strings.ToLower(op.Extend.EntityKey.Hex()),
@@ -749,7 +792,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 					EntityTransactionIndexInBlock:     int64(op.Extend.TransactionIndex),
 					EntityOperationIndexInTransaction: int64(op.Extend.OperationIndex),
 					AnnotationKey:                     annotation.AnnotationKey,
-					Value:                             value,
+					Value:                             int64(value),
 				})
 				if err != nil {
 					return fmt.Errorf("failed to insert numeric annotation: %w", err)
@@ -979,7 +1022,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 
 			// Convert numeric annotations
 			for _, row := range numericAnnotRows {
-				if row.AnnotationKey != "$expiration" {
+				if row.AnnotationKey != "$expiration" && row.AnnotationKey != "$sequence" {
 					r.NumericAttributes = append(r.NumericAttributes, entity.NumericAnnotation{
 						Key:   row.AnnotationKey,
 						Value: uint64(row.Value),
