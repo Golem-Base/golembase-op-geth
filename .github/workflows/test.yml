@@ -13,14 +13,16 @@ jobs:
       labels: cluster-runner
     steps:
       - uses: actions/checkout@v4
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v19
-        env:
-          DOCKER_HOST: "unix:///var/run/docker.sock.disabled"
-        with:
-          planner: "linux"
-          start-daemon: false
-      - run: sudo chown -R $(id -u):$(id -g) /nix
+
+      # Necessary for installing nix (alternative: create a custom gh runner image)
+      - name: Install xz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils
+
+      - name: Install nix
+        uses: cachix/install-nix-action@7be5dee1421f63d07e71ce6e0a9f8a4b07c2a487 # v31.6.1
+
       - name: Run tests
         # Some tests fail on the self-hosted runner, but because they're not relevant to our work, we disable them.
         run: |
