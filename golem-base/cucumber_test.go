@@ -18,6 +18,7 @@ import (
 
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
+	"github.com/ethereum/go-ethereum/arkiv/compression"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
-	"github.com/klauspost/compress/zstd"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
 )
 
@@ -44,8 +44,6 @@ var opts = godog.Options{
 
 	Paths: []string{"features"},
 }
-
-var encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
 
 func init() {
 	godog.BindCommandLineFlags("godog.", &opts)
@@ -2645,7 +2643,7 @@ func iSubmitATransactionToChangeTheOwnerOfTheEntity(ctx context.Context) error {
 		ctx,
 		big.NewInt(1),
 		address.ArkivProcessorAddress,
-		encoder.EncodeAll(txData, nil),
+		compression.MustBrotliCompress(txData),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to send transaction: %w", err)
@@ -2751,7 +2749,7 @@ func iSubmitATransactionToChangeTheOwnerOfTheEntityByNonowner(ctx context.Contex
 		ctx,
 		big.NewInt(0),
 		address.ArkivProcessorAddress,
-		encoder.EncodeAll(txData, nil),
+		compression.MustBrotliCompress(txData),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to send transaction: %w", err)
