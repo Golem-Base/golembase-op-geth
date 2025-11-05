@@ -122,7 +122,7 @@ func (api *arkivAPI) Query(
 	op *QueryOptions,
 ) (*arkivtype.QueryResponse, error) {
 
-	log.Info("arkiv API", "query_options", op)
+	log.Info("query options", "options", op)
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -198,7 +198,7 @@ func (api *arkivAPI) Query(
 
 	if op != nil {
 		maxResultsPerPage = int(op.ResultsPerPage)
-		log.Info("query", "max_results_per_page", maxResultsPerPage)
+		log.Info("query max results per page", "value", maxResultsPerPage)
 	}
 
 	startTime := time.Now()
@@ -247,7 +247,7 @@ func (api *arkivAPI) Query(
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	log.Info("query", "num_of_results", len(response.Data))
+	log.Info("query number of results", "value", len(response.Data))
 	return response, nil
 }
 
