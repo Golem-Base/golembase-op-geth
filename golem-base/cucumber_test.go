@@ -229,6 +229,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I submit a storage transaction with unparseable data$`, iSubmitAStorageTransactionWithUnparseableData)
 	ctx.Step(`^the transaction submission should fail$`, theTransactionSubmissionShouldFail)
 
+	ctx.Step(`^I submit an arkiv transaction with empty content and one annotation$`, iSubmitAnArkivTransactionWithEmptyContentAndOneAnnotation)
+	ctx.Step(`^the transaction should succeed$`, theTransactionShouldSucceed)
+
 }
 
 func iSearchForEntitiesWithTheInvalidQuery(ctx context.Context, query *godog.DocString) error {
@@ -2776,6 +2779,51 @@ func theTransactionSubmissionShouldFail(ctx context.Context) error {
 
 	if !strings.Contains(w.LastError.Error(), "golem base storage transaction data is empty") {
 		return fmt.Errorf("expected transaction submission to fail with 'golem base storage transaction data is empty', but got: %s", w.LastError.Error())
+	}
+
+	return nil
+}
+
+func iSubmitAnArkivTransactionWithEmptyContentAndOneAnnotation(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	tx := &storagetx.ArkivTransaction{
+		Create: []storagetx.ArkivCreate{
+			{
+				BTL:         1000,
+				ContentType: "application/octet-stream",
+				Payload:     []byte{},
+				StringAnnotations: []entity.StringAnnotation{
+					{Key: "type", Value: "test"},
+				},
+			},
+		},
+	}
+	txData, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return fmt.Errorf("failed to encode transaction: %w", err)
+	}
+
+	_, err = w.SendTxWithData(
+		ctx,
+		big.NewInt(0),
+		address.ArkivProcessorAddress,
+		compression.MustBrotliCompress(txData),
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to send transaction: %w", err)
+	}
+	return nil
+}
+
+func theTransactionShouldSucceed(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.LastReceipt == nil {
+		return fmt.Errorf("no receipt found")
+	}
+
+	if w.LastReceipt.Status == types.ReceiptStatusFailed {
+		return fmt.Errorf("transaction failed")
 	}
 
 	return nil

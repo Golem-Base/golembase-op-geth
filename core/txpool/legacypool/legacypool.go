@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -685,6 +686,16 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 		_, err := compression.BrotliDecompress(tx.Data())
 		if err != nil {
 			return fmt.Errorf("failed to decompress arkiv transaction data: %w", err)
+		}
+
+		tx, err := storagetx.UnpackArkivTransaction(tx.Data())
+		if err != nil {
+			return fmt.Errorf("failed to unpack arkiv transaction: %w", err)
+		}
+
+		tx.Validate()
+		if err != nil {
+			return fmt.Errorf("failed to validate arkiv transaction: %w", err)
 		}
 
 		return nil

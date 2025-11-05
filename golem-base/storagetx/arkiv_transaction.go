@@ -448,10 +448,9 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 	return logs, nil
 }
 
-const maxCompressedSize = 1024 * 1024 * 20 // 10MB
+const maxCompressedSize = 1024 * 1024 * 20 // 20MB
 
-func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
-
+func UnpackArkivTransaction(compressed []byte) (*ArkivTransaction, error) {
 	reader := brotli.NewReader(bytes.NewReader(compressed))
 	lr := io.LimitReader(reader, maxCompressedSize)
 
@@ -464,6 +463,16 @@ func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash commo
 	err = rlp.DecodeBytes(d, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode storage transaction: %w", err)
+	}
+
+	return tx, nil
+}
+
+func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
+
+	tx, err := UnpackArkivTransaction(compressed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unpack arkiv transaction: %w", err)
 	}
 
 	st := storageaccounting.NewSlotUsageCounter(access)

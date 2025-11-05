@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS schema_versions (
 CREATE TABLE IF NOT EXISTS entities (
   key TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
-  payload BLOB NOT NULL,
+  payload BLOB,
   content_type TEXT NOT NULL,
   created_at_block INTEGER NOT NULL,
   last_modified_at_block INTEGER NOT NULL,
