@@ -10,6 +10,10 @@ import (
 
 func BrotliCompress(data []byte) ([]byte, error) {
 
+	if len(data) == 0 {
+		return nil, nil
+	}
+
 	buf := bytes.NewBuffer(nil)
 
 	writer := brotli.NewWriterV2(buf, 9)
@@ -36,6 +40,9 @@ func MustBrotliCompress(data []byte) []byte {
 }
 
 func BrotliDecompress(data []byte) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
 	buf := bytes.NewBuffer(nil)
 	reader := brotli.NewReader(buf)
 	_, err := io.Copy(buf, reader)
