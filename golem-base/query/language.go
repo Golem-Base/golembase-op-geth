@@ -62,7 +62,7 @@ func (opts *QueryOptions) EncodeCursor(cursor *arkivtype.Cursor) (string, error)
 
 	s, err := json.Marshal(encodedCursor)
 	if err != nil {
-		return "", fmt.Errorf("could not marshal offset: %w", err)
+		return "", fmt.Errorf("could not marshal cursor: %w", err)
 	}
 	log.Info("Encoded cursor", "cursor", string(s))
 
@@ -79,7 +79,7 @@ func (opts *QueryOptions) DecodeCursor(cursorStr string) (*arkivtype.Cursor, err
 
 	bs, err := hex.DecodeString(cursorStr)
 	if err != nil {
-		return nil, fmt.Errorf("could not decode offset: %w", err)
+		return nil, fmt.Errorf("could not decode cursor: %w", err)
 	}
 
 	cursor := arkivtype.Cursor{}
@@ -87,7 +87,7 @@ func (opts *QueryOptions) DecodeCursor(cursorStr string) (*arkivtype.Cursor, err
 	encoded := make([]any, 0)
 	err = json.Unmarshal(bs, &encoded)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal offset: %w (%s)", err, string(bs))
+		return nil, fmt.Errorf("could not unmarshal cursor: %w (%s)", err, string(bs))
 	}
 
 	firstValue, ok := encoded[0].(float64)
