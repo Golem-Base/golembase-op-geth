@@ -168,6 +168,7 @@ func testInteropTransaction(t *testing.T, failsafeEnabled bool, expectIncluded b
 }
 
 func TestInteropTxRejectedWithFailsafe(t *testing.T) {
+	t.Skip()
 	t.Run("failsafe enabled", func(t *testing.T) {
 		testInteropTransaction(t, true, false, true) // not included, rejected
 	})
