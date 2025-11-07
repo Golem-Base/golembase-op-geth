@@ -1029,7 +1029,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 
 			// Convert string annotations
 			for _, row := range stringAnnotRows {
-				if !strings.HasPrefix(row.AnnotationKey, "$") {
+				if options.IncludeSyntheticAnnotations || !strings.HasPrefix(row.AnnotationKey, "$") {
 					r.StringAttributes = append(r.StringAttributes, entity.StringAnnotation{
 						Key:   row.AnnotationKey,
 						Value: row.Value,
@@ -1039,7 +1039,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 
 			// Convert numeric annotations
 			for _, row := range numericAnnotRows {
-				if !strings.HasPrefix(row.AnnotationKey, "$") {
+				if options.IncludeSyntheticAnnotations || !strings.HasPrefix(row.AnnotationKey, "$") {
 					r.NumericAttributes = append(r.NumericAttributes, entity.NumericAnnotation{
 						Key:   row.AnnotationKey,
 						Value: uint64(row.Value),

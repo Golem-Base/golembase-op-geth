@@ -17,11 +17,12 @@ import (
 )
 
 type QueryOptions struct {
-	AtBlock            uint64
-	IncludeAnnotations bool
-	Columns            map[string]string
-	OrderBy            []arkivtype.OrderByAnnotation
-	Cursor             []arkivtype.CursorValue
+	AtBlock                     uint64
+	IncludeAnnotations          bool
+	IncludeSyntheticAnnotations bool
+	Columns                     map[string]string
+	OrderBy                     []arkivtype.OrderByAnnotation
+	Cursor                      []arkivtype.CursorValue
 
 	// Cache the sorted list of unique columns to fetch
 	allColumnsSorted []string

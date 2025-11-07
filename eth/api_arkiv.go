@@ -18,6 +18,7 @@ import (
 type IncludeData struct {
 	Key                         bool `json:"key"`
 	Attributes                  bool `json:"attributes"`
+	SyntheticAttributes         bool `json:"syntheticAttributes"`
 	Payload                     bool `json:"payload"`
 	ContentType                 bool `json:"contentType"`
 	Expiration                  bool `json:"expiration"`
@@ -70,13 +71,12 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 		}, nil
 	default:
 		iq := internalQueryOptions{
-			Columns: map[string]string{},
-			OrderBy: options.OrderBy,
-			AtBlock: options.AtBlock,
-			Cursor:  options.Cursor,
-		}
-		if options.IncludeData.Attributes {
-			iq.IncludeAnnotations = true
+			Columns:                     map[string]string{},
+			OrderBy:                     options.OrderBy,
+			AtBlock:                     options.AtBlock,
+			Cursor:                      options.Cursor,
+			IncludeAnnotations:          options.IncludeData.Attributes,
+			IncludeSyntheticAnnotations: options.IncludeData.SyntheticAttributes,
 		}
 		if options.IncludeData.Payload {
 			column := arkivtype.GetColumnOrPanic("payload")
@@ -119,11 +119,12 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 }
 
 type internalQueryOptions struct {
-	AtBlock            *uint64                       `json:"atBlock"`
-	IncludeAnnotations bool                          `json:"includeAnnotations"`
-	Columns            map[string]string             `json:"columns"`
-	OrderBy            []arkivtype.OrderByAnnotation `json:"orderBy"`
-	Cursor             string                        `json:"cursor"`
+	AtBlock                     *uint64                       `json:"atBlock"`
+	IncludeAnnotations          bool                          `json:"includeAnnotations"`
+	IncludeSyntheticAnnotations bool                          `json:"includeSyntheticAnnotations"`
+	Columns                     map[string]string             `json:"columns"`
+	OrderBy                     []arkivtype.OrderByAnnotation `json:"orderBy"`
+	Cursor                      string                        `json:"cursor"`
 }
 
 type arkivAPI struct {
@@ -160,9 +161,10 @@ func (api *arkivAPI) Query(
 	block := latestsHead.Number.Uint64()
 
 	queryOptions := query.QueryOptions{
-		IncludeAnnotations: options.IncludeAnnotations,
-		Columns:            options.Columns,
-		OrderBy:            options.OrderBy,
+		IncludeAnnotations:          options.IncludeAnnotations,
+		IncludeSyntheticAnnotations: options.IncludeSyntheticAnnotations,
+		Columns:                     options.Columns,
+		OrderBy:                     options.OrderBy,
 	}
 
 	if len(options.Cursor) != 0 {
