@@ -935,7 +935,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		var keyHash *common.Hash
 		// We check whether the key was actually requested, since it's always included
 		// in the query because of sorting
-		if key != nil && slices.Contains(options.Columns, "key") {
+		if key != nil {
 			hash := common.HexToHash(*key)
 			keyHash = &hash
 		}
@@ -956,7 +956,6 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		}
 
 		r := arkivtype.EntityData{
-			Key:               keyHash,
 			ExpiresAt:         expiresAt,
 			Value:             value,
 			ContentType:       contentType,
@@ -966,6 +965,9 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			NumericAttributes: []entity.NumericAnnotation{},
 		}
 
+		if slices.Contains(options.Columns, "key") {
+			r.Key = keyHash
+		}
 		// Make sure to only include these properties when they were actually requested
 		// They are always included in the query, so we need to explicitly check the query options
 		if slices.Contains(options.Columns, "last_modified_at_block") {
