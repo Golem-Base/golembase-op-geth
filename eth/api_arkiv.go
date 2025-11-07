@@ -36,12 +36,21 @@ type QueryOptions struct {
 	Cursor         string                        `json:"cursor"`
 }
 
-var defaultColumns = []string{
-	arkivtype.GetColumnOrPanic("key"),
-	arkivtype.GetColumnOrPanic("expires_at"),
-	arkivtype.GetColumnOrPanic("owner_address"),
-	arkivtype.GetColumnOrPanic("payload"),
-	arkivtype.GetColumnOrPanic("content_type"),
+var defaultColumns map[string]string
+
+func init() {
+	columns := []string{
+		arkivtype.GetColumnOrPanic("key"),
+		arkivtype.GetColumnOrPanic("expires_at"),
+		arkivtype.GetColumnOrPanic("owner_address"),
+		arkivtype.GetColumnOrPanic("payload"),
+		arkivtype.GetColumnOrPanic("content_type"),
+	}
+
+	defaultColumns = make(map[string]string, len(columns))
+	for _, column := range columns {
+		defaultColumns[column] = column
+	}
 }
 
 func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, error) {
@@ -61,7 +70,7 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 		}, nil
 	default:
 		iq := internalQueryOptions{
-			Columns: []string{},
+			Columns: map[string]string{},
 			OrderBy: options.OrderBy,
 			AtBlock: options.AtBlock,
 			Cursor:  options.Cursor,
@@ -70,31 +79,40 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 			iq.IncludeAnnotations = true
 		}
 		if options.IncludeData.Payload {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("payload"))
+			column := arkivtype.GetColumnOrPanic("payload")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.ContentType {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("content_type"))
+			column := arkivtype.GetColumnOrPanic("content_type")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.Expiration {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("expires_at"))
+			column := arkivtype.GetColumnOrPanic("expires_at")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.Owner {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("owner_address"))
+			column := arkivtype.GetColumnOrPanic("owner_address")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.Key {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("key"))
+			column := arkivtype.GetColumnOrPanic("key")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.CreatedAtBlock {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("created_at_block"))
+			column := arkivtype.GetColumnOrPanic("created_at_block")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.LastModifiedAtBlock {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("last_modified_at_block"))
+			column := arkivtype.GetColumnOrPanic("last_modified_at_block")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.TransactionIndexInBlock {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("transaction_index_in_block"))
+			column := arkivtype.GetColumnOrPanic("transaction_index_in_block")
+			iq.Columns[column] = column
 		}
 		if options.IncludeData.OperationIndexInTransaction {
-			iq.Columns = append(iq.Columns, arkivtype.GetColumnOrPanic("operation_index_in_transaction"))
+			column := arkivtype.GetColumnOrPanic("operation_index_in_transaction")
+			iq.Columns[column] = column
 		}
 		return &iq, nil
 	}
@@ -103,7 +121,7 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 type internalQueryOptions struct {
 	AtBlock            *uint64                       `json:"atBlock"`
 	IncludeAnnotations bool                          `json:"includeAnnotations"`
-	Columns            []string                      `json:"columns"`
+	Columns            map[string]string             `json:"columns"`
 	OrderBy            []arkivtype.OrderByAnnotation `json:"orderBy"`
 	Cursor             string                        `json:"cursor"`
 }

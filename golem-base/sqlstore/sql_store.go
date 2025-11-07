@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 
@@ -965,18 +964,22 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			NumericAttributes: []entity.NumericAnnotation{},
 		}
 
-		if slices.Contains(options.Columns, "key") {
+		_, wantsKey := options.Columns["key"]
+		if wantsKey {
 			r.Key = keyHash
 		}
 		// Make sure to only include these properties when they were actually requested
 		// They are always included in the query, so we need to explicitly check the query options
-		if slices.Contains(options.Columns, "last_modified_at_block") {
+		_, wantsLastModified := options.Columns["last_modified_at_block"]
+		if wantsLastModified {
 			r.LastModifiedAtBlock = lastModifiedAtBlock
 		}
-		if slices.Contains(options.Columns, "transaction_index_in_block") {
+		_, wantsTxIx := options.Columns["transaction_index_in_block"]
+		if wantsTxIx {
 			r.TransactionIndexInBlock = transactionIndexInBlock
 		}
-		if slices.Contains(options.Columns, "operation_index_in_transaction") {
+		_, wantsOpIx := options.Columns["operation_index_in_transaction"]
+		if wantsOpIx {
 			r.OperationIndexInTransaction = operationIndexInTransaction
 		}
 

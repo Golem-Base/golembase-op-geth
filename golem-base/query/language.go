@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -18,7 +19,7 @@ import (
 type QueryOptions struct {
 	AtBlock            uint64
 	IncludeAnnotations bool
-	Columns            []string
+	Columns            map[string]string
 	OrderBy            []arkivtype.OrderByAnnotation
 	Cursor             []arkivtype.CursorValue
 
@@ -148,7 +149,7 @@ func (opts *QueryOptions) DecodeCursor(cursorStr string) (*arkivtype.Cursor, err
 func (opts *QueryOptions) AllColumns() []string {
 	if opts.allColumnsSorted == nil {
 
-		columns := opts.Columns
+		columns := slices.Collect(maps.Values(opts.Columns))
 
 		for i := range opts.OrderBy {
 			columns = append(columns, fmt.Sprintf("arkiv_annotation_sorting%d.value", i))
