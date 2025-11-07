@@ -367,12 +367,16 @@ func (e *SQLStore) SnapSyncToBlock(
 		// Insert string annotations
 		strAnnotations := append(entityToInsert.Metadata.StringAnnotations,
 			entity.StringAnnotation{
-				Key:   "$key",
+				Key:   arkivtype.KeyAttributeKey,
 				Value: strings.ToLower(entityToInsert.Key.Hex()),
 			},
 			entity.StringAnnotation{
-				Key:   "$owner",
+				Key:   arkivtype.OwnerAttributeKey,
 				Value: strings.ToLower(entityToInsert.Metadata.Owner.Hex()),
+			},
+			entity.StringAnnotation{
+				Key:   arkivtype.CreatorAttributeKey,
+				Value: strings.ToLower(entityToInsert.Metadata.Creator.Hex()),
 			},
 		)
 		for _, annotation := range strAnnotations {
@@ -392,11 +396,11 @@ func (e *SQLStore) SnapSyncToBlock(
 		// Insert numeric annotations
 		numAnnotations := append(entityToInsert.Metadata.NumericAnnotations,
 			entity.NumericAnnotation{
-				Key:   "$expiration",
+				Key:   arkivtype.ExpirationAttributeKey,
 				Value: entityToInsert.Metadata.ExpiresAtBlock,
 			},
 			entity.NumericAnnotation{
-				Key: "$sequence",
+				Key: arkivtype.SequenceAttributeKey,
 				Value: getSequence(
 					entityToInsert.Metadata.LastModifiedAtBlock,
 					entityToInsert.Metadata.TransactionIndex,
@@ -525,11 +529,11 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			numAnnotations := append(op.Create.NumericAnnotations,
 				entity.NumericAnnotation{
-					Key:   "$expiration",
+					Key:   arkivtype.ExpirationAttributeKey,
 					Value: op.Create.ExpiresAtBlock,
 				},
 				entity.NumericAnnotation{
-					Key: "$sequence",
+					Key: arkivtype.SequenceAttributeKey,
 					Value: getSequence(
 						blockWal.BlockInfo.Number,
 						op.Create.TransactionIndex,
@@ -553,11 +557,15 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			strAnnotations := append(op.Create.StringAnnotations,
 				entity.StringAnnotation{
-					Key:   "$key",
+					Key:   arkivtype.KeyAttributeKey,
 					Value: strings.ToLower(op.Create.EntityKey.Hex()),
 				},
 				entity.StringAnnotation{
-					Key:   "$owner",
+					Key:   arkivtype.OwnerAttributeKey,
+					Value: strings.ToLower(op.Create.Owner.Hex()),
+				},
+				entity.StringAnnotation{
+					Key:   arkivtype.CreatorAttributeKey,
 					Value: strings.ToLower(op.Create.Owner.Hex()),
 				},
 			)
@@ -598,11 +606,11 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			numAnnotations := append(op.Update.NumericAnnotations,
 				entity.NumericAnnotation{
-					Key:   "$expiration",
+					Key:   arkivtype.ExpirationAttributeKey,
 					Value: op.Update.ExpiresAtBlock,
 				},
 				entity.NumericAnnotation{
-					Key: "$sequence",
+					Key: arkivtype.SequenceAttributeKey,
 					Value: getSequence(
 						blockWal.BlockInfo.Number,
 						op.Update.TransactionIndex,
@@ -626,12 +634,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			strAnnotations := append(op.Update.StringAnnotations,
 				entity.StringAnnotation{
-					Key:   "$key",
+					Key:   arkivtype.KeyAttributeKey,
 					Value: strings.ToLower(op.Update.EntityKey.Hex()),
 				},
 				entity.StringAnnotation{
-					Key:   "$owner",
+					Key:   arkivtype.OwnerAttributeKey,
 					Value: strings.ToLower(existingEntity.OwnerAddress),
+				},
+				entity.StringAnnotation{
+					Key:   arkivtype.CreatorAttributeKey,
+					Value: strings.ToLower(existingEntity.CreatorAddress),
 				},
 			)
 			for _, annotation := range strAnnotations {
@@ -685,7 +697,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			for _, annotation := range numericAnnotations {
 				value := uint64(annotation.Value)
-				if annotation.AnnotationKey == "$sequence" {
+				if annotation.AnnotationKey == arkivtype.SequenceAttributeKey {
 					value = getSequence(
 						blockWal.BlockInfo.Number,
 						op.ChangeOwner.TransactionIndex,
@@ -707,7 +719,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 
 			for _, annotation := range stringAnnotations {
 				value := annotation.Value
-				if annotation.AnnotationKey == "$owner" {
+				if annotation.AnnotationKey == arkivtype.OwnerAttributeKey {
 					value = op.ChangeOwner.Owner.Hex()
 				}
 				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
@@ -776,13 +788,13 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 			for _, annotation := range numericAnnotations {
 				value := uint64(annotation.Value)
 				switch annotation.AnnotationKey {
-				case "$sequence":
+				case arkivtype.SequenceAttributeKey:
 					value = getSequence(
 						blockWal.BlockInfo.Number,
 						op.Extend.TransactionIndex,
 						op.Extend.OperationIndex,
 					)
-				case "$expiration":
+				case arkivtype.ExpirationAttributeKey:
 					value = op.Extend.NewExpiresAt
 				}
 				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
@@ -1017,7 +1029,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 
 			// Convert string annotations
 			for _, row := range stringAnnotRows {
-				if row.AnnotationKey != "$key" && row.AnnotationKey != "$owner" {
+				if !strings.HasPrefix(row.AnnotationKey, "$") {
 					r.StringAttributes = append(r.StringAttributes, entity.StringAnnotation{
 						Key:   row.AnnotationKey,
 						Value: row.Value,
@@ -1027,7 +1039,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 
 			// Convert numeric annotations
 			for _, row := range numericAnnotRows {
-				if row.AnnotationKey != "$expiration" && row.AnnotationKey != "$sequence" {
+				if !strings.HasPrefix(row.AnnotationKey, "$") {
 					r.NumericAttributes = append(r.NumericAttributes, entity.NumericAnnotation{
 						Key:   row.AnnotationKey,
 						Value: uint64(row.Value),

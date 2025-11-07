@@ -9,7 +9,13 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
-var allColumns []string = []string{
+var KeyAttributeKey = "$key"
+var CreatorAttributeKey = "$creator"
+var OwnerAttributeKey = "$owner"
+var ExpirationAttributeKey = "$expiration"
+var SequenceAttributeKey = "$sequence"
+
+var allColumns = []string{
 	"key",
 	"payload",
 	"content_type",
@@ -27,7 +33,7 @@ type columnEntry struct {
 }
 
 // allColumnsMapping is used to verify user-supplied columns to protect against SQL injection
-var allColumnsMapping map[string]columnEntry = make(map[string]columnEntry)
+var allColumnsMapping = make(map[string]columnEntry)
 
 func init() {
 	for i, column := range allColumns {

@@ -195,8 +195,14 @@ func (q *Queries) DeleteStringAnnotationsUntilBlock(ctx context.Context, block i
 }
 
 const getEntity = `-- name: GetEntity :one
-SELECT e.expires_at, e.payload, e.owner_address, e.created_at_block, e.last_modified_at_block
+SELECT e.expires_at, e.payload, e.owner_address, a.value AS creator_address , e.created_at_block
 FROM entities AS e
+INNER JOIN string_annotations AS a
+ON e.key = a.entity_key
+AND e.last_modified_at_block = a.entity_last_modified_at_block
+AND e.transaction_index_in_block = a.entity_transaction_index_in_block
+AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
+AND a.annotation_key = "$creator"
 WHERE e.key = ?1
 AND e.deleted = FALSE
 AND e.last_modified_at_block <= ?2
@@ -229,11 +235,11 @@ type GetEntityParams struct {
 }
 
 type GetEntityRow struct {
-	ExpiresAt           int64
-	Payload             []byte
-	OwnerAddress        string
-	CreatedAtBlock      int64
-	LastModifiedAtBlock int64
+	ExpiresAt      int64
+	Payload        []byte
+	OwnerAddress   string
+	CreatorAddress string
+	CreatedAtBlock int64
 }
 
 func (q *Queries) GetEntity(ctx context.Context, arg GetEntityParams) (GetEntityRow, error) {
@@ -243,8 +249,8 @@ func (q *Queries) GetEntity(ctx context.Context, arg GetEntityParams) (GetEntity
 		&i.ExpiresAt,
 		&i.Payload,
 		&i.OwnerAddress,
+		&i.CreatorAddress,
 		&i.CreatedAtBlock,
-		&i.LastModifiedAtBlock,
 	)
 	return i, err
 }

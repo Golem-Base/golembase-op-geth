@@ -33,8 +33,14 @@ INSERT INTO numeric_annotations (
 );
 
 -- name: GetEntity :one
-SELECT e.expires_at, e.payload, e.owner_address, e.created_at_block, e.last_modified_at_block
+SELECT e.expires_at, e.payload, e.owner_address, a.value AS creator_address , e.created_at_block
 FROM entities AS e
+INNER JOIN string_annotations AS a
+ON e.key = a.entity_key
+AND e.last_modified_at_block = a.entity_last_modified_at_block
+AND e.transaction_index_in_block = a.entity_transaction_index_in_block
+AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
+AND a.annotation_key = "$creator"
 WHERE e.key = sqlc.arg(key)
 AND e.deleted = FALSE
 AND e.last_modified_at_block <= sqlc.arg(block)

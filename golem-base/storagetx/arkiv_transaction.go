@@ -240,6 +240,7 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 		ap := &entity.EntityMetaData{
 			ContentType:         contentType,
 			Owner:               sender,
+			Creator:             sender,
 			ExpiresAtBlock:      blockNumber + create.BTL,
 			StringAnnotations:   create.StringAnnotations,
 			NumericAnnotations:  create.NumericAnnotations,
@@ -329,6 +330,7 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 			StringAnnotations:   update.StringAnnotations,
 			NumericAnnotations:  update.NumericAnnotations,
 			Owner:               oldMetaData.Owner,
+			Creator:             oldMetaData.Creator,
 			CreatedAtBlock:      oldMetaData.CreatedAtBlock,
 			LastModifiedAtBlock: blockNumber,
 			OperationIndex:      uint64(opIx),

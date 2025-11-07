@@ -7,16 +7,16 @@ import (
 //go:generate go run ../../../rlp/rlpgen -type EntityMetaData -out gen_entity_meta_data_rlp.go
 
 // EntityMetaData represents information about an entity that is currently active in the storage layer.
-// This is what stored in the state.
+// This is what is stored in the state.
 // It contains a BTL (number of blocks) and a list of annotations.
 // The Key of the entity is derived from the payload content and the transaction hash where the entity was created.
-
 type EntityMetaData struct {
 	ContentType         string              `json:"contentType"`
 	ExpiresAtBlock      uint64              `json:"expiresAtBlock"`
 	StringAnnotations   []StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations  []NumericAnnotation `json:"numericAnnotations"`
 	Owner               common.Address      `json:"owner"`
+	Creator             common.Address      `json:"creator"`
 	CreatedAtBlock      uint64              `json:"createdAtBlock"`
 	LastModifiedAtBlock uint64              `json:"lastModifiedAtBlock"`
 	TransactionIndex    uint64              `json:"transactionIndex"`
