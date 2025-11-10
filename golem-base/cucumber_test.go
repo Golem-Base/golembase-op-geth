@@ -2473,7 +2473,7 @@ func iSubmitAStorageTransactionWithUnparseableData(ctx context.Context) error {
 		ctx,
 		big.NewInt(1),
 		address.ArkivProcessorAddress,
-		[]byte("unparseable data"),
+		compression.MustBrotliCompress([]byte("unparseable data")),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to transfer: %w", err)
@@ -2802,8 +2802,8 @@ func theTransactionSubmissionShouldFail(ctx context.Context) error {
 		return fmt.Errorf("expected transaction submission to fail, but it succeeded")
 	}
 
-	if !strings.Contains(w.LastError.Error(), "golem base storage transaction data is empty") {
-		return fmt.Errorf("expected transaction submission to fail with 'golem base storage transaction data is empty', but got: %s", w.LastError.Error())
+	if !strings.Contains(w.LastError.Error(), "arkiv transaction data is empty") {
+		return fmt.Errorf("expected transaction submission to fail with 'arkiv transaction data is empty', but got: %s", w.LastError.Error())
 	}
 
 	return nil
