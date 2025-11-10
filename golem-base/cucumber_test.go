@@ -232,6 +232,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I submit an arkiv transaction with empty content and one annotation$`, iSubmitAnArkivTransactionWithEmptyContentAndOneAnnotation)
 	ctx.Step(`^the transaction should succeed$`, theTransactionShouldSucceed)
 
+	ctx.Step(`^the transaction should be rejected$`, theTransactionShouldBeRejected)
+
 }
 
 func iSearchForEntitiesWithTheInvalidQuery(ctx context.Context, query *godog.DocString) error {
@@ -2475,9 +2477,7 @@ func iSubmitAStorageTransactionWithUnparseableData(ctx context.Context) error {
 		address.ArkivProcessorAddress,
 		compression.MustBrotliCompress([]byte("unparseable data")),
 	)
-	if err != nil {
-		return fmt.Errorf("failed to transfer: %w", err)
-	}
+	w.LastError = err
 	return nil
 }
 
@@ -2849,6 +2849,19 @@ func theTransactionShouldSucceed(ctx context.Context) error {
 
 	if w.LastReceipt.Status == types.ReceiptStatusFailed {
 		return fmt.Errorf("transaction failed")
+	}
+
+	return nil
+}
+
+func theTransactionShouldBeRejected(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	if w.LastError == nil {
+		return fmt.Errorf("no error found")
+	}
+
+	if !strings.Contains(w.LastError.Error(), "failed to unpack arkiv transaction: failed to decode storage transaction") {
+		return fmt.Errorf("expected error to contain 'failed to unpack arkiv transaction: failed to decode storage transaction', but got: %s", w.LastError.Error())
 	}
 
 	return nil
