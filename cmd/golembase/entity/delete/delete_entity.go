@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
@@ -70,7 +71,7 @@ func Delete() *cli.Command {
 			}
 
 			// Create the storage transaction
-			storageTx := &storagetx.StorageTransaction{
+			storageTx := &storagetx.ArkivTransaction{
 				Delete: []common.Hash{
 					common.HexToHash(c.String("key")),
 				},
@@ -119,7 +120,7 @@ func Delete() *cli.Command {
 			}
 
 			for _, log := range receipt.Logs {
-				if log.Topics[0] == storagetx.GolemBaseStorageEntityDeleted {
+				if log.Topics[0] == arkivlogs.ArkivEntityDeleted {
 					fmt.Println("Entity deleted", "key", log.Topics[1])
 				}
 			}

@@ -94,11 +94,12 @@ func (w *World) updateEntity(
 	}
 
 	// Create a StorageTransaction with a single Create operation
-	storageTx := &storagetx.StorageTransaction{
-		Update: []storagetx.Update{
+	storageTx := &storagetx.ArkivTransaction{
+		Update: []storagetx.ArkivUpdate{
 			{
 				EntityKey:          key,
 				BTL:                btl,
+				ContentType:        "application/octet-stream",
 				Payload:            payload,
 				StringAnnotations:  stringAnnotations,
 				NumericAnnotations: numericAnnotations,

@@ -35,10 +35,11 @@ func (w *World) CreateEntity(
 	}
 
 	// Create a StorageTransaction with a single Create operation
-	storageTx := &storagetx.StorageTransaction{
-		Create: []storagetx.Create{
+	storageTx := &storagetx.ArkivTransaction{
+		Create: []storagetx.ArkivCreate{
 			{
 				BTL:                btl,
+				ContentType:        "application/octet-stream",
 				Payload:            payload,
 				StringAnnotations:  stringAnnotations,
 				NumericAnnotations: numericAnnotations,

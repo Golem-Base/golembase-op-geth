@@ -2101,11 +2101,12 @@ func theTraceShouldBeEmpty(ctx context.Context) error {
 
 func iHaveAStorageTransactionWithCreateUpdateDeleteAndExtendOperations(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
-		Create: []storagetx.Create{
+	w.CurrentStorageTransaction = &storagetx.ArkivTransaction{
+		Create: []storagetx.ArkivCreate{
 			{
-				BTL:     100,
-				Payload: []byte("test payload"),
+				BTL:         100,
+				ContentType: "application/octet-stream",
+				Payload:     []byte("test payload"),
 				StringAnnotations: []entity.StringAnnotation{
 					{Key: "type", Value: "test"},
 				},
@@ -2114,11 +2115,12 @@ func iHaveAStorageTransactionWithCreateUpdateDeleteAndExtendOperations(ctx conte
 				},
 			},
 		},
-		Update: []storagetx.Update{
+		Update: []storagetx.ArkivUpdate{
 			{
-				EntityKey: common.HexToHash("0x1234567890"),
-				BTL:       200,
-				Payload:   []byte("updated payload"),
+				EntityKey:   common.HexToHash("0x1234567890"),
+				BTL:         200,
+				ContentType: "application/octet-stream",
+				Payload:     []byte("updated payload"),
 				StringAnnotations: []entity.StringAnnotation{
 					{Key: "status", Value: "updated"},
 				},
@@ -2182,11 +2184,12 @@ func theValidationShouldFail(ctx context.Context) error {
 
 func iHaveAStorageTransactionWithACreateOperation(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
-		Create: []storagetx.Create{
+	w.CurrentStorageTransaction = &storagetx.ArkivTransaction{
+		Create: []storagetx.ArkivCreate{
 			{
-				BTL:     100,
-				Payload: []byte("test payload"),
+				BTL:         100,
+				ContentType: "application/octet-stream",
+				Payload:     []byte("test payload"),
 			},
 		},
 	}
@@ -2215,12 +2218,13 @@ func theErrorShouldMention(ctx context.Context, expectedText string) error {
 
 func iHaveAStorageTransactionWithAnUpdateOperation(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
-		Update: []storagetx.Update{
+	w.CurrentStorageTransaction = &storagetx.ArkivTransaction{
+		Update: []storagetx.ArkivUpdate{
 			{
-				EntityKey: common.HexToHash("0x1234567890"),
-				BTL:       200,
-				Payload:   []byte("updated payload"),
+				EntityKey:   common.HexToHash("0x1234567890"),
+				BTL:         200,
+				ContentType: "application/octet-stream",
+				Payload:     []byte("updated payload"),
 			},
 		},
 	}
@@ -2238,7 +2242,7 @@ func theUpdateOperationHasBTLSetTo(ctx context.Context, btl int) error {
 
 func iHaveAStorageTransactionWithAnExtendOperation(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
+	w.CurrentStorageTransaction = &storagetx.ArkivTransaction{
 		Extend: []storagetx.ExtendBTL{
 			{
 				EntityKey:      common.HexToHash("0x1234567890"),
@@ -2379,21 +2383,23 @@ func theCreateOperationHasAStringAnnotationWithKeyStartingWithANumber(ctx contex
 
 func iHaveAnEmptyStorageTransaction(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-	w.CurrentStorageTransaction = &storagetx.StorageTransaction{}
+	w.CurrentStorageTransaction = &storagetx.ArkivTransaction{}
 	return nil
 }
 
 func iHaveAStorageTransactionWithMultipleCreateOperations(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-	w.CurrentStorageTransaction = &storagetx.StorageTransaction{
-		Create: []storagetx.Create{
+	w.CurrentStorageTransaction = &storagetx.ArkivTransaction{
+		Create: []storagetx.ArkivCreate{
 			{
-				BTL:     100,
-				Payload: []byte("valid payload"),
+				BTL:         100,
+				ContentType: "application/octet-stream",
+				Payload:     []byte("valid payload"),
 			},
 			{
-				BTL:     200,
-				Payload: []byte("another valid payload"),
+				BTL:         200,
+				ContentType: "application/octet-stream",
+				Payload:     []byte("another valid payload"),
 			},
 		},
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -87,12 +88,13 @@ func Update() *cli.Command {
 			}
 
 			// Create the storage transaction
-			storageTx := &storagetx.StorageTransaction{
-				Update: []storagetx.Update{
+			storageTx := &storagetx.ArkivTransaction{
+				Update: []storagetx.ArkivUpdate{
 					{
-						EntityKey: common.HexToHash(c.String("key")),
-						BTL:       cfg.btl,
-						Payload:   []byte(c.String("data")),
+						EntityKey:   common.HexToHash(c.String("key")),
+						BTL:         cfg.btl,
+						Payload:     []byte(c.String("data")),
+						ContentType: "application/octet-stream",
 						StringAnnotations: []entity.StringAnnotation{
 							{
 								Key:   "foo",
@@ -146,7 +148,7 @@ func Update() *cli.Command {
 			}
 
 			for _, log := range receipt.Logs {
-				if log.Topics[0] == storagetx.GolemBaseStorageEntityUpdated {
+				if log.Topics[0] == arkivlogs.ArkivEntityUpdated {
 					fmt.Println("Entity updated", "key", log.Topics[1])
 				}
 			}

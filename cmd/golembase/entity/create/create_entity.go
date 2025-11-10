@@ -158,12 +158,12 @@ func Create() *cli.Command {
 			}
 
 			// Create the storage transaction
-			storageTx := &storagetx.StorageTransaction{
-				Create: []storagetx.Create{
+			storageTx := &storagetx.ArkivTransaction{
+				Create: []storagetx.ArkivCreate{
 					{
-						BTL:     cfg.btl,
-						Payload: []byte(c.String("data")),
-
+						BTL:                cfg.btl,
+						Payload:            []byte(c.String("data")),
+						ContentType:        "application/octet-stream",
 						StringAnnotations:  strs,
 						NumericAnnotations: nums,
 					},

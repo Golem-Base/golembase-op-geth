@@ -71,7 +71,7 @@ func (w *World) deleteEntityFromAccount(
 	}
 
 	// Create a StorageTransaction with a single Create operation
-	storageTx := &storagetx.StorageTransaction{
+	storageTx := &storagetx.ArkivTransaction{
 		Delete: []common.Hash{
 			key,
 		},
