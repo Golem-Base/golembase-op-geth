@@ -2460,7 +2460,7 @@ func iSubmitAStorageTransactionWithNoPlayload(ctx context.Context) error {
 	_, err := w.SendTxWithData(
 		ctx,
 		big.NewInt(1),
-		address.GolemBaseStorageProcessorAddress,
+		address.ArkivProcessorAddress,
 		nil,
 	)
 	w.LastError = err
@@ -2472,7 +2472,7 @@ func iSubmitAStorageTransactionWithUnparseableData(ctx context.Context) error {
 	_, err := w.SendTxWithData(
 		ctx,
 		big.NewInt(1),
-		address.GolemBaseStorageProcessorAddress,
+		address.ArkivProcessorAddress,
 		[]byte("unparseable data"),
 	)
 	if err != nil {

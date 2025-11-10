@@ -89,7 +89,7 @@ func Delete() *cli.Command {
 				Nonce:     nonce,
 				Gas:       1_000_000,
 				Data:      txData,
-				To:        &address.GolemBaseStorageProcessorAddress,
+				To:        &address.ArkivProcessorAddress,
 				GasTipCap: big.NewInt(1e9), // 1 Gwei
 				GasFeeCap: big.NewInt(5e9), // 5 Gwei
 			}

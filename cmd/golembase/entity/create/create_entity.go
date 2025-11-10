@@ -179,7 +179,7 @@ func Create() *cli.Command {
 			// Dynamically determine gas, gas tip cap, and gas fee cap
 			msg := ethereum.CallMsg{
 				From:     userAccount.Address,
-				To:       &address.GolemBaseStorageProcessorAddress,
+				To:       &address.ArkivProcessorAddress,
 				Gas:      0, // let EstimateGas determine
 				GasPrice: nil,
 				Value:    nil,
@@ -207,7 +207,7 @@ func Create() *cli.Command {
 				Nonce:     nonce,
 				Gas:       gasLimit,
 				Data:      txData,
-				To:        &address.GolemBaseStorageProcessorAddress,
+				To:        &address.ArkivProcessorAddress,
 				GasTipCap: gasTipCap,
 				GasFeeCap: gasFeeCap,
 			}
