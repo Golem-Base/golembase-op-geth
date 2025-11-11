@@ -8,6 +8,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/address"
@@ -456,6 +457,17 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 				BlockNumber: blockNumber,
 			},
 		)
+	}
+
+	intValue, _ := uint256.FromBig(value)
+
+	if requiredFee.Cmp(intValue) > 0 {
+		return nil, fmt.Errorf("required fee %s is greater than value %s", requiredFee.String(), value.String())
+	}
+
+	delta := intValue.Sub(intValue, requiredFee)
+	if delta.Sign() > 0 {
+		access.AddBalance(sender, delta, tracing.BalanceTransactionFeeRefund)
 	}
 
 	return logs, nil
