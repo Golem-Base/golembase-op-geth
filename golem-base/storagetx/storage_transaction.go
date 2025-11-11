@@ -2,6 +2,7 @@ package storagetx
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -104,7 +105,7 @@ func (tx *StorageTransaction) Validate() error {
 	return tx.ConvertToArkiv().Validate()
 }
 
-func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
+func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess, value *big.Int) ([]*types.Log, error) {
 	tx := &StorageTransaction{}
 	err := rlp.DecodeBytes(d, tx)
 	if err != nil {
@@ -113,7 +114,7 @@ func ExecuteTransaction(d []byte, blockNumber uint64, txHash common.Hash, txIx i
 
 	st := storageaccounting.NewSlotUsageCounter(access)
 
-	logs, err := tx.ConvertToArkiv().Run(blockNumber, txHash, txIx, sender, st)
+	logs, err := tx.ConvertToArkiv().Run(blockNumber, txHash, txIx, sender, st, value)
 	if err != nil {
 		log.Error("Failed to run storage transaction", "error", err)
 		return nil, fmt.Errorf("failed to run storage transaction: %w", err)

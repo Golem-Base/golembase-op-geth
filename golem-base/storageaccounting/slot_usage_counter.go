@@ -2,6 +2,7 @@ package storageaccounting
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
@@ -65,4 +66,12 @@ func (c *SlotUsageCounter) UpdateUsedSlotsForGolemBase() {
 
 	c.stateAccess.SetState(address.ArkivProcessorAddress, UsedSlotsKey, storedSlotsCounter.Bytes32())
 	counter.SetUint64(0)
+}
+
+func (c *SlotUsageCounter) AddBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
+	return c.stateAccess.AddBalance(addr, amount, reason)
+}
+
+func (c *SlotUsageCounter) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
+	return c.stateAccess.SubBalance(addr, amount, reason)
 }

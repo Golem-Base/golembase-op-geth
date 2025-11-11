@@ -159,6 +159,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 				txIx,
 				msg.From,
 				statedb,
+				msg.Value,
 			)
 
 			status := types.ReceiptStatusSuccessful
@@ -209,6 +210,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 				txIx,
 				msg.From,
 				statedb,
+				msg.Value,
 			)
 
 			status := types.ReceiptStatusSuccessful

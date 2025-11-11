@@ -166,7 +166,7 @@ type ArkivChangeOwner struct {
 	NewOwner  common.Address `json:"newOwner"`
 }
 
-func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {
+func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access *storageaccounting.SlotUsageCounter, value *big.Int) (_ []*types.Log, err error) {
 
 	defer func() {
 		if err != nil {
@@ -470,7 +470,7 @@ func UnpackArkivTransaction(compressed []byte) (*ArkivTransaction, error) {
 	return tx, nil
 }
 
-func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) ([]*types.Log, error) {
+func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess, value *big.Int) ([]*types.Log, error) {
 
 	tx, err := UnpackArkivTransaction(compressed)
 	if err != nil {
@@ -479,7 +479,7 @@ func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash commo
 
 	st := storageaccounting.NewSlotUsageCounter(access)
 
-	logs, err := tx.Run(blockNumber, txHash, txIx, sender, st)
+	logs, err := tx.Run(blockNumber, txHash, txIx, sender, st, value)
 	if err != nil {
 		log.Error("Failed to run storage transaction", "error", err)
 		return nil, fmt.Errorf("failed to run storage transaction: %w", err)
