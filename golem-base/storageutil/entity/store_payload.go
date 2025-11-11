@@ -9,8 +9,9 @@ import (
 
 var PayloadSalt = []byte("arkivPayload")
 
-func StorePayload(access StateAccess, key common.Hash, payload []byte) {
+func StorePayload(access StateAccess, key common.Hash, payload []byte) uint64 {
 	compressed := compression.MustBrotliCompress(payload)
 	hash := crypto.Keccak256Hash(PayloadSalt, key[:])
 	stateblob.SetBlob(access, hash, compressed)
+	return uint64(len(payload))
 }
