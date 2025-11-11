@@ -2830,7 +2830,7 @@ func iSubmitAnArkivTransactionWithEmptyContentAndOneAnnotation(ctx context.Conte
 
 	_, err = w.SendTxWithData(
 		ctx,
-		big.NewInt(0),
+		big.NewInt(100e9), // 100 gwei
 		address.ArkivProcessorAddress,
 		compression.MustBrotliCompress(txData),
 	)
