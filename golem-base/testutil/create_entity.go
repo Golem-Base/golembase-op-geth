@@ -62,7 +62,7 @@ func (w *World) CreateEntity(
 		GasFeeCap:  big.NewInt(5e9), // 5 Gwei
 		Gas:        2_800_000,
 		To:         &address.ArkivProcessorAddress,
-		Value:      big.NewInt(0), // No ETH transfer needed
+		Value:      big.NewInt(100e9), // 100 gwei
 		Data:       compression.MustBrotliCompress(rlpData),
 		AccessList: types.AccessList{},
 	}
