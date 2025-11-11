@@ -30,10 +30,10 @@ type IncludeData struct {
 }
 
 type QueryOptions struct {
-	AtBlock        *uint64                       `json:"atBlock"`
+	AtBlock        *hexutil.Uint64               `json:"atBlock"`
 	IncludeData    *IncludeData                  `json:"includeData"`
 	OrderBy        []arkivtype.OrderByAnnotation `json:"orderBy"`
-	ResultsPerPage uint64                        `json:"resultsPerPage"`
+	ResultsPerPage hexutil.Uint64                `json:"resultsPerPage"`
 	Cursor         string                        `json:"cursor"`
 }
 
@@ -62,18 +62,28 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 			IncludeAnnotations: true,
 		}, nil
 	case options.IncludeData == nil:
+		var atBlock *uint64
+		if options.AtBlock != nil {
+			val := uint64(*options.AtBlock)
+			atBlock = &val
+		}
 		return &internalQueryOptions{
 			Columns:            defaultColumns,
 			IncludeAnnotations: true,
 			OrderBy:            options.OrderBy,
-			AtBlock:            options.AtBlock,
+			AtBlock:            atBlock,
 			Cursor:             options.Cursor,
 		}, nil
 	default:
+		var atBlock *uint64
+		if options.AtBlock != nil {
+			val := uint64(*options.AtBlock)
+			atBlock = &val
+		}
 		iq := internalQueryOptions{
 			Columns:                     map[string]string{},
 			OrderBy:                     options.OrderBy,
-			AtBlock:                     options.AtBlock,
+			AtBlock:                     atBlock,
 			Cursor:                      options.Cursor,
 			IncludeAnnotations:          options.IncludeData.Attributes,
 			IncludeSyntheticAnnotations: options.IncludeData.SyntheticAttributes,
@@ -146,6 +156,9 @@ func (api *arkivAPI) Query(
 ) (*arkivtype.QueryResponse, error) {
 
 	log.Info("query options", "options", op)
+	if op != nil && op.IncludeData != nil {
+		log.Info("include data", "value", op.IncludeData)
+	}
 
 	expr, err := query.Parse(req)
 	if err != nil {
@@ -188,7 +201,7 @@ func (api *arkivAPI) Query(
 	}
 
 	response := &arkivtype.QueryResponse{
-		BlockNumber: block,
+		BlockNumber: hexutil.Uint64(block),
 		Data:        make([]json.RawMessage, 0),
 	}
 
@@ -248,7 +261,7 @@ func (api *arkivAPI) Query(
 			if newLen > maxResponseSize {
 				cursor, err := queryOptions.EncodeCursor(&cursor)
 				if err != nil {
-					return fmt.Errorf("could not encode offset: %w", err)
+					return fmt.Errorf("failed to marshal cursor: %w", err)
 				}
 				response.Cursor = &cursor
 				return sqlstore.ErrStopIteration
@@ -258,7 +271,7 @@ func (api *arkivAPI) Query(
 			if maxResultsPerPage > 0 && len(response.Data) >= maxResultsPerPage {
 				cursor, err := queryOptions.EncodeCursor(&cursor)
 				if err != nil {
-					return fmt.Errorf("could not encode offset: %w", err)
+					return fmt.Errorf("failed to marshal cursor: %w", err)
 				}
 				response.Cursor = &cursor
 				return sqlstore.ErrStopIteration

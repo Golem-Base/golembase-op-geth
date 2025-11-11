@@ -16,6 +16,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/arkiv/compression"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore/sqlitegolem"
@@ -839,7 +840,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 	}
 
 	// Delete blocks that are older than the historicBlocksCount
-	if e.historicBlocksCount > 0 && blockWal.BlockInfo.Number > e.historicBlocksCount {
+	if e.historicBlocksCount > 0 && uint64(blockWal.BlockInfo.Number) > e.historicBlocksCount {
 		deleteUntilBlock := int64(blockWal.BlockInfo.Number) - int64(e.historicBlocksCount)
 		txDB.DeleteStringAnnotationsUntilBlock(ctx, deleteUntilBlock)
 		txDB.DeleteNumericAnnotationsUntilBlock(ctx, deleteUntilBlock)
@@ -906,36 +907,47 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		for _, column := range options.AllColumns() {
 			switch column {
 			case "key":
-				dest = append(dest, &key)
-				columns[column] = &key
+				var val any = &key
+				dest = append(dest, val)
+				columns[column] = val
 			case "expires_at":
-				dest = append(dest, &expiresAt)
-				columns[column] = &expiresAt
+				var val any = &expiresAt
+				dest = append(dest, val)
+				columns[column] = val
 			case "payload":
-				dest = append(dest, &payload)
-				columns[column] = &payload
+				var val any = &payload
+				dest = append(dest, val)
+				columns[column] = val
 			case "content_type":
-				dest = append(dest, &contentType)
-				columns[column] = &contentType
+				var val any = &contentType
+				dest = append(dest, val)
+				columns[column] = val
 			case "owner_address":
-				dest = append(dest, &owner)
-				columns[column] = &owner
+				var val any = &owner
+				dest = append(dest, val)
+				columns[column] = val
 			case "created_at_block":
-				dest = append(dest, &createdAtBlock)
-				columns[column] = &createdAtBlock
+				var val any = &createdAtBlock
+				dest = append(dest, val)
+				columns[column] = val
 			case "last_modified_at_block":
-				dest = append(dest, &lastModifiedAtBlock)
-				columns[column] = &lastModifiedAtBlock
+				var val any = &lastModifiedAtBlock
+				dest = append(dest, val)
+				columns[column] = val
 			case "transaction_index_in_block":
-				dest = append(dest, &transactionIndexInBlock)
-				columns[column] = &transactionIndexInBlock
+				var val any = &transactionIndexInBlock
+				dest = append(dest, val)
+				columns[column] = val
 			case "operation_index_in_transaction":
-				dest = append(dest, &operationIndexInTransaction)
-				columns[column] = &operationIndexInTransaction
+				var val any = &operationIndexInTransaction
+				dest = append(dest, val)
+				columns[column] = val
 			default:
-				var value any
-				dest = append(dest, &value)
-				columns[column] = &value
+				// TODO can we somehow get type information on the columns here so that we
+				// can create a pointer of the right type immediately?
+				var val any
+				dest = append(dest, &val)
+				columns[column] = &val
 			}
 		}
 
@@ -965,15 +977,25 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			address := common.HexToAddress(*owner)
 			ownerAddress = &address
 		}
+		var expiresAtPtr *hexutil.Uint64
+		if expiresAt != nil {
+			val := hexutil.Uint64(*expiresAt)
+			expiresAtPtr = &val
+		}
+		var createdAtBlockPtr *hexutil.Uint64
+		if createdAtBlock != nil {
+			val := hexutil.Uint64(*createdAtBlock)
+			createdAtBlockPtr = &val
+		}
 
 		r := arkivtype.EntityData{
-			ExpiresAt:         expiresAt,
+			ExpiresAt:         expiresAtPtr,
 			Value:             value,
 			ContentType:       contentType,
 			Owner:             ownerAddress,
-			CreatedAtBlock:    createdAtBlock,
-			StringAttributes:  []entity.StringAnnotation{},
-			NumericAttributes: []entity.NumericAnnotation{},
+			CreatedAtBlock:    createdAtBlockPtr,
+			StringAttributes:  []arkivtype.StringAnnotation{},
+			NumericAttributes: []arkivtype.NumericAnnotation{},
 		}
 
 		_, wantsKey := options.Columns["key"]
@@ -983,16 +1005,19 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		// Make sure to only include these properties when they were actually requested
 		// They are always included in the query, so we need to explicitly check the query options
 		_, wantsLastModified := options.Columns["last_modified_at_block"]
-		if wantsLastModified {
-			r.LastModifiedAtBlock = lastModifiedAtBlock
+		if wantsLastModified && lastModifiedAtBlock != nil {
+			val := hexutil.Uint64(*lastModifiedAtBlock)
+			r.LastModifiedAtBlock = &val
 		}
 		_, wantsTxIx := options.Columns["transaction_index_in_block"]
-		if wantsTxIx {
-			r.TransactionIndexInBlock = transactionIndexInBlock
+		if wantsTxIx && transactionIndexInBlock != nil {
+			val := hexutil.Uint64(*transactionIndexInBlock)
+			r.TransactionIndexInBlock = &val
 		}
 		_, wantsOpIx := options.Columns["operation_index_in_transaction"]
-		if wantsOpIx {
-			r.OperationIndexInTransaction = operationIndexInTransaction
+		if wantsOpIx && operationIndexInTransaction != nil {
+			val := hexutil.Uint64(*operationIndexInTransaction)
+			r.OperationIndexInTransaction = &val
 		}
 
 		cursor := arkivtype.Cursor{
@@ -1030,7 +1055,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			// Convert string annotations
 			for _, row := range stringAnnotRows {
 				if options.IncludeSyntheticAnnotations || !strings.HasPrefix(row.AnnotationKey, "$") {
-					r.StringAttributes = append(r.StringAttributes, entity.StringAnnotation{
+					r.StringAttributes = append(r.StringAttributes, arkivtype.StringAnnotation{
 						Key:   row.AnnotationKey,
 						Value: row.Value,
 					})
@@ -1040,9 +1065,9 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			// Convert numeric annotations
 			for _, row := range numericAnnotRows {
 				if options.IncludeSyntheticAnnotations || !strings.HasPrefix(row.AnnotationKey, "$") {
-					r.NumericAttributes = append(r.NumericAttributes, entity.NumericAnnotation{
+					r.NumericAttributes = append(r.NumericAttributes, arkivtype.NumericAnnotation{
 						Key:   row.AnnotationKey,
-						Value: uint64(row.Value),
+						Value: hexutil.Uint64(row.Value),
 					})
 				}
 			}

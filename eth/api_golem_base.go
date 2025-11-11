@@ -111,11 +111,29 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 		return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
+	// Convert string annotations
+	strAttrs := make([]entity.StringAnnotation, 0, len(metadata.StringAttributes))
+	for _, a := range metadata.StringAttributes {
+		strAttrs = append(strAttrs, entity.StringAnnotation{
+			Key:   a.Key,
+			Value: a.Value,
+		})
+	}
+
+	// Convert numeric annotations
+	numAttrs := make([]entity.NumericAnnotation, 0, len(metadata.NumericAttributes))
+	for _, a := range metadata.NumericAttributes {
+		numAttrs = append(numAttrs, entity.NumericAnnotation{
+			Key:   a.Key,
+			Value: uint64(a.Value),
+		})
+	}
+
 	return &entity.EntityMetaData{
-		ExpiresAtBlock:     *metadata.ExpiresAt,
+		ExpiresAtBlock:     uint64(*metadata.ExpiresAt),
 		Owner:              *metadata.Owner,
-		StringAnnotations:  metadata.StringAttributes,
-		NumericAnnotations: metadata.NumericAttributes,
+		StringAnnotations:  strAttrs,
+		NumericAnnotations: numAttrs,
 	}, nil
 }
 

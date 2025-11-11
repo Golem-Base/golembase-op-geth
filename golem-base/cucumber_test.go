@@ -1152,7 +1152,7 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 		return fmt.Errorf("failed to get block number: %w", err)
 	}
 
-	atBlock := block - 1
+	atBlock := hexutil.Uint64(block - 1)
 	err = rpcClient.CallContext(
 		ctx,
 		&res,
