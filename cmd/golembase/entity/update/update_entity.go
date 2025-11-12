@@ -7,6 +7,7 @@ import (
 	"os/signal"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/arkiv/compression"
 	"github.com/ethereum/go-ethereum/cmd/golembase/account/pkg/useraccount"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -111,12 +112,17 @@ func Update() *cli.Command {
 				return fmt.Errorf("failed to encode storage tx: %w", err)
 			}
 
+			compressedTxData, err := compression.BrotliCompress(txData)
+			if err != nil {
+				return fmt.Errorf("failed to compress tx data: %w", err)
+			}
+
 			// Create the GolemBaseUpdateStorageTx
 			tx := &types.DynamicFeeTx{
 				ChainID:   chainID,
 				Nonce:     nonce,
 				Gas:       1_000_000,
-				Data:      txData,
+				Data:      compressedTxData,
 				To:        &address.ArkivProcessorAddress,
 				GasTipCap: big.NewInt(1e9), // 1 Gwei
 				GasFeeCap: big.NewInt(5e9), // 5 Gwei

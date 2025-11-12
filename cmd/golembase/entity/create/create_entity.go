@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/arkiv/compression"
 	"github.com/ethereum/go-ethereum/cmd/golembase/account/pkg/useraccount"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -176,6 +177,11 @@ func Create() *cli.Command {
 				return fmt.Errorf("failed to encode storage tx: %w", err)
 			}
 
+			compressedTxData, err := compression.BrotliCompress(txData)
+			if err != nil {
+				return fmt.Errorf("failed to compress tx data: %w", err)
+			}
+
 			// Dynamically determine gas, gas tip cap, and gas fee cap
 			msg := ethereum.CallMsg{
 				From:     userAccount.Address,
@@ -183,7 +189,7 @@ func Create() *cli.Command {
 				Gas:      0, // let EstimateGas determine
 				GasPrice: nil,
 				Value:    nil,
-				Data:     txData,
+				Data:     compressedTxData,
 			}
 
 			gasLimit, err := client.EstimateGas(ctx, msg)
@@ -206,7 +212,7 @@ func Create() *cli.Command {
 				ChainID:   chainID,
 				Nonce:     nonce,
 				Gas:       gasLimit,
-				Data:      txData,
+				Data:      compressedTxData,
 				To:        &address.ArkivProcessorAddress,
 				GasTipCap: gasTipCap,
 				GasFeeCap: gasFeeCap,
