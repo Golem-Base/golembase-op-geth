@@ -493,7 +493,15 @@ func UnpackArkivTransaction(compressed []byte) (*ArkivTransaction, error) {
 	return tx, nil
 }
 
-func ExecuteArkivTransaction(compressed []byte, blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess, value *big.Int) ([]*types.Log, error) {
+func ExecuteArkivTransaction(
+	compressed []byte,
+	blockNumber uint64,
+	txHash common.Hash,
+	txIx int,
+	sender common.Address,
+	access storageutil.StateAccess,
+	value *big.Int,
+) ([]*types.Log, error) {
 
 	tx, err := UnpackArkivTransaction(compressed)
 	if err != nil {
