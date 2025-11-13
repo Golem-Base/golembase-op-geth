@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/arkiv/compression"
 	"github.com/ethereum/go-ethereum/common"
@@ -24,7 +25,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const entitiesSchemaVersion = uint64(4)
+const entitiesSchemaVersion = uint64(5)
 
 type BlockWal struct {
 	BlockInfo  BlockInfo
@@ -876,6 +877,41 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 	}
 
 	txDB := sqlitegolem.New(tx)
+
+	startTime := time.Now()
+	defer func() {
+		elapsed := time.Since(startTime)
+		if elapsed.Seconds() > 1 {
+			rows, err := e.readDB.QueryContext(ctx, fmt.Sprintf("explain query plan %s", query), args...)
+			if err != nil {
+				log.Error("failed to get query plan", "err", err)
+			}
+
+			defer rows.Close()
+
+			var (
+				id      int
+				parent  int
+				notUsed int
+				detail  string
+			)
+
+			b := strings.Builder{}
+			for rows.Next() {
+				err := rows.Err()
+				if err != nil {
+					log.Error("failed to get query plan", "err", err)
+				}
+
+				err = rows.Scan(&id, &parent, &notUsed, &detail)
+				if err != nil {
+					log.Error("failed to get query plan", "err", err)
+				}
+				fmt.Fprintf(&b, "id=%d parent=%d %s\n", id, parent, detail)
+			}
+			log.Info("query plan", "plan", b.String())
+		}
+	}()
 
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {

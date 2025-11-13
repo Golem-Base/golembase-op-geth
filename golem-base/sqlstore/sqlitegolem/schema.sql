@@ -29,7 +29,16 @@ CREATE TABLE IF NOT EXISTS entities (
   )
 );
 
-CREATE INDEX IF NOT EXISTS idx_entities_owner_address ON entities(owner_address);
+CREATE INDEX IF NOT EXISTS idx_entities_owner_address
+ON entities(owner_address);
+
+CREATE INDEX IF NOT EXISTS idx_entities_key_last_modified
+ON entities(
+  key,
+  last_modified_at_block,
+  transaction_index_in_block,
+  operation_index_in_transaction
+);
 
 CREATE TABLE IF NOT EXISTS string_annotations (
   entity_key TEXT NOT NULL,
@@ -60,6 +69,15 @@ CREATE TABLE IF NOT EXISTS string_annotations (
   )
 );
 
+CREATE INDEX IF NOT EXISTS idx_string_annotations_key_last_modified
+ON string_annotations(
+  entity_key,
+  entity_last_modified_at_block,
+  entity_transaction_index_in_block,
+  entity_operation_index_in_transaction,
+  annotation_key
+);
+
 CREATE TABLE IF NOT EXISTS numeric_annotations (
   entity_key TEXT NOT NULL,
   entity_last_modified_at_block INTEGER NOT NULL,
@@ -87,4 +105,13 @@ CREATE TABLE IF NOT EXISTS numeric_annotations (
     transaction_index_in_block,
     operation_index_in_transaction
   )
+);
+
+CREATE INDEX IF NOT EXISTS idx_numeric_annotations_key_last_modified
+ON numeric_annotations(
+  entity_key,
+  entity_last_modified_at_block,
+  entity_transaction_index_in_block,
+  entity_operation_index_in_transaction,
+  annotation_key
 );

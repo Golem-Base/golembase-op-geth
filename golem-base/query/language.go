@@ -405,6 +405,7 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 			"AND NOT EXISTS (",
 			"SELECT 1",
 			"FROM entities AS e2",
+			"INDEXED BY idx_entities_key_last_modified",
 			"WHERE e2.key = e.key",
 			"AND e2.last_modified_at_block <= ?",
 			"AND (",
@@ -822,7 +823,7 @@ func (e *Paren) Evaluate(b *QueryBuilder) string {
 }
 
 func (b *QueryBuilder) createAnnotationQuery(
-	tableName string,
+	attributeType string,
 	whereClause string,
 	arguments ...any,
 ) string {
@@ -830,12 +831,22 @@ func (b *QueryBuilder) createAnnotationQuery(
 	args = append(args, b.options.AtBlock, b.options.AtBlock)
 	args = append(args, arguments...)
 
+	tableName := "string_annotations"
+	indexName := "idx_string_annotations_key_last_modified"
+	if attributeType == "numeric" {
+		tableName = "numeric_annotations"
+		indexName = "idx_numeric_annotations_key_last_modified"
+	}
+
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
-				"SELECT DISTINCT e.* FROM",
+				"SELECT e.* FROM",
 				tableName,
-				"AS a INNER JOIN entities AS e",
+				"AS a INDEXED BY",
+				indexName,
+				"INNER JOIN entities AS e",
+				"INDEXED BY idx_entities_key_last_modified",
 				"ON a.entity_key = e.key",
 				"AND a.entity_last_modified_at_block = e.last_modified_at_block",
 				"AND a.entity_transaction_index_in_block = e.transaction_index_in_block",
@@ -845,6 +856,7 @@ func (b *QueryBuilder) createAnnotationQuery(
 				"AND NOT EXISTS (",
 				"SELECT 1",
 				"FROM entities AS e2",
+				"INDEXED BY idx_entities_key_last_modified",
 				"WHERE e2.key = e.key",
 				"AND e2.last_modified_at_block <= ?",
 				"AND (",
@@ -886,7 +898,7 @@ func (e *Glob) invert() *Glob {
 func (e *Glob) Evaluate(b *QueryBuilder) string {
 	if !e.IsNot {
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -899,7 +911,7 @@ func (e *Glob) Evaluate(b *QueryBuilder) string {
 		)
 	} else {
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -928,7 +940,7 @@ func (e *LessThan) invert() *GreaterOrEqualThan {
 func (e *LessThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -941,7 +953,7 @@ func (e *LessThan) Evaluate(b *QueryBuilder) string {
 		)
 	} else {
 		return b.createAnnotationQuery(
-			"numeric_annotations",
+			"numeric",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -970,7 +982,7 @@ func (e *LessOrEqualThan) invert() *GreaterThan {
 func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -983,7 +995,7 @@ func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
 		)
 	} else {
 		return b.createAnnotationQuery(
-			"numeric_annotations",
+			"numeric",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -1012,7 +1024,7 @@ func (e *GreaterThan) invert() *LessOrEqualThan {
 func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -1025,7 +1037,7 @@ func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
 		)
 	} else {
 		return b.createAnnotationQuery(
-			"numeric_annotations",
+			"numeric",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -1054,7 +1066,7 @@ func (e *GreaterOrEqualThan) invert() *LessThan {
 func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 	if e.Value.String != nil {
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -1067,7 +1079,7 @@ func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 		)
 	} else {
 		return b.createAnnotationQuery(
-			"numeric_annotations",
+			"numeric",
 			strings.Join(
 				[]string{
 					"annotation_key = ?",
@@ -1112,7 +1124,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 		}
 
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"a.annotation_key = ?",
@@ -1133,7 +1145,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 		}
 
 		return b.createAnnotationQuery(
-			"numeric_annotations",
+			"numeric",
 			strings.Join(
 				[]string{
 					"a.annotation_key = ?",
@@ -1186,7 +1198,7 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 		}
 
 		return b.createAnnotationQuery(
-			"string_annotations",
+			"string",
 			strings.Join(
 				[]string{
 					"a.annotation_key = ?",
@@ -1214,7 +1226,7 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 		}
 
 		return b.createAnnotationQuery(
-			"numeric_annotations",
+			"numeric",
 			strings.Join(
 				[]string{
 					"a.annotation_key = ?",
