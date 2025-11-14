@@ -38,6 +38,7 @@ var (
 	errInvalidTopic           = errors.New("invalid topic(s)")
 	errFilterNotFound         = errors.New("filter not found")
 	errInvalidBlockRange      = errors.New("invalid block range params")
+	errExceedMaxBlockRange    = errors.New("exceed max block range params")
 	errUnknownBlock           = errors.New("unknown block")
 	errBlockHashWithRange     = errors.New("can't specify fromBlock/toBlock with blockHash")
 	errPendingLogsUnsupported = errors.New("pending logs are not supported")
@@ -375,6 +376,9 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		}
 		if begin >= 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
 			return nil, &history.PrunedHistoryError{}
+		}
+		if end-begin > 1000 {
+			return nil, errExceedMaxBlockRange
 		}
 		// Construct the range filter
 		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
