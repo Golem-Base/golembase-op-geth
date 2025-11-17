@@ -43,6 +43,11 @@ type ArkivTransaction struct {
 	ChangeOwner []ArkivChangeOwner `json:"changeOwner"`
 }
 
+type ExtendBTL struct {
+	EntityKey      common.Hash `json:"entityKey"`
+	NumberOfBlocks uint64      `json:"numberOfBlocks"`
+}
+
 func (tx *ArkivTransaction) Validate() error {
 
 	for i, create := range tx.Create {
@@ -164,6 +169,12 @@ type ArkivUpdate struct {
 type ArkivChangeOwner struct {
 	EntityKey common.Hash    `json:"entityKey"`
 	NewOwner  common.Address `json:"newOwner"`
+}
+
+func addressToHash(a common.Address) common.Hash {
+	h := common.Hash{}
+	copy(h[12:], a[:])
+	return h
 }
 
 func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int, sender common.Address, access storageutil.StateAccess) (_ []*types.Log, err error) {

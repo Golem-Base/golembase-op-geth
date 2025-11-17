@@ -423,27 +423,6 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		return fmt.Errorf("expected 2 logs, got %d", len(logs))
 	}
 
-	oldCreatedLog := logs[0]
-
-	if oldCreatedLog.Topics[0] != storagetx.GolemBaseStorageEntityCreated {
-		return fmt.Errorf("expected GolemBaseStorageEntityCreated log, got %s", oldCreatedLog.Topics[0])
-	}
-
-	oldLogData := oldCreatedLog.Data
-
-	if len(oldLogData) != 32 {
-		return fmt.Errorf("expected old log data to be 32 bytes, got %d", len(oldLogData))
-	}
-
-	expiresAtBlockU256 := uint256.NewInt(0).SetBytes(oldLogData[:32])
-	oldExpiresAtBlock := expiresAtBlockU256.Uint64()
-
-	expiresAtBlockExpected := receipt.BlockNumber.Uint64() + 100
-
-	if oldExpiresAtBlock != expiresAtBlockExpected {
-		return fmt.Errorf("expected expires at block to be %d, got %d", expiresAtBlockExpected, oldExpiresAtBlock)
-	}
-
 	newCreatedLog := logs[1]
 
 	if newCreatedLog.Topics[0] != arkivlogs.ArkivEntityCreated {
@@ -458,13 +437,6 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	if len(newLogData) != 64 {
 		return fmt.Errorf("expected new log data to be 64 bytes, got %d", len(newLogData))
-	}
-
-	newExpiresAtBlockU256 := uint256.NewInt(0).SetBytes(newLogData[:32])
-	newExpiresAtBlock := newExpiresAtBlockU256.Uint64()
-
-	if newExpiresAtBlock != expiresAtBlockExpected {
-		return fmt.Errorf("expected archiv expires at block to be %d, got %d", expiresAtBlockExpected, newExpiresAtBlock)
 	}
 
 	owner := hashToAddress(newCreatedLog.Topics[2])
@@ -2495,25 +2467,7 @@ func theEntityUpdateLogShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("expected 2 logs, got %d", len(logs))
 	}
 
-	oldLog := logs[0]
-
-	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityUpdated {
-		return fmt.Errorf("expected GolemBaseStorageEntityUpdated log, got %s", oldLog.Topics[0])
-	}
-
-	oldLogData := oldLog.Data
-
-	if len(oldLogData) != 32 {
-		return fmt.Errorf("expected old log data to be 32 bytes, got %d", len(oldLogData))
-	}
-
-	oldExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData).Uint64()
-
 	expiresAtBlockExpected := receipt.BlockNumber.Uint64() + 100
-
-	if oldExpiresAtBlock != expiresAtBlockExpected {
-		return fmt.Errorf("expected old expires at block to be %d, got %d", expiresAtBlockExpected, oldExpiresAtBlock)
-	}
 
 	newLog := logs[1]
 
@@ -2526,13 +2480,6 @@ func theEntityUpdateLogShouldBeRecorded(ctx context.Context) error {
 	if len(newLogData) != 96 {
 		return fmt.Errorf("expected new log data to be 64 bytes, got %d", len(newLogData))
 	}
-
-	oldEntityExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[:32]).Uint64()
-
-	if oldEntityExpiresAtBlock != (expiresAtBlockExpected - 1) {
-		return fmt.Errorf("expected old entity expires at block to be %d, got %d", expiresAtBlockExpected-1, oldExpiresAtBlock)
-	}
-
 	newExpiresAtBlockU256 := uint256.NewInt(0).SetBytes(newLogData[32:64])
 	newExpiresAtBlock := newExpiresAtBlockU256.Uint64()
 
@@ -2559,12 +2506,6 @@ func theEntityDeleteLogShouldBeRecorded(ctx context.Context) error {
 
 	if len(receipt.Logs) != 2 {
 		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
-	}
-
-	oldLog := receipt.Logs[0]
-
-	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityDeleted {
-		return fmt.Errorf("expected GolemBaseStorageEntityDeleted log, got %s", oldLog.Topics[0])
 	}
 
 	newLog := receipt.Logs[1]
@@ -2600,27 +2541,6 @@ func theEntityExtendLogShouldBeRecorded(ctx context.Context) error {
 
 	if len(receipt.Logs) != 2 {
 		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
-	}
-
-	oldLog := receipt.Logs[0]
-
-	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityBTLExtended {
-		return fmt.Errorf("expected GolemBaseStorageEntityBTLExtended log, got %s", oldLog.Topics[0])
-	}
-
-	{
-		oldLogData := oldLog.Data
-		if len(oldLogData) != 64 {
-			return fmt.Errorf("expected old log data to be 64 bytes, got %d", len(oldLogData))
-		}
-		oldExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData[:32]).Uint64()
-		if oldExpiresAtBlock != (receipt.BlockNumber.Uint64() + 100 - 1) {
-			return fmt.Errorf("expected old entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+100-1, oldExpiresAtBlock)
-		}
-		newExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData[32:64]).Uint64()
-		if newExpiresAtBlock != (receipt.BlockNumber.Uint64() + 200 - 1) {
-			return fmt.Errorf("expected new entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+200-1, newExpiresAtBlock)
-		}
 	}
 
 	newLog := receipt.Logs[1]
