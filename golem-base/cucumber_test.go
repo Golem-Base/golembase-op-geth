@@ -419,11 +419,11 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	logs := receipt.Logs
 
-	if len(logs) != 2 {
-		return fmt.Errorf("expected 2 logs, got %d", len(logs))
+	if len(logs) != 1 {
+		return fmt.Errorf("expected 1 logs, got %d", len(logs))
 	}
 
-	newCreatedLog := logs[1]
+	newCreatedLog := logs[0]
 
 	if newCreatedLog.Topics[0] != arkivlogs.ArkivEntityCreated {
 		return fmt.Errorf("expected ArkivEntityCreated log, got %s", newCreatedLog.Topics[0])
@@ -500,43 +500,27 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
 
-	toExpire := []common.Hash{}
-
 	rcpClient := w.GethInstance.RPCClient
 
 	if len(receipt.Logs) == 0 {
 		return fmt.Errorf("no logs found in receipt")
 	}
 
-	blockNumber256 := uint256.NewInt(0).SetBytes(receipt.Logs[0].Data)
+	blockNumber256 := uint256.NewInt(0).SetBytes(receipt.Logs[0].Data[:32])
 
 	key := receipt.Logs[0].Topics[1]
 
-	if err := rcpClient.CallContext(
-		ctx,
-		&toExpire,
-		"golembase_getEntitiesToExpireAtBlock",
-		blockNumber256.Uint64(),
-	); err != nil {
-		return fmt.Errorf("failed to get entities to expire: %w", err)
-	}
-
-	if len(toExpire) != 1 {
-		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(toExpire))
-	}
-
-	if toExpire[0] != key {
-		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", toExpire[0].Hex(), key.Hex())
-	}
-
 	var result arkivtype.QueryResponse
-	if err := rcpClient.CallContext(
+
+	err := rcpClient.CallContext(
 		ctx,
 		&result,
 		"arkiv_query",
 		fmt.Sprintf("$expiration = %d", blockNumber256.Uint64()),
 		struct{}{},
-	); err != nil {
+	)
+
+	if err != nil {
 		return fmt.Errorf("failed to get entities to expire: %w", err)
 	}
 
@@ -546,7 +530,7 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 
 	ed := arkivtype.EntityData{}
 
-	err := json.Unmarshal(result.Data[0], &ed)
+	err = json.Unmarshal(result.Data[0], &ed)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
@@ -1467,23 +1451,16 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	var count uint64
-	if err := rpcClient.CallContext(ctx, &count, "golembase_getEntityCount"); err != nil {
-		return fmt.Errorf("failed to get entity count: %w", err)
-	}
-
-	if int(count) != expected {
-		return fmt.Errorf("expected %d entities, but got %d", expected, count)
-	}
-
 	entities := arkivtype.QueryResponse{}
-	if err := rpcClient.CallContext(
+	err := rpcClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
 		"$all",
 		struct{}{},
-	); err != nil {
+	)
+
+	if err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
 
@@ -1546,28 +1523,20 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	var entityKeys []common.Hash
-	if err := rpcClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys"); err != nil {
-		return fmt.Errorf("failed to get all entity keys: %w", err)
-	}
-
-	if len(entityKeys) != 0 {
-		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
-	}
-
 	entities := arkivtype.QueryResponse{}
-	if err := rpcClient.CallContext(
+	err := rpcClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
 		"$all",
 		struct{}{},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
 
 	if len(entities.Data) != 0 {
-		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
+		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entities.Data))
 	}
 
 	return nil
@@ -1748,7 +1717,7 @@ func theEntitysBTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks i
 	}
 
 	oldExpiresAtBlock := new(big.Int).SetBytes(w.LastReceipt.Logs[0].Data[:32])
-	newExpiresAtBlock := new(big.Int).SetBytes(w.LastReceipt.Logs[0].Data[32:])
+	newExpiresAtBlock := new(big.Int).SetBytes(w.LastReceipt.Logs[0].Data[32:64])
 
 	if oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks) != newExpiresAtBlock.Uint64() {
 		return fmt.Errorf("expected entity to expire at block %d, but got %d", oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks), newExpiresAtBlock.Uint64())
@@ -2463,13 +2432,13 @@ func theEntityUpdateLogShouldBeRecorded(ctx context.Context) error {
 
 	logs := receipt.Logs
 
-	if len(logs) != 2 {
-		return fmt.Errorf("expected 2 logs, got %d", len(logs))
+	if len(logs) != 1 {
+		return fmt.Errorf("expected 1 log, got %d", len(logs))
 	}
 
 	expiresAtBlockExpected := receipt.BlockNumber.Uint64() + 100
 
-	newLog := logs[1]
+	newLog := logs[0]
 
 	if newLog.Topics[0] != arkivlogs.ArkivEntityUpdated {
 		return fmt.Errorf("expected ArkivEntityUpdated log, got %s", newLog.Topics[0])
@@ -2504,11 +2473,11 @@ func theEntityDeleteLogShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("no logs found in receipt")
 	}
 
-	if len(receipt.Logs) != 2 {
-		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	if len(receipt.Logs) != 1 {
+		return fmt.Errorf("expected 1 log, got %d", len(receipt.Logs))
 	}
 
-	newLog := receipt.Logs[1]
+	newLog := receipt.Logs[0]
 
 	if newLog.Topics[0] != arkivlogs.ArkivEntityDeleted {
 		return fmt.Errorf("expected ArkivEntityDeleted log, got %s", newLog.Topics[0])
@@ -2539,11 +2508,11 @@ func theEntityExtendLogShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("no logs found in receipt")
 	}
 
-	if len(receipt.Logs) != 2 {
-		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	if len(receipt.Logs) != 1 {
+		return fmt.Errorf("expected 1 logs, got %d", len(receipt.Logs))
 	}
 
-	newLog := receipt.Logs[1]
+	newLog := receipt.Logs[0]
 
 	if newLog.Topics[0] != arkivlogs.ArkivEntityBTLExtended {
 		return fmt.Errorf("expected ArkivEntityBTLExtended log, got %s", newLog.Topics[0])
@@ -2562,19 +2531,13 @@ func theEntityExtendLogShouldBeRecorded(ctx context.Context) error {
 	if owner != w.FundedAccount.Address {
 		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
 	}
-	{
-		newLogData := newLog.Data
-		if len(newLogData) != 96 {
-			return fmt.Errorf("expected new log data to be 96 bytes, got %d", len(newLogData))
-		}
-		oldExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[:32]).Uint64()
-		if oldExpiresAtBlock != (receipt.BlockNumber.Uint64() + 100 - 1) {
-			return fmt.Errorf("expected old entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+100-1, oldExpiresAtBlock)
-		}
-		newExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[32:64]).Uint64()
-		if newExpiresAtBlock != (receipt.BlockNumber.Uint64() + 200 - 1) {
-			return fmt.Errorf("expected new entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+200-1, newExpiresAtBlock)
-		}
+	newLogData := newLog.Data
+	if len(newLogData) != 96 {
+		return fmt.Errorf("expected new log data to be 96 bytes, got %d", len(newLogData))
+	}
+	newExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[32:64]).Uint64()
+	if newExpiresAtBlock != (receipt.BlockNumber.Uint64() + 200 - 1) {
+		return fmt.Errorf("expected new entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+200-1, newExpiresAtBlock)
 	}
 
 	return nil
@@ -2618,7 +2581,7 @@ func theEntityOwnerChangeLogShouldBeRecorded(ctx context.Context) error {
 	}
 
 	if len(receipt.Logs) != 1 {
-		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+		return fmt.Errorf("expected 1 logs, got %d", len(receipt.Logs))
 	}
 
 	log := receipt.Logs[0]
