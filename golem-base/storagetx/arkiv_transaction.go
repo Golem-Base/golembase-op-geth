@@ -200,12 +200,7 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 			// create the log for the created entity
 			logs = append(
 				logs,
-				&types.Log{
-					Address:     address.GolemBaseStorageProcessorAddress,
-					Topics:      []common.Hash{GolemBaseStorageEntityCreated, key},
-					Data:        data[:32],
-					BlockNumber: blockNumber,
-				},
+
 				&types.Log{
 					Address: common.Address(address.ArkivProcessorAddress),
 					Topics: []common.Hash{
@@ -270,12 +265,7 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 			// create the log for the created entity
 			logs = append(
 				logs,
-				&types.Log{
-					Address:     address.GolemBaseStorageProcessorAddress,
-					Topics:      []common.Hash{GolemBaseStorageEntityDeleted, toDelete},
-					Data:        []byte{},
-					BlockNumber: blockNumber,
-				},
+
 				&types.Log{
 					Address: common.Address(address.ArkivProcessorAddress),
 					Topics: []common.Hash{
@@ -355,12 +345,7 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 
 		logs = append(
 			logs,
-			&types.Log{
-				Address:     address.GolemBaseStorageProcessorAddress,
-				Topics:      []common.Hash{GolemBaseStorageEntityUpdated, update.EntityKey},
-				Data:        data[32:64],
-				BlockNumber: blockNumber,
-			},
+
 			&types.Log{
 				Address: common.Address(address.ArkivProcessorAddress),
 				Topics: []common.Hash{
@@ -394,12 +379,6 @@ func (tx *ArkivTransaction) Run(blockNumber uint64, txHash common.Hash, txIx int
 
 		logs = append(
 			logs,
-			&types.Log{
-				Address:     address.GolemBaseStorageProcessorAddress,
-				Topics:      []common.Hash{GolemBaseStorageEntityBTLExtended, extend.EntityKey},
-				Data:        data[:64],
-				BlockNumber: blockNumber,
-			},
 			&types.Log{
 				Address: common.Address(address.ArkivProcessorAddress),
 				Topics: []common.Hash{

@@ -222,22 +222,6 @@ func WriteLogForBlockSqlite(
 				ops := extractArkivOperations(&stx, txIx, receipt, from)
 				wal.Operations = append(wal.Operations, ops...)
 
-			case toAddr == address.GolemBaseStorageProcessorAddress:
-
-				stx := storagetx.StorageTransaction{}
-				err := rlp.DecodeBytes(tx.Data(), &stx)
-				if err != nil {
-					return fmt.Errorf("failed to decode storage transaction: %w", err)
-				}
-
-				from, err := types.Sender(signer, tx)
-				if err != nil {
-					return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
-				}
-
-				ops := extractArkivOperations(stx.ConvertToArkiv(), txIx, receipt, from)
-				wal.Operations = append(wal.Operations, ops...)
-
 			default:
 			}
 

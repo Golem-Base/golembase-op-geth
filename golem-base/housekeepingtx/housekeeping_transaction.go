@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
-	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
@@ -52,12 +51,6 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 		// create the log for the created entity
 		logs = append(
 			logs,
-			&types.Log{
-				Address:     address.GolemBaseStorageProcessorAddress, // Set the appropriate address if needed
-				Topics:      []common.Hash{storagetx.GolemBaseStorageEntityDeleted, toDelete},
-				Data:        []byte{},
-				BlockNumber: blockNumber,
-			},
 			&types.Log{
 				Address: common.Address(address.ArkivProcessorAddress),
 				Topics: []common.Hash{

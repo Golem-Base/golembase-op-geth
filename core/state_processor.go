@@ -150,56 +150,6 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 
 	if hooks := evm.Config.Tracer; hooks != nil {
 
-		if tx.To() != nil && *tx.To() == address.GolemBaseStorageProcessorAddress {
-
-			logs, err := storagetx.ExecuteTransaction(
-				tx.Data(),
-				blockNumber.Uint64(),
-				blockHash,
-				txIx,
-				msg.From,
-				statedb,
-			)
-
-			status := types.ReceiptStatusSuccessful
-			if err != nil {
-				status = types.ReceiptStatusFailed
-			}
-
-			fakeReceipt := &types.Receipt{
-				GasUsed:     0,
-				Logs:        logs,
-				TxHash:      tx.Hash(),
-				Status:      status,
-				Bloom:       types.Bloom{},
-				BlockHash:   blockHash,
-				BlockNumber: blockNumber,
-			}
-
-			if hooks.OnTxStart != nil {
-				hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			}
-
-			if hooks.OnEnter != nil {
-				hooks.OnEnter(0, byte(vm.CALL), msg.From, address.GolemBaseStorageProcessorAddress, tx.Data(), tx.Gas(), msg.Value)
-			}
-
-			if hooks.OnLog != nil {
-				for _, log := range fakeReceipt.Logs {
-					hooks.OnLog(log)
-				}
-			}
-
-			if hooks.OnExit != nil {
-				hooks.OnExit(0, []byte{}, 0, nil, false)
-			}
-
-			if hooks.OnTxEnd != nil {
-				hooks.OnTxEnd(fakeReceipt, nil)
-			}
-			return fakeReceipt, nil
-		}
-
 		if tx.To() != nil && *tx.To() == address.ArkivProcessorAddress {
 
 			logs, err := storagetx.ExecuteArkivTransaction(

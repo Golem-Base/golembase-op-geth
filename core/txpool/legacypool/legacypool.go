@@ -661,8 +661,6 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 		switch {
 		case to == nil:
 			return ErrNonGolembaseTransaction
-		case *to == address.GolemBaseStorageProcessorAddress:
-			// allow golem base storage transactions
 		case *to == address.ArkivProcessorAddress:
 			// allow arkiv transactions
 		default:
@@ -672,12 +670,6 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 	}
 
 	switch {
-	case to != nil && *to == address.GolemBaseStorageProcessorAddress:
-		if len(tx.Data()) == 0 {
-			return fmt.Errorf("golem base storage transaction data is empty")
-		}
-
-		return nil
 	case to != nil && *to == address.ArkivProcessorAddress:
 		if len(tx.Data()) == 0 {
 			return fmt.Errorf("arkiv transaction data is empty")
