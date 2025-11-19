@@ -25,7 +25,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const entitiesSchemaVersion = uint64(5)
+const entitiesSchemaVersion = uint64(6)
 
 type BlockWal struct {
 	BlockInfo  BlockInfo
