@@ -223,13 +223,80 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 	}
 	readDB.SetMaxOpenConns(runtime.NumCPU())
 
-	log.Info("arkiv: database ready", "entitySchemaVersion", entitiesSchemaVersion)
-	return &SQLStore{
+	store := &SQLStore{
 		writeDB:             db,
 		readDB:              readDB,
 		historicBlocksCount: historicBlocksCount,
 		lock:                &sync.RWMutex{},
-	}, nil
+	}
+
+	go store.collectGarbage()
+
+	log.Info("arkiv: database ready", "entitySchemaVersion", entitiesSchemaVersion)
+	return store, nil
+}
+
+func (e *SQLStore) collectGarbage() {
+	log.Info("started DB garbage collector")
+	ctx := context.Background()
+	for {
+		time.Sleep(time.Minute)
+		e.doCollectGarbage(ctx)
+	}
+}
+
+func (e *SQLStore) doCollectGarbage(ctx context.Context) {
+	readDB := sqlitegolem.New(e.readDB)
+
+	blockNumber, err := readDB.GetLastProcessedBlockNumber(ctx)
+	if err != nil {
+		log.Error("failed to fetch current block number", "error", err)
+		return
+	}
+
+	garbageCount, err := readDB.GetGarbageCount(ctx, blockNumber)
+	if err != nil {
+		log.Error("failed to fetch amount of garbage", "error", err)
+		return
+	}
+
+	if garbageCount < 100 {
+		log.Info("skipping garbage collection in the DB", "count", garbageCount)
+		return
+	}
+
+	log.Info("collecting garbage in the DB", "count", garbageCount)
+
+	e.lock.Lock()
+
+	defer e.lock.Unlock()
+
+	tx, err := e.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		log.Error("failed to begin transaction", "error", err)
+		return
+	}
+
+	txDB := sqlitegolem.New(tx)
+
+	// Delete blocks that are older than the historicBlocksCount
+	if e.historicBlocksCount > 0 && blockNumber > int64(e.historicBlocksCount) {
+		deleteUntilBlock := blockNumber - int64(e.historicBlocksCount)
+
+		err = errors.Join(
+			txDB.DeleteStringAnnotationsUntilBlock(ctx, deleteUntilBlock),
+			txDB.DeleteNumericAnnotationsUntilBlock(ctx, deleteUntilBlock),
+			txDB.DeleteEntitiesUntilBlock(ctx, deleteUntilBlock),
+		)
+	}
+
+	if err != nil {
+		tx.Rollback()
+		log.Error("failed to collect garbage in DB", "error", err)
+	} else {
+		tx.Commit()
+		log.Info("collected garbage in the DB")
+	}
 }
 
 // Close closes the database connection

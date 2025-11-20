@@ -287,6 +287,90 @@ func (q *Queries) GetEntityCount(ctx context.Context, block int64) (int64, error
 	return count, err
 }
 
+const getGarbageCount = `-- name: GetGarbageCount :one
+SELECT
+(
+  SELECT COUNT(1)
+  FROM entities AS e
+  WHERE e.last_modified_at_block <= ?1
+  AND (
+    EXISTS (
+      SELECT 1
+      FROM entities AS e2
+      WHERE e2.key = e.key
+      AND e2.last_modified_at_block > e.last_modified_at_block
+    )
+    OR e.deleted = TRUE
+  )
+)
++
+(
+SELECT COUNT(1)
+  FROM string_annotations AS a
+  WHERE a.entity_last_modified_at_block <= ?1
+  AND (
+    EXISTS (
+      SELECT 1
+      FROM entities AS e
+      WHERE e.key = a.entity_key
+      AND (
+        -- either there is a more recent version of the entity that this annotation
+        -- belongs to
+        e.last_modified_at_block > a.entity_last_modified_at_block
+        -- or the entity that this annotation belongs to has been deleted
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.deleted = TRUE
+        )
+      )
+    )
+  )
+)
++
+(
+  SELECT COUNT(1)
+  FROM numeric_annotations AS a
+  WHERE a.entity_last_modified_at_block <= ?1
+  AND (
+    EXISTS (
+      SELECT 1
+      FROM entities AS e
+      WHERE e.key = a.entity_key
+      AND (
+        -- either there is a more recent version of the entity that this annotation
+        -- belongs to
+        e.last_modified_at_block > a.entity_last_modified_at_block
+        -- or the entity that this annotation belongs to has been deleted
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.deleted = TRUE
+        )
+      )
+    )
+  )
+)
+`
+
+func (q *Queries) GetGarbageCount(ctx context.Context, block int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getGarbageCount, block)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getLastProcessedBlockNumber = `-- name: GetLastProcessedBlockNumber :one
+SELECT last_processed_block_number
+FROM processing_status
+LIMIT 1
+`
+
+func (q *Queries) GetLastProcessedBlockNumber(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getLastProcessedBlockNumber)
+	var last_processed_block_number int64
+	err := row.Scan(&last_processed_block_number)
+	return last_processed_block_number, err
+}
+
 const getNumericAnnotations = `-- name: GetNumericAnnotations :many
 SELECT a.annotation_key, a.value
 FROM numeric_annotations AS a INNER JOIN entities AS e

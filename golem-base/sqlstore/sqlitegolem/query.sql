@@ -347,3 +347,71 @@ AND (
     )
   )
 );
+
+-- name: GetGarbageCount :one
+SELECT
+(
+  SELECT COUNT(1)
+  FROM entities AS e
+  WHERE e.last_modified_at_block <= sqlc.arg(block)
+  AND (
+    EXISTS (
+      SELECT 1
+      FROM entities AS e2
+      WHERE e2.key = e.key
+      AND e2.last_modified_at_block > e.last_modified_at_block
+    )
+    OR e.deleted = TRUE
+  )
+)
++
+(
+SELECT COUNT(1)
+  FROM string_annotations AS a
+  WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
+  AND (
+    EXISTS (
+      SELECT 1
+      FROM entities AS e
+      WHERE e.key = a.entity_key
+      AND (
+        -- either there is a more recent version of the entity that this annotation
+        -- belongs to
+        e.last_modified_at_block > a.entity_last_modified_at_block
+        -- or the entity that this annotation belongs to has been deleted
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.deleted = TRUE
+        )
+      )
+    )
+  )
+)
++
+(
+  SELECT COUNT(1)
+  FROM numeric_annotations AS a
+  WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
+  AND (
+    EXISTS (
+      SELECT 1
+      FROM entities AS e
+      WHERE e.key = a.entity_key
+      AND (
+        -- either there is a more recent version of the entity that this annotation
+        -- belongs to
+        e.last_modified_at_block > a.entity_last_modified_at_block
+        -- or the entity that this annotation belongs to has been deleted
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.deleted = TRUE
+        )
+      )
+    )
+  )
+);
+
+-- name: GetLastProcessedBlockNumber :one
+SELECT last_processed_block_number
+FROM processing_status
+LIMIT 1
