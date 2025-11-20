@@ -65,6 +65,15 @@ AND (
     FROM entities AS e2
     WHERE e2.key = e.key
     AND e2.last_modified_at_block > e.last_modified_at_block
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block > e.transaction_index_in_block
+    )
+    OR (
+      e2.last_modified_at_block = e.last_modified_at_block
+      AND e2.transaction_index_in_block = e.transaction_index_in_block
+      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+    )
   )
   OR e.deleted = TRUE
 )
@@ -142,7 +151,18 @@ AND (
     AND (
       -- either there is a more recent version of the entity that this annotation
       -- belongs to
-      e.last_modified_at_block > a.entity_last_modified_at_block
+      (
+        e.last_modified_at_block > a.entity_last_modified_at_block
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.transaction_index_in_block > a.entity_transaction_index_in_block
+        )
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
+          AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
+        )
+      )
       -- or the entity that this annotation belongs to has been deleted
       OR (
         e.last_modified_at_block = a.entity_last_modified_at_block
@@ -178,7 +198,18 @@ AND (
     AND (
       -- either there is a more recent version of the entity that this annotation
       -- belongs to
-      e.last_modified_at_block > a.entity_last_modified_at_block
+      (
+        e.last_modified_at_block > a.entity_last_modified_at_block
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.transaction_index_in_block > a.entity_transaction_index_in_block
+        )
+        OR (
+          e.last_modified_at_block = a.entity_last_modified_at_block
+          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
+          AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
+        )
+      )
       -- or the entity that this annotation belongs to has been deleted
       OR (
         e.last_modified_at_block = a.entity_last_modified_at_block
@@ -299,6 +330,15 @@ SELECT
       FROM entities AS e2
       WHERE e2.key = e.key
       AND e2.last_modified_at_block > e.last_modified_at_block
+      OR (
+        e2.last_modified_at_block = e.last_modified_at_block
+        AND e2.transaction_index_in_block > e.transaction_index_in_block
+      )
+      OR (
+        e2.last_modified_at_block = e.last_modified_at_block
+        AND e2.transaction_index_in_block = e.transaction_index_in_block
+        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
+      )
     )
     OR e.deleted = TRUE
   )
@@ -316,7 +356,18 @@ SELECT COUNT(1)
       AND (
         -- either there is a more recent version of the entity that this annotation
         -- belongs to
-        e.last_modified_at_block > a.entity_last_modified_at_block
+        (
+          e.last_modified_at_block > a.entity_last_modified_at_block
+          OR (
+            e.last_modified_at_block = a.entity_last_modified_at_block
+            AND e.transaction_index_in_block > a.entity_transaction_index_in_block
+          )
+          OR (
+            e.last_modified_at_block = a.entity_last_modified_at_block
+            AND e.transaction_index_in_block = a.entity_transaction_index_in_block
+            AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
+          )
+        )
         -- or the entity that this annotation belongs to has been deleted
         OR (
           e.last_modified_at_block = a.entity_last_modified_at_block
@@ -339,7 +390,18 @@ SELECT COUNT(1)
       AND (
         -- either there is a more recent version of the entity that this annotation
         -- belongs to
-        e.last_modified_at_block > a.entity_last_modified_at_block
+        (
+          e.last_modified_at_block > a.entity_last_modified_at_block
+          OR (
+            e.last_modified_at_block = a.entity_last_modified_at_block
+            AND e.transaction_index_in_block > a.entity_transaction_index_in_block
+          )
+          OR (
+            e.last_modified_at_block = a.entity_last_modified_at_block
+            AND e.transaction_index_in_block = a.entity_transaction_index_in_block
+            AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
+          )
+        )
         -- or the entity that this annotation belongs to has been deleted
         OR (
           e.last_modified_at_block = a.entity_last_modified_at_block
