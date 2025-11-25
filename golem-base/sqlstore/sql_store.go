@@ -331,6 +331,9 @@ func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*
 
 // GetEntityCount retrieves the total number of entities in the database
 func (e *SQLStore) GetEntityCount(ctx context.Context, block uint64) (uint64, error) {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+
 	count, err := e.GetQueries().GetEntityCount(ctx, int64(block))
 	if err != nil {
 		return 0, fmt.Errorf("failed to get entity count: %w", err)
