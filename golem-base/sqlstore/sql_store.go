@@ -101,6 +101,16 @@ func getSequence(createdAtBlock uint64, transactionIndexInBlock uint64, operatio
 	return createdAtBlock<<32 | transactionIndexInBlock<<16 | operationIndexInTransaction
 }
 
+// configureDBPool configures the database connection pool.
+// Keep constant set of open connections and never close them.
+// This allows us to avoid `database is locked` error, when new connection is opened.
+func configureDBPool(db *sql.DB, numThreads int) {
+	db.SetMaxOpenConns(numThreads)
+	db.SetMaxIdleConns(numThreads)
+	db.SetConnMaxLifetime(0)
+	db.SetConnMaxIdleTime(0)
+}
+
 // NewStore creates a new ETL instance with database connection and schema setup
 func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 	dir := filepath.Dir(dbFile)
@@ -114,7 +124,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	db.SetMaxOpenConns(1)
+	configureDBPool(db, 1)
 
 	// Check if schema exists and apply if needed
 	ctx := context.Background()
@@ -227,13 +237,13 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	readDB.SetMaxOpenConns(runtime.NumCPU())
+
+	configureDBPool(readDB, runtime.NumCPU())
 
 	store := &SQLStore{
 		writeDB:             db,
 		readDB:              readDB,
 		historicBlocksCount: historicBlocksCount,
-		lock:                &sync.RWMutex{},
 	}
 
 	go store.collectGarbage()
@@ -272,10 +282,6 @@ func (e *SQLStore) doCollectGarbage(ctx context.Context) {
 	}
 
 	log.Info("collecting garbage in the DB", "count", garbageCount)
-
-	e.lock.Lock()
-
-	defer e.lock.Unlock()
 
 	tx, err := e.writeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -331,9 +337,6 @@ func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*
 
 // GetEntityCount retrieves the total number of entities in the database
 func (e *SQLStore) GetEntityCount(ctx context.Context, block uint64) (uint64, error) {
-	e.lock.RLock()
-	defer e.lock.RUnlock()
-
 	count, err := e.GetQueries().GetEntityCount(ctx, int64(block))
 	if err != nil {
 		return 0, fmt.Errorf("failed to get entity count: %w", err)
@@ -358,9 +361,6 @@ func (e *SQLStore) SnapSyncToBlock(
 ) (err error) {
 	log.Info("snap syncing to block start", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
 	defer log.Info("snap syncing to block end", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
-
-	e.lock.Lock()
-	defer e.lock.Unlock()
 
 	tx, err := e.writeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -517,9 +517,6 @@ func (e *SQLStore) SnapSyncToBlock(
 func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID string) (err error) {
 	log.Info("processing block", "block", blockWal.BlockInfo.Number)
 	defer log.Info("processing block end", "block", blockWal.BlockInfo.Number)
-
-	e.lock.Lock()
-	defer e.lock.Unlock()
 
 	tx, err := e.writeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -928,9 +925,6 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 	iterator func(arkivtype.EntityData, arkivtype.Cursor) error,
 ) error {
 	log.Info("Executing query", "query", query, "args", args)
-
-	e.lock.RLock()
-	defer e.lock.RUnlock()
 
 	// Begin a read-only transaction for consistency
 	tx, err := e.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
