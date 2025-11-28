@@ -927,6 +927,12 @@ var (
 		Category: flags.MiscCategory,
 		Value:    128,
 	}
+	ArkivDatabaseDisabledFlag = &cli.BoolFlag{
+		Name:     "arkiv.disable-database",
+		Usage:    "Disable the Arkiv database",
+		Category: flags.MiscCategory,
+		Value:    false,
+	}
 
 	// Console
 	JSpathFlag = &flags.DirectoryFlag{
@@ -1589,6 +1595,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	} else {
 		cfg.ArkivHistoricBlocksFlag = ArkivHistoricBlocksFlag.Value
 	}
+
+	cfg.ArkivDatabaseDisabled = ArkivDatabaseDisabledFlag.Value
 
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
 	if ctx.IsSet(LogBacktraceAtFlag.Name) {
@@ -2514,6 +2522,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
 		stack.Config().ArkivHistoricBlocksFlag,
+		stack.Config().ArkivDatabaseDisabled,
 	)
 	if err != nil {
 		Fatalf("failed to create SQLStore: %v", err)

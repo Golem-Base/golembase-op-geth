@@ -101,6 +101,7 @@ var (
 		utils.ChainHistoryFlag,
 		utils.LogHistoryFlag,
 		utils.ArkivHistoricBlocksFlag,
+		utils.ArkivDatabaseDisabledFlag,
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,

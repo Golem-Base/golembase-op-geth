@@ -95,6 +95,7 @@ type SQLStore struct {
 	readDB              *sql.DB
 	lock                *sync.RWMutex
 	historicBlocksCount uint64
+	databaseDisabled    bool
 }
 
 func getSequence(createdAtBlock uint64, transactionIndexInBlock uint64, operationIndexInTransaction uint64) uint64 {
@@ -102,7 +103,7 @@ func getSequence(createdAtBlock uint64, transactionIndexInBlock uint64, operatio
 }
 
 // NewStore creates a new ETL instance with database connection and schema setup
-func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
+func NewStore(dbFile string, historicBlocksCount uint64, databaseDisabled bool) (*SQLStore, error) {
 	dir := filepath.Dir(dbFile)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
@@ -234,9 +235,12 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		readDB:              readDB,
 		historicBlocksCount: historicBlocksCount,
 		lock:                &sync.RWMutex{},
+		databaseDisabled:    databaseDisabled,
 	}
 
-	go store.collectGarbage()
+	if !databaseDisabled {
+		go store.collectGarbage()
+	}
 
 	log.Info("arkiv: database ready", "entitySchemaVersion", entitiesSchemaVersion)
 	return store, nil
@@ -356,6 +360,9 @@ func (e *SQLStore) SnapSyncToBlock(
 		error,
 	],
 ) (err error) {
+	if e.databaseDisabled {
+		return nil
+	}
 	log.Info("snap syncing to block start", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
 	defer log.Info("snap syncing to block end", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
 
@@ -515,6 +522,9 @@ func (e *SQLStore) SnapSyncToBlock(
 
 // InsertBlock processes a single block from the WAL and inserts it into the database
 func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID string) (err error) {
+	if e.databaseDisabled {
+		return nil
+	}
 	log.Info("processing block", "block", blockWal.BlockInfo.Number)
 	defer log.Info("processing block end", "block", blockWal.BlockInfo.Number)
 
@@ -927,6 +937,9 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 	options query.QueryOptions,
 	iterator func(arkivtype.EntityData, arkivtype.Cursor) error,
 ) error {
+	if e.databaseDisabled {
+		return fmt.Errorf("database is disabled")
+	}
 	log.Info("Executing query", "query", query, "args", args)
 
 	e.lock.RLock()
