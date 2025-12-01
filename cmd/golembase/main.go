@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/golembase/integrity"
 	"github.com/ethereum/go-ethereum/cmd/golembase/query"
 	"github.com/ethereum/go-ethereum/cmd/golembase/state"
+	"github.com/ethereum/go-ethereum/cmd/golembase/state/entitiestoexpireatblock"
 	"github.com/urfave/cli/v2"
 )
 
@@ -29,6 +30,7 @@ func main() {
 			query.Query(),
 			integrity.Integrity(),
 			state.State(),
+			entitiestoexpireatblock.EntitiesToExpireAtBlock(),
 		},
 	}
 
