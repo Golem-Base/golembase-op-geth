@@ -20,165 +20,23 @@ func (q *Queries) CountNetworks(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const deleteAllEntities = `-- name: DeleteAllEntities :exec
-DELETE FROM entities
+const deleteNumericAttributesBeforeBlock = `-- name: DeleteNumericAttributesBeforeBlock :exec
+DELETE FROM NUMERIC_ATTRIBUTES
+WHERE FROM_BLOCK < ?
 `
 
-func (q *Queries) DeleteAllEntities(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteAllEntities)
+func (q *Queries) DeleteNumericAttributesBeforeBlock(ctx context.Context, fromBlock int64) error {
+	_, err := q.db.ExecContext(ctx, deleteNumericAttributesBeforeBlock, fromBlock)
 	return err
 }
 
-const deleteAllNumericAnnotations = `-- name: DeleteAllNumericAnnotations :exec
-DELETE FROM numeric_annotations
+const deletePayloadsBeforeBlock = `-- name: DeletePayloadsBeforeBlock :exec
+DELETE FROM PAYLOADS
+WHERE FROM_BLOCK < ?
 `
 
-func (q *Queries) DeleteAllNumericAnnotations(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteAllNumericAnnotations)
-	return err
-}
-
-const deleteAllProcessingStatus = `-- name: DeleteAllProcessingStatus :exec
-DELETE FROM processing_status
-`
-
-func (q *Queries) DeleteAllProcessingStatus(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteAllProcessingStatus)
-	return err
-}
-
-const deleteAllStringAnnotations = `-- name: DeleteAllStringAnnotations :exec
-DELETE FROM string_annotations
-`
-
-func (q *Queries) DeleteAllStringAnnotations(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteAllStringAnnotations)
-	return err
-}
-
-const deleteEntitiesUntilBlock = `-- name: DeleteEntitiesUntilBlock :exec
-DELETE FROM entities AS e
-WHERE e.last_modified_at_block <= ?1
-AND (
-  EXISTS (
-    SELECT 1
-    FROM entities AS e2
-    WHERE e2.key = e.key
-    AND (
-      e2.last_modified_at_block > e.last_modified_at_block
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block > e.transaction_index_in_block
-      )
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block = e.transaction_index_in_block
-        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-      )
-    )
-  )
-  OR e.deleted = TRUE
-)
-`
-
-func (q *Queries) DeleteEntitiesUntilBlock(ctx context.Context, block int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEntitiesUntilBlock, block)
-	return err
-}
-
-const deleteEntity = `-- name: DeleteEntity :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-SELECT
-    e.key,
-    e.expires_at,
-    e.payload,
-    e.content_type,
-    e.owner_address,
-    e.created_at_block,
-    ?1 AS last_modified_at_block,
-    TRUE AS deleted,
-    ?2 AS transaction_index_in_block,
-    ?3 AS operation_index_in_transaction
-FROM entities AS e
-WHERE e.key = ?4
-AND e.deleted = FALSE
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-)
-`
-
-type DeleteEntityParams struct {
-	LastModifiedAtBlock         int64
-	TransactionIndexInBlock     int64
-	OperationIndexInTransaction int64
-	Key                         string
-}
-
-func (q *Queries) DeleteEntity(ctx context.Context, arg DeleteEntityParams) error {
-	_, err := q.db.ExecContext(ctx, deleteEntity,
-		arg.LastModifiedAtBlock,
-		arg.TransactionIndexInBlock,
-		arg.OperationIndexInTransaction,
-		arg.Key,
-	)
-	return err
-}
-
-const deleteNumericAnnotationsUntilBlock = `-- name: DeleteNumericAnnotationsUntilBlock :exec
-DELETE FROM numeric_annotations AS a
-WHERE a.entity_last_modified_at_block <= ?1
-AND (
-  EXISTS (
-    SELECT 1
-    FROM entities AS e
-    WHERE e.key = a.entity_key
-    AND (
-      -- either there is a more recent version of the entity that this annotation
-      -- belongs to
-      (
-        e.last_modified_at_block > a.entity_last_modified_at_block
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-        )
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-        )
-      )
-      -- or the entity that this annotation belongs to has been deleted
-      OR (
-        e.last_modified_at_block = a.entity_last_modified_at_block
-        AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-        AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-        AND e.deleted = TRUE
-      )
-    )
-  )
-)
-`
-
-func (q *Queries) DeleteNumericAnnotationsUntilBlock(ctx context.Context, block int64) error {
-	_, err := q.db.ExecContext(ctx, deleteNumericAnnotationsUntilBlock, block)
+func (q *Queries) DeletePayloadsBeforeBlock(ctx context.Context, fromBlock int64) error {
+	_, err := q.db.ExecContext(ctx, deletePayloadsBeforeBlock, fromBlock)
 	return err
 }
 
@@ -191,134 +49,89 @@ func (q *Queries) DeleteProcessingStatus(ctx context.Context, network string) er
 	return err
 }
 
-const deleteStringAnnotationsUntilBlock = `-- name: DeleteStringAnnotationsUntilBlock :exec
-DELETE FROM string_annotations AS a
-WHERE a.entity_last_modified_at_block <= ?1
-AND (
-  EXISTS (
-    SELECT 1
-    FROM entities AS e
-    WHERE e.key = a.entity_key
-    AND (
-      -- either there is a more recent version of the entity that this annotation
-      -- belongs to
-      (
-        e.last_modified_at_block > a.entity_last_modified_at_block
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-        )
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-        )
-      )
-      -- or the entity that this annotation belongs to has been deleted
-      OR (
-        e.last_modified_at_block = a.entity_last_modified_at_block
-        AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-        AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-        AND e.deleted = TRUE
-      )
-    )
-  )
-)
+const deleteStringAttributesBeforeBlock = `-- name: DeleteStringAttributesBeforeBlock :exec
+DELETE FROM STRING_ATTRIBUTES
+WHERE FROM_BLOCK < ?
 `
 
-func (q *Queries) DeleteStringAnnotationsUntilBlock(ctx context.Context, block int64) error {
-	_, err := q.db.ExecContext(ctx, deleteStringAnnotationsUntilBlock, block)
+func (q *Queries) DeleteStringAttributesBeforeBlock(ctx context.Context, fromBlock int64) error {
+	_, err := q.db.ExecContext(ctx, deleteStringAttributesBeforeBlock, fromBlock)
 	return err
 }
 
-const getEntity = `-- name: GetEntity :one
-SELECT e.expires_at, e.payload, e.owner_address, a.value AS creator_address , e.created_at_block
-FROM entities AS e
-INNER JOIN string_annotations AS a
-ON e.key = a.entity_key
-AND e.last_modified_at_block = a.entity_last_modified_at_block
-AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-AND a.annotation_key = "$creator"
-WHERE e.key = ?1
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= ?2
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-  -- There is a bug in sqlc currently with repeated named args,
-  -- so we resolve the named arg ourselves here.
-  -- See https://github.com/sqlc-dev/sqlc/issues/4110
-  AND e2.last_modified_at_block <= ?2
-)
+const getActiveStringAttributesAtBlock = `-- name: GetActiveStringAttributesAtBlock :many
+SELECT STRING_ATTRIBUTES.KEY, STRING_ATTRIBUTES.VALUE
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?
 `
 
-type GetEntityParams struct {
+type GetActiveStringAttributesAtBlockParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+}
+
+type GetActiveStringAttributesAtBlockRow struct {
 	Key   string
-	Block int64
+	Value string
 }
 
-type GetEntityRow struct {
-	ExpiresAt      int64
-	Payload        []byte
-	OwnerAddress   string
-	CreatorAddress string
-	CreatedAtBlock int64
+// Helper query to get active string attributes at a block
+func (q *Queries) GetActiveStringAttributesAtBlock(ctx context.Context, arg GetActiveStringAttributesAtBlockParams) ([]GetActiveStringAttributesAtBlockRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActiveStringAttributesAtBlock, arg.EntityKey, arg.FromBlock, arg.ToBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActiveStringAttributesAtBlockRow
+	for rows.Next() {
+		var i GetActiveStringAttributesAtBlockRow
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func (q *Queries) GetEntity(ctx context.Context, arg GetEntityParams) (GetEntityRow, error) {
-	row := q.db.QueryRowContext(ctx, getEntity, arg.Key, arg.Block)
-	var i GetEntityRow
-	err := row.Scan(
-		&i.ExpiresAt,
-		&i.Payload,
-		&i.OwnerAddress,
-		&i.CreatorAddress,
-		&i.CreatedAtBlock,
-	)
-	return i, err
+const getCreator = `-- name: GetCreator :one
+SELECT VALUE FROM STRING_ATTRIBUTES
+WHERE ENTITY_KEY = ? AND KEY = '$creator' AND FROM_BLOCK <= ?
+ORDER BY FROM_BLOCK DESC
+LIMIT 1
+`
+
+type GetCreatorParams struct {
+	EntityKey []byte
+	FromBlock int64
+}
+
+func (q *Queries) GetCreator(ctx context.Context, arg GetCreatorParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getCreator, arg.EntityKey, arg.FromBlock)
+	var value string
+	err := row.Scan(&value)
+	return value, err
 }
 
 const getEntityCount = `-- name: GetEntityCount :one
-SELECT COUNT(*)
-FROM entities AS e
-WHERE e.deleted = FALSE
-AND e.last_modified_at_block <= ?1
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-  AND e2.last_modified_at_block <= ?1
-)
+SELECT COUNT(DISTINCT ENTITY_KEY)
+FROM PAYLOADS
+WHERE FROM_BLOCK <= ? AND TO_BLOCK > ?
 `
 
-func (q *Queries) GetEntityCount(ctx context.Context, block int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getEntityCount, block)
+type GetEntityCountParams struct {
+	FromBlock int64
+	ToBlock   int64
+}
+
+func (q *Queries) GetEntityCount(ctx context.Context, arg GetEntityCountParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getEntityCount, arg.FromBlock, arg.ToBlock)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -328,108 +141,45 @@ const getGarbageCount = `-- name: GetGarbageCount :one
 SELECT
 (
   SELECT COUNT(1)
-  FROM entities AS e
-  WHERE e.last_modified_at_block <= ?1
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM entities AS e2
-      WHERE e2.key = e.key
-      AND (
-        e2.last_modified_at_block > e.last_modified_at_block
-        OR (
-          e2.last_modified_at_block = e.last_modified_at_block
-          AND e2.transaction_index_in_block > e.transaction_index_in_block
-        )
-        OR (
-          e2.last_modified_at_block = e.last_modified_at_block
-          AND e2.transaction_index_in_block = e.transaction_index_in_block
-          AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-        )
-      )
-    )
-    OR e.deleted = TRUE
-  )
-)
-+
-(
-SELECT COUNT(1)
-  FROM string_annotations AS a
-  WHERE a.entity_last_modified_at_block <= ?1
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM entities AS e
-      WHERE e.key = a.entity_key
-      AND (
-        -- either there is a more recent version of the entity that this annotation
-        -- belongs to
-        (
-          e.last_modified_at_block > a.entity_last_modified_at_block
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-          )
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-            AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-          )
-        )
-        -- or the entity that this annotation belongs to has been deleted
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-          AND e.deleted = TRUE
-        )
-      )
-    )
-  )
+  FROM PAYLOADS
+  WHERE PAYLOADS.TO_BLOCK <= ?
 )
 +
 (
   SELECT COUNT(1)
-  FROM numeric_annotations AS a
-  WHERE a.entity_last_modified_at_block <= ?1
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM entities AS e
-      WHERE e.key = a.entity_key
-      AND (
-        -- either there is a more recent version of the entity that this annotation
-        -- belongs to
-        (
-          e.last_modified_at_block > a.entity_last_modified_at_block
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-          )
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-            AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-          )
-        )
-        -- or the entity that this annotation belongs to has been deleted
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-          AND e.deleted = TRUE
-        )
-      )
-    )
-  )
+  FROM STRING_ATTRIBUTES
+  WHERE STRING_ATTRIBUTES.TO_BLOCK <= ?
+)
++
+(
+  SELECT COUNT(1)
+  FROM NUMERIC_ATTRIBUTES
+  WHERE NUMERIC_ATTRIBUTES.TO_BLOCK <= ?
 )
 `
 
-func (q *Queries) GetGarbageCount(ctx context.Context, block int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getGarbageCount, block)
+type GetGarbageCountParams struct {
+	ToBlock   int64
+	ToBlock_2 int64
+	ToBlock_3 int64
+}
+
+func (q *Queries) GetGarbageCount(ctx context.Context, arg GetGarbageCountParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getGarbageCount, arg.ToBlock, arg.ToBlock_2, arg.ToBlock_3)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const getLastBlock = `-- name: GetLastBlock :one
+SELECT BLOCK FROM LAST_BLOCK
+`
+
+func (q *Queries) GetLastBlock(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getLastBlock)
+	var block int64
+	err := row.Scan(&block)
+	return block, err
 }
 
 const getLastProcessedBlockNumber = `-- name: GetLastProcessedBlockNumber :one
@@ -446,38 +196,15 @@ func (q *Queries) GetLastProcessedBlockNumber(ctx context.Context) (int64, error
 }
 
 const getNumericAnnotations = `-- name: GetNumericAnnotations :many
-SELECT a.annotation_key, a.value
-FROM numeric_annotations AS a INNER JOIN entities AS e
-  ON a.entity_key = e.key
-  AND a.entity_last_modified_at_block = e.last_modified_at_block
-  AND a.entity_transaction_index_in_block = e.transaction_index_in_block
-  AND a.entity_operation_index_in_transaction = e.operation_index_in_transaction
-  AND e.deleted = FALSE
-  AND e.last_modified_at_block <= ?2
-  AND NOT EXISTS (
-    SELECT 1
-    FROM entities AS e2
-    WHERE e2.key = e.key
-    AND (
-      e2.last_modified_at_block > e.last_modified_at_block
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block > e.transaction_index_in_block
-      )
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block = e.transaction_index_in_block
-        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-      )
-    )
-    AND e2.last_modified_at_block <= ?2
-  )
-WHERE a.entity_key = ?1
+SELECT NUMERIC_ATTRIBUTES.KEY AS annotation_key, NUMERIC_ATTRIBUTES.VALUE AS value
+FROM NUMERIC_ATTRIBUTES
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ? AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ? AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?
 `
 
 type GetNumericAnnotationsParams struct {
-	EntityKey string
-	Block     int64
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
 }
 
 type GetNumericAnnotationsRow struct {
@@ -486,7 +213,7 @@ type GetNumericAnnotationsRow struct {
 }
 
 func (q *Queries) GetNumericAnnotations(ctx context.Context, arg GetNumericAnnotationsParams) ([]GetNumericAnnotationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getNumericAnnotations, arg.EntityKey, arg.Block)
+	rows, err := q.db.QueryContext(ctx, getNumericAnnotations, arg.EntityKey, arg.FromBlock, arg.ToBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -508,6 +235,147 @@ func (q *Queries) GetNumericAnnotations(ctx context.Context, arg GetNumericAnnot
 	return items, nil
 }
 
+const getNumericAttributesForEntityAtBlock = `-- name: GetNumericAttributesForEntityAtBlock :many
+SELECT NUMERIC_ATTRIBUTES.ENTITY_KEY, NUMERIC_ATTRIBUTES.TO_BLOCK AS OLD_TO_BLOCK, NUMERIC_ATTRIBUTES.KEY, NUMERIC_ATTRIBUTES.VALUE
+FROM NUMERIC_ATTRIBUTES
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ? AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ? AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?
+`
+
+type GetNumericAttributesForEntityAtBlockParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+}
+
+type GetNumericAttributesForEntityAtBlockRow struct {
+	EntityKey  []byte
+	OldToBlock int64
+	Key        string
+	Value      int64
+}
+
+func (q *Queries) GetNumericAttributesForEntityAtBlock(ctx context.Context, arg GetNumericAttributesForEntityAtBlockParams) ([]GetNumericAttributesForEntityAtBlockRow, error) {
+	rows, err := q.db.QueryContext(ctx, getNumericAttributesForEntityAtBlock, arg.EntityKey, arg.FromBlock, arg.ToBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetNumericAttributesForEntityAtBlockRow
+	for rows.Next() {
+		var i GetNumericAttributesForEntityAtBlockRow
+		if err := rows.Scan(
+			&i.EntityKey,
+			&i.OldToBlock,
+			&i.Key,
+			&i.Value,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNumericAttributesForEntityAtBlockSimple = `-- name: GetNumericAttributesForEntityAtBlockSimple :many
+SELECT NUMERIC_ATTRIBUTES.ENTITY_KEY, NUMERIC_ATTRIBUTES.KEY, NUMERIC_ATTRIBUTES.VALUE
+FROM NUMERIC_ATTRIBUTES
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ? AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ? AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?
+`
+
+type GetNumericAttributesForEntityAtBlockSimpleParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+}
+
+type GetNumericAttributesForEntityAtBlockSimpleRow struct {
+	EntityKey []byte
+	Key       string
+	Value     int64
+}
+
+func (q *Queries) GetNumericAttributesForEntityAtBlockSimple(ctx context.Context, arg GetNumericAttributesForEntityAtBlockSimpleParams) ([]GetNumericAttributesForEntityAtBlockSimpleRow, error) {
+	rows, err := q.db.QueryContext(ctx, getNumericAttributesForEntityAtBlockSimple, arg.EntityKey, arg.FromBlock, arg.ToBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetNumericAttributesForEntityAtBlockSimpleRow
+	for rows.Next() {
+		var i GetNumericAttributesForEntityAtBlockSimpleRow
+		if err := rows.Scan(&i.EntityKey, &i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPayloadForEntityAtBlock = `-- name: GetPayloadForEntityAtBlock :one
+SELECT PAYLOADS.ENTITY_KEY, PAYLOADS.TO_BLOCK AS OLD_TO_BLOCK, PAYLOADS.PAYLOAD
+FROM PAYLOADS
+WHERE PAYLOADS.ENTITY_KEY = ? AND PAYLOADS.FROM_BLOCK <= ? AND PAYLOADS.TO_BLOCK > ?
+LIMIT 1
+`
+
+type GetPayloadForEntityAtBlockParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+}
+
+type GetPayloadForEntityAtBlockRow struct {
+	EntityKey  []byte
+	OldToBlock int64
+	Payload    []byte
+}
+
+// Helper queries for ChangeOwner operation
+func (q *Queries) GetPayloadForEntityAtBlock(ctx context.Context, arg GetPayloadForEntityAtBlockParams) (GetPayloadForEntityAtBlockRow, error) {
+	row := q.db.QueryRowContext(ctx, getPayloadForEntityAtBlock, arg.EntityKey, arg.FromBlock, arg.ToBlock)
+	var i GetPayloadForEntityAtBlockRow
+	err := row.Scan(&i.EntityKey, &i.OldToBlock, &i.Payload)
+	return i, err
+}
+
+const getPayloadForEntityAtBlockSimple = `-- name: GetPayloadForEntityAtBlockSimple :one
+SELECT PAYLOADS.ENTITY_KEY, PAYLOADS.PAYLOAD
+FROM PAYLOADS
+WHERE PAYLOADS.ENTITY_KEY = ? AND PAYLOADS.FROM_BLOCK <= ? AND PAYLOADS.TO_BLOCK > ?
+LIMIT 1
+`
+
+type GetPayloadForEntityAtBlockSimpleParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+}
+
+type GetPayloadForEntityAtBlockSimpleRow struct {
+	EntityKey []byte
+	Payload   []byte
+}
+
+// Helper queries for ChangeToBlock operation
+func (q *Queries) GetPayloadForEntityAtBlockSimple(ctx context.Context, arg GetPayloadForEntityAtBlockSimpleParams) (GetPayloadForEntityAtBlockSimpleRow, error) {
+	row := q.db.QueryRowContext(ctx, getPayloadForEntityAtBlockSimple, arg.EntityKey, arg.FromBlock, arg.ToBlock)
+	var i GetPayloadForEntityAtBlockSimpleRow
+	err := row.Scan(&i.EntityKey, &i.Payload)
+	return i, err
+}
+
 const getProcessingStatus = `-- name: GetProcessingStatus :one
 SELECT last_processed_block_number, last_processed_block_hash FROM processing_status WHERE network = ?
 `
@@ -517,6 +385,7 @@ type GetProcessingStatusRow struct {
 	LastProcessedBlockHash   string
 }
 
+// Processing status queries (kept for network tracking)
 func (q *Queries) GetProcessingStatus(ctx context.Context, network string) (GetProcessingStatusRow, error) {
 	row := q.db.QueryRowContext(ctx, getProcessingStatus, network)
 	var i GetProcessingStatusRow
@@ -525,38 +394,15 @@ func (q *Queries) GetProcessingStatus(ctx context.Context, network string) (GetP
 }
 
 const getStringAnnotations = `-- name: GetStringAnnotations :many
-SELECT a.annotation_key, a.value
-FROM string_annotations AS a INNER JOIN entities AS e
-  ON a.entity_key = e.key
-  AND a.entity_last_modified_at_block = e.last_modified_at_block
-  AND a.entity_transaction_index_in_block = e.transaction_index_in_block
-  AND a.entity_operation_index_in_transaction = e.operation_index_in_transaction
-  AND e.deleted = FALSE
-  AND e.last_modified_at_block <= ?2
-  AND NOT EXISTS (
-    SELECT 1
-    FROM entities AS e2
-    WHERE e2.key = e.key
-    AND (
-      e2.last_modified_at_block > e.last_modified_at_block
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block > e.transaction_index_in_block
-      )
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block = e.transaction_index_in_block
-        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-      )
-    )
-    AND e2.last_modified_at_block <= ?2
-  )
-WHERE a.entity_key = ?1
+SELECT STRING_ATTRIBUTES.KEY AS annotation_key, STRING_ATTRIBUTES.VALUE AS value
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?
 `
 
 type GetStringAnnotationsParams struct {
-	EntityKey string
-	Block     int64
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
 }
 
 type GetStringAnnotationsRow struct {
@@ -564,8 +410,9 @@ type GetStringAnnotationsRow struct {
 	Value         string
 }
 
+// Query operations for reading entities (adapted for temporal schema)
 func (q *Queries) GetStringAnnotations(ctx context.Context, arg GetStringAnnotationsParams) ([]GetStringAnnotationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getStringAnnotations, arg.EntityKey, arg.Block)
+	rows, err := q.db.QueryContext(ctx, getStringAnnotations, arg.EntityKey, arg.FromBlock, arg.ToBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -574,6 +421,94 @@ func (q *Queries) GetStringAnnotations(ctx context.Context, arg GetStringAnnotat
 	for rows.Next() {
 		var i GetStringAnnotationsRow
 		if err := rows.Scan(&i.AnnotationKey, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStringAttributesForEntityAtBlock = `-- name: GetStringAttributesForEntityAtBlock :many
+SELECT STRING_ATTRIBUTES.ENTITY_KEY, STRING_ATTRIBUTES.TO_BLOCK AS OLD_TO_BLOCK, STRING_ATTRIBUTES.KEY, STRING_ATTRIBUTES.VALUE
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?
+`
+
+type GetStringAttributesForEntityAtBlockParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+}
+
+type GetStringAttributesForEntityAtBlockRow struct {
+	EntityKey  []byte
+	OldToBlock int64
+	Key        string
+	Value      string
+}
+
+func (q *Queries) GetStringAttributesForEntityAtBlock(ctx context.Context, arg GetStringAttributesForEntityAtBlockParams) ([]GetStringAttributesForEntityAtBlockRow, error) {
+	rows, err := q.db.QueryContext(ctx, getStringAttributesForEntityAtBlock, arg.EntityKey, arg.FromBlock, arg.ToBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetStringAttributesForEntityAtBlockRow
+	for rows.Next() {
+		var i GetStringAttributesForEntityAtBlockRow
+		if err := rows.Scan(
+			&i.EntityKey,
+			&i.OldToBlock,
+			&i.Key,
+			&i.Value,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStringAttributesForEntityAtBlockSimple = `-- name: GetStringAttributesForEntityAtBlockSimple :many
+SELECT STRING_ATTRIBUTES.ENTITY_KEY, STRING_ATTRIBUTES.KEY, STRING_ATTRIBUTES.VALUE
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?
+`
+
+type GetStringAttributesForEntityAtBlockSimpleParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+}
+
+type GetStringAttributesForEntityAtBlockSimpleRow struct {
+	EntityKey []byte
+	Key       string
+	Value     string
+}
+
+func (q *Queries) GetStringAttributesForEntityAtBlockSimple(ctx context.Context, arg GetStringAttributesForEntityAtBlockSimpleParams) ([]GetStringAttributesForEntityAtBlockSimpleRow, error) {
+	rows, err := q.db.QueryContext(ctx, getStringAttributesForEntityAtBlockSimple, arg.EntityKey, arg.FromBlock, arg.ToBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetStringAttributesForEntityAtBlockSimpleRow
+	for rows.Next() {
+		var i GetStringAttributesForEntityAtBlockSimpleRow
+		if err := rows.Scan(&i.EntityKey, &i.Key, &i.Value); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -598,77 +533,57 @@ func (q *Queries) HasProcessingStatus(ctx context.Context, network string) (bool
 	return column_1, err
 }
 
-const insertEntity = `-- name: InsertEntity :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-VALUES (
-  ?, ?, ?, ?, ?,
-  ?, ?, ?,
-  ?, ?
-)
+const insertNumericAttribute = `-- name: InsertNumericAttribute :exec
+INSERT INTO NUMERIC_ATTRIBUTES (
+    ENTITY_KEY,
+    FROM_BLOCK,
+    TO_BLOCK,
+    KEY,
+    VALUE
+) VALUES (?, ?, ?, ?, ?)
 `
 
-type InsertEntityParams struct {
-	Key                         string
-	ExpiresAt                   int64
-	Payload                     []byte
-	ContentType                 string
-	OwnerAddress                string
-	CreatedAtBlock              int64
-	LastModifiedAtBlock         int64
-	Deleted                     bool
-	TransactionIndexInBlock     int64
-	OperationIndexInTransaction int64
+type InsertNumericAttributeParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+	Key       string
+	Value     int64
 }
 
-func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) error {
-	_, err := q.db.ExecContext(ctx, insertEntity,
+func (q *Queries) InsertNumericAttribute(ctx context.Context, arg InsertNumericAttributeParams) error {
+	_, err := q.db.ExecContext(ctx, insertNumericAttribute,
+		arg.EntityKey,
+		arg.FromBlock,
+		arg.ToBlock,
 		arg.Key,
-		arg.ExpiresAt,
-		arg.Payload,
-		arg.ContentType,
-		arg.OwnerAddress,
-		arg.CreatedAtBlock,
-		arg.LastModifiedAtBlock,
-		arg.Deleted,
-		arg.TransactionIndexInBlock,
-		arg.OperationIndexInTransaction,
+		arg.Value,
 	)
 	return err
 }
 
-const insertNumericAnnotation = `-- name: InsertNumericAnnotation :exec
-INSERT INTO numeric_annotations (
-  entity_key, entity_last_modified_at_block,
-  entity_transaction_index_in_block, entity_operation_index_in_transaction,
-  annotation_key, value
-) VALUES (
-  ?, ?,
-  ?, ?,
-  ?, ?
-)
+const insertPayload = `-- name: InsertPayload :exec
+INSERT INTO PAYLOADS (
+    ENTITY_KEY,
+    FROM_BLOCK,
+    TO_BLOCK,
+    PAYLOAD
+) VALUES (?, ?, ?, ?)
 `
 
-type InsertNumericAnnotationParams struct {
-	EntityKey                         string
-	EntityLastModifiedAtBlock         int64
-	EntityTransactionIndexInBlock     int64
-	EntityOperationIndexInTransaction int64
-	AnnotationKey                     string
-	Value                             int64
+type InsertPayloadParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+	Payload   []byte
 }
 
-func (q *Queries) InsertNumericAnnotation(ctx context.Context, arg InsertNumericAnnotationParams) error {
-	_, err := q.db.ExecContext(ctx, insertNumericAnnotation,
+func (q *Queries) InsertPayload(ctx context.Context, arg InsertPayloadParams) error {
+	_, err := q.db.ExecContext(ctx, insertPayload,
 		arg.EntityKey,
-		arg.EntityLastModifiedAtBlock,
-		arg.EntityTransactionIndexInBlock,
-		arg.EntityOperationIndexInTransaction,
-		arg.AnnotationKey,
-		arg.Value,
+		arg.FromBlock,
+		arg.ToBlock,
+		arg.Payload,
 	)
 	return err
 }
@@ -688,153 +603,80 @@ func (q *Queries) InsertProcessingStatus(ctx context.Context, arg InsertProcessi
 	return err
 }
 
-const insertStringAnnotation = `-- name: InsertStringAnnotation :exec
-INSERT INTO string_annotations (
-  entity_key, entity_last_modified_at_block,
-  entity_transaction_index_in_block, entity_operation_index_in_transaction,
-  annotation_key, value
-) VALUES (
-  ?, ?,
-  ?, ?,
-  ?, ?
-)
+const insertStringAttribute = `-- name: InsertStringAttribute :exec
+INSERT INTO STRING_ATTRIBUTES (
+    ENTITY_KEY,
+    FROM_BLOCK,
+    TO_BLOCK,
+    KEY,
+    VALUE
+) VALUES (?, ?, ?, ?, ?)
 `
 
-type InsertStringAnnotationParams struct {
-	EntityKey                         string
-	EntityLastModifiedAtBlock         int64
-	EntityTransactionIndexInBlock     int64
-	EntityOperationIndexInTransaction int64
-	AnnotationKey                     string
-	Value                             string
+type InsertStringAttributeParams struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+	Key       string
+	Value     string
 }
 
-func (q *Queries) InsertStringAnnotation(ctx context.Context, arg InsertStringAnnotationParams) error {
-	_, err := q.db.ExecContext(ctx, insertStringAnnotation,
+func (q *Queries) InsertStringAttribute(ctx context.Context, arg InsertStringAttributeParams) error {
+	_, err := q.db.ExecContext(ctx, insertStringAttribute,
 		arg.EntityKey,
-		arg.EntityLastModifiedAtBlock,
-		arg.EntityTransactionIndexInBlock,
-		arg.EntityOperationIndexInTransaction,
-		arg.AnnotationKey,
+		arg.FromBlock,
+		arg.ToBlock,
+		arg.Key,
 		arg.Value,
 	)
 	return err
 }
 
-const updateEntityExpiresAt = `-- name: UpdateEntityExpiresAt :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-SELECT
-    e.key,
-    ?1 AS expires_at,
-    e.payload,
-    e.content_type,
-    e.owner_address,
-    e.created_at_block,
-    ?2 AS last_modified_at_block,
-    e.deleted,
-    ?3 AS transaction_index_in_block,
-    ?4 AS operation_index_in_transaction
-FROM entities AS e
-WHERE e.key = ?5
-AND e.deleted = FALSE
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-)
+const terminateNumericAttributesAtBlock = `-- name: TerminateNumericAttributesAtBlock :exec
+UPDATE NUMERIC_ATTRIBUTES
+SET TO_BLOCK = ?2
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ?1 AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ?2 AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?2
 `
 
-type UpdateEntityExpiresAtParams struct {
-	ExpiresAt                   int64
-	LastModifiedAtBlock         int64
-	TransactionIndexInBlock     int64
-	OperationIndexInTransaction int64
-	Key                         string
+type TerminateNumericAttributesAtBlockParams struct {
+	EntityKey []byte
+	ToBlock   int64
 }
 
-func (q *Queries) UpdateEntityExpiresAt(ctx context.Context, arg UpdateEntityExpiresAtParams) error {
-	_, err := q.db.ExecContext(ctx, updateEntityExpiresAt,
-		arg.ExpiresAt,
-		arg.LastModifiedAtBlock,
-		arg.TransactionIndexInBlock,
-		arg.OperationIndexInTransaction,
-		arg.Key,
-	)
+func (q *Queries) TerminateNumericAttributesAtBlock(ctx context.Context, arg TerminateNumericAttributesAtBlockParams) error {
+	_, err := q.db.ExecContext(ctx, terminateNumericAttributesAtBlock, arg.EntityKey, arg.ToBlock)
 	return err
 }
 
-const updateEntityOwner = `-- name: UpdateEntityOwner :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-SELECT
-    e.key,
-    e.expires_at,
-    e.payload,
-    e.content_type,
-    ?1,
-    e.created_at_block,
-    ?2 AS last_modified_at_block,
-    e.deleted,
-    ?3 AS transaction_index_in_block,
-    ?4 AS operation_index_in_transaction
-FROM entities AS e
-WHERE e.key = ?5
-AND e.deleted = FALSE
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-)
+const terminatePayloadAtBlock = `-- name: TerminatePayloadAtBlock :exec
+UPDATE PAYLOADS
+SET TO_BLOCK = ?2
+WHERE PAYLOADS.ENTITY_KEY = ?1 AND PAYLOADS.FROM_BLOCK <= ?2 AND PAYLOADS.TO_BLOCK > ?2
 `
 
-type UpdateEntityOwnerParams struct {
-	OwnerAddress                string
-	LastModifiedAtBlock         int64
-	TransactionIndexInBlock     int64
-	OperationIndexInTransaction int64
-	Key                         string
+type TerminatePayloadAtBlockParams struct {
+	EntityKey []byte
+	ToBlock   int64
 }
 
-func (q *Queries) UpdateEntityOwner(ctx context.Context, arg UpdateEntityOwnerParams) error {
-	_, err := q.db.ExecContext(ctx, updateEntityOwner,
-		arg.OwnerAddress,
-		arg.LastModifiedAtBlock,
-		arg.TransactionIndexInBlock,
-		arg.OperationIndexInTransaction,
-		arg.Key,
-	)
+func (q *Queries) TerminatePayloadAtBlock(ctx context.Context, arg TerminatePayloadAtBlockParams) error {
+	_, err := q.db.ExecContext(ctx, terminatePayloadAtBlock, arg.EntityKey, arg.ToBlock)
+	return err
+}
+
+const terminateStringAttributesAtBlock = `-- name: TerminateStringAttributesAtBlock :exec
+UPDATE STRING_ATTRIBUTES
+SET TO_BLOCK = ?2
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ?1 AND STRING_ATTRIBUTES.FROM_BLOCK <= ?2 AND STRING_ATTRIBUTES.TO_BLOCK > ?2
+`
+
+type TerminateStringAttributesAtBlockParams struct {
+	EntityKey []byte
+	ToBlock   int64
+}
+
+func (q *Queries) TerminateStringAttributesAtBlock(ctx context.Context, arg TerminateStringAttributesAtBlockParams) error {
+	_, err := q.db.ExecContext(ctx, terminateStringAttributesAtBlock, arg.EntityKey, arg.ToBlock)
 	return err
 }
 
@@ -850,5 +692,16 @@ type UpdateProcessingStatusParams struct {
 
 func (q *Queries) UpdateProcessingStatus(ctx context.Context, arg UpdateProcessingStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateProcessingStatus, arg.LastProcessedBlockNumber, arg.LastProcessedBlockHash, arg.Network)
+	return err
+}
+
+const upsertLastBlock = `-- name: UpsertLastBlock :exec
+INSERT INTO LAST_BLOCK (ID, BLOCK)
+VALUES (1, ?)
+ON CONFLICT (ID) DO UPDATE SET BLOCK = excluded.BLOCK
+`
+
+func (q *Queries) UpsertLastBlock(ctx context.Context, block int64) error {
+	_, err := q.db.ExecContext(ctx, upsertLastBlock, block)
 	return err
 }
