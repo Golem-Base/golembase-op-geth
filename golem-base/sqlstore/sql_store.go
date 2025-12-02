@@ -104,6 +104,7 @@ func getSequence(createdAtBlock uint64, transactionIndexInBlock uint64, operatio
 
 // NewStore creates a new ETL instance with database connection and schema setup
 func NewStore(dbFile string, historicBlocksCount uint64, databaseDisabled bool) (*SQLStore, error) {
+	log.Info("creating new SQLStore", "dbFile", dbFile, "historicBlocksCount", historicBlocksCount, "databaseDisabled", databaseDisabled)
 	dir := filepath.Dir(dbFile)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
