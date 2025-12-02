@@ -23,10 +23,10 @@ func TestEqualExpr(t *testing.T) {
 
 	require.ElementsMatch(t,
 		[]any{
-			block, block,
+			block, block, block, block, // 4 for CTE (a.FROM_BLOCK, a.TO_BLOCK, e2.FROM_BLOCK, e2.TO_BLOCK)
 			"name",
 			"test",
-			block, block,
+			block, block, block, block, // 4 for main WHERE (e.FROM_BLOCK, e.TO_BLOCK, e2.FROM_BLOCK, e2.TO_BLOCK)
 		},
 		res.Args,
 	)
@@ -40,10 +40,10 @@ func TestEqualExpr(t *testing.T) {
 
 	require.ElementsMatch(t,
 		[]any{
-			block, block,
+			block, block, block, block, // 4 for CTE
 			"déçevant",
 			"non",
-			block, block,
+			block, block, block, block, // 4 for main WHERE
 		},
 		res.Args,
 	)
@@ -56,10 +56,10 @@ func TestEqualExpr(t *testing.T) {
 
 	require.ElementsMatch(t,
 		[]any{
-			block, block,
+			block, block, block, block, // 4 for CTE
 			"بروح",
 			"ايوة",
-			block, block,
+			block, block, block, block, // 4 for main WHERE
 		},
 		res.Args,
 	)

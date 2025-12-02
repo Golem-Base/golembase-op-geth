@@ -489,12 +489,16 @@ func (e *SQLStore) SnapSyncToBlock(
 		fromBlock := int64(entityToInsert.Metadata.LastModifiedAtBlock)
 		toBlock := int64(entityToInsert.Metadata.ExpiresAtBlock)
 
-		// Insert payload
+		// Insert payload (ensure it's not nil - use empty slice if nil)
+		payload := entityToInsert.Payload
+		if payload == nil {
+			payload = []byte{}
+		}
 		err = txDB.InsertPayload(ctx, sqlitegolem.InsertPayloadParams{
 			EntityKey: entityKey,
 			FromBlock: fromBlock,
 			ToBlock:   toBlock,
-			Payload:   entityToInsert.Payload,
+			Payload:   payload,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to insert payload for entity %s: %w", entityToInsert.Key.Hex(), err)
@@ -645,12 +649,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 			entityKey := entityKeyBytes(op.Create.EntityKey)
 			untilBlock := int64(op.Create.ExpiresAtBlock)
 
-			// Insert payload
+			// Insert payload (ensure it's not nil - use empty slice if nil)
+			payload := op.Create.Payload
+			if payload == nil {
+				payload = []byte{}
+			}
 			err = txDB.InsertPayload(ctx, sqlitegolem.InsertPayloadParams{
 				EntityKey: entityKey,
 				FromBlock: currentBlock,
 				ToBlock:   untilBlock,
-				Payload:   op.Create.Payload,
+				Payload:   payload,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert payload: %w", err)
@@ -760,12 +768,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				return fmt.Errorf("failed to terminate numeric attributes: %w", err)
 			}
 
-			// Insert new payload
+			// Insert new payload (ensure it's not nil - use empty slice if nil)
+			payload := op.Update.Payload
+			if payload == nil {
+				payload = []byte{}
+			}
 			err = txDB.InsertPayload(ctx, sqlitegolem.InsertPayloadParams{
 				EntityKey: entityKey,
 				FromBlock: currentBlock,
 				ToBlock:   untilBlock,
-				Payload:   op.Update.Payload,
+				Payload:   payload,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert payload: %w", err)
@@ -873,12 +885,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				return fmt.Errorf("failed to terminate numeric attributes: %w", err)
 			}
 
-			// Insert new records with updated owner
+			// Insert new records with updated owner (ensure payload is not nil)
+			payloadData := payload.Payload
+			if payloadData == nil {
+				payloadData = []byte{}
+			}
 			err = txDB.InsertPayload(ctx, sqlitegolem.InsertPayloadParams{
 				EntityKey: entityKey,
 				FromBlock: currentBlock,
 				ToBlock:   payload.OldToBlock,
-				Payload:   payload.Payload,
+				Payload:   payloadData,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert payload: %w", err)
@@ -997,12 +1013,16 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				return fmt.Errorf("failed to terminate numeric attributes: %w", err)
 			}
 
-			// Insert new records with updated expiration
+			// Insert new records with updated expiration (ensure payload is not nil)
+			payloadData := payload.Payload
+			if payloadData == nil {
+				payloadData = []byte{}
+			}
 			err = txDB.InsertPayload(ctx, sqlitegolem.InsertPayloadParams{
 				EntityKey: entityKey,
 				FromBlock: currentBlock,
 				ToBlock:   newToBlock,
-				Payload:   payload.Payload,
+				Payload:   payloadData,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert payload: %w", err)
