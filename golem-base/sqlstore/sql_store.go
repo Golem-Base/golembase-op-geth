@@ -107,6 +107,8 @@ func configureDBPool(db *sql.DB, numThreads int) {
 	db.SetMaxIdleConns(numThreads)
 	db.SetConnMaxLifetime(0)
 	db.SetConnMaxIdleTime(0)
+
+	db.Exec(fmt.Sprintf("PRAGMA threads = %d;", numThreads))
 }
 
 // logDBStats logs database statistics for both read and write databases
@@ -138,7 +140,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=1000000000", dbFile))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=rwc&_synchronous=normal&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=1000000000", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -278,7 +280,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to recreate schema: %w", err)
 	}
 
-	readDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=deferred&_cache_size=1000000000", dbFile))
+	readDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?&_synchronous=normal&_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_foreign_keys=true&_txlock=deferred&_cache_size=1000000000", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
