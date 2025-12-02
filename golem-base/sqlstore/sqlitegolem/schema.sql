@@ -40,6 +40,11 @@ ON entities(
   operation_index_in_transaction
 );
 
+CREATE INDEX IF NOT EXISTS idx_entities_last_modified
+ON entities(
+  last_modified_at_block
+);
+
 CREATE TABLE IF NOT EXISTS string_annotations (
   entity_key TEXT NOT NULL,
   entity_last_modified_at_block INTEGER NOT NULL,
