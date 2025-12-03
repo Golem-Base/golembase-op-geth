@@ -348,8 +348,10 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 	}
 
 	tableName := "PAYLOADS"
+	hasCTEs := false
 	if !t.All {
 		tableName = t.Expression.Evaluate(&builder)
+		hasCTEs = true
 	}
 
 	// Build SELECT clause with proper column mappings from PAYLOADS
@@ -395,16 +397,34 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		columnSelect = "1"
 	}
 
-	builder.tableBuilder.WriteString(strings.Join(
-		[]string{
-			" SELECT DISTINCT",
-			columnSelect,
-			"FROM",
-			tableName,
-			"AS e",
-		},
-		" ",
-	))
+	if hasCTEs {
+		// Join PAYLOADS when using CTEs (which return ENTITY_KEY and FROM_BLOCK)
+		builder.tableBuilder.WriteString(strings.Join(
+			[]string{
+				" SELECT DISTINCT",
+				columnSelect,
+				"FROM",
+				tableName,
+				"AS cte",
+				"INNER JOIN PAYLOADS AS e",
+				"ON cte.ENTITY_KEY = e.ENTITY_KEY",
+				"AND cte.FROM_BLOCK = e.FROM_BLOCK",
+			},
+			" ",
+		))
+	} else {
+		// Direct query on PAYLOADS
+		builder.tableBuilder.WriteString(strings.Join(
+			[]string{
+				" SELECT DISTINCT",
+				columnSelect,
+				"FROM",
+				tableName,
+				"AS e",
+			},
+			" ",
+		))
+	}
 
 	for i, orderBy := range builder.options.OrderBy {
 		tableName := ""
@@ -879,9 +899,9 @@ func (b *QueryBuilder) createAnnotationQuery(
 	whereClause string,
 	arguments ...any,
 ) string {
-	args := make([]any, 0, len(arguments)+4)
-	// Add 4 AtBlock args: 2 for a (FROM_BLOCK/TO_BLOCK), 2 for e2 (FROM_BLOCK/TO_BLOCK)
-	args = append(args, b.options.AtBlock, b.options.AtBlock, b.options.AtBlock, b.options.AtBlock)
+	args := make([]any, 0, len(arguments)+2)
+	// Add 2 AtBlock args: for a (FROM_BLOCK/TO_BLOCK)
+	args = append(args, b.options.AtBlock, b.options.AtBlock)
 	args = append(args, arguments...)
 
 	tableName := "STRING_ATTRIBUTES"
@@ -892,23 +912,13 @@ func (b *QueryBuilder) createAnnotationQuery(
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
-				"SELECT e.* FROM",
+				"SELECT DISTINCT a.ENTITY_KEY, a.FROM_BLOCK FROM",
 				tableName,
 				"AS a",
-				"INNER JOIN PAYLOADS AS e",
-				"ON a.ENTITY_KEY = e.ENTITY_KEY",
-				"AND a.FROM_BLOCK = e.FROM_BLOCK",
-				"AND a.FROM_BLOCK <= ?",
-				"AND a.TO_BLOCK > ?",
-				"AND NOT EXISTS (",
-				"SELECT 1",
-				"FROM PAYLOADS AS e2",
-				"WHERE e2.ENTITY_KEY = e.ENTITY_KEY",
-				"AND e2.FROM_BLOCK <= ?",
-				"AND e2.TO_BLOCK > ?",
-				"AND e2.FROM_BLOCK > e.FROM_BLOCK",
-				")",
 				"WHERE",
+				"a.FROM_BLOCK <= ?",
+				"AND a.TO_BLOCK > ?",
+				"AND",
 				func() string {
 					clause := strings.ReplaceAll(strings.ReplaceAll(whereClause, "a.annotation_key", "a.KEY"), "annotation_key", "a.KEY")
 					// Qualify unqualified KEY and VALUE with a.
