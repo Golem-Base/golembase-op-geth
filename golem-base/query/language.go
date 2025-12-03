@@ -469,14 +469,6 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		[]string{
 			"e.FROM_BLOCK <= ?",
 			"AND e.TO_BLOCK > ?",
-			"AND NOT EXISTS (",
-			"SELECT 1",
-			"FROM PAYLOADS AS e2",
-			"WHERE e2.ENTITY_KEY = e.ENTITY_KEY",
-			"AND e2.FROM_BLOCK <= ?",
-			"AND e2.TO_BLOCK > ?",
-			"AND e2.FROM_BLOCK > e.FROM_BLOCK",
-			")",
 		},
 		" ",
 	))
@@ -491,7 +483,7 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 	for i := 0; i < atBlockArgsCount; i++ {
 		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
 	}
-	builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock, builder.options.AtBlock, builder.options.AtBlock)
+	builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
 
 	builder.tableBuilder.WriteString(" ORDER BY ")
 
