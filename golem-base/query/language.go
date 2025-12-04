@@ -240,23 +240,13 @@ type SelectQuery struct {
 type QueryBuilder struct {
 	tableBuilder *strings.Builder
 	args         []any
-	needsComma   bool
 	needsWhere   bool
-	tableCounter uint64
 	options      QueryOptions
 }
 
-func (b *QueryBuilder) nextTableName() string {
-	b.tableCounter = b.tableCounter + 1
-	return fmt.Sprintf("table_%d", b.tableCounter)
-}
-
-func (b *QueryBuilder) writeComma() {
-	if b.needsComma {
-		b.tableBuilder.WriteString(", ")
-	} else {
-		b.needsComma = true
-	}
+// WhereCondition represents a WHERE clause condition that can be combined with AND/OR
+type WhereCondition struct {
+	Condition string
 }
 
 func (b *QueryBuilder) addPaginationArguments() {
@@ -307,17 +297,43 @@ func (b *QueryBuilder) addPaginationArguments() {
 	}
 }
 
-func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
-	tableName := b.nextTableName()
-	b.writeComma()
-	b.tableBuilder.WriteString(tableName)
-	b.tableBuilder.WriteString(" AS (")
-	b.tableBuilder.WriteString(query)
-	b.tableBuilder.WriteString(")")
+// createExistsCondition creates an EXISTS subquery condition for attribute filtering
+func (b *QueryBuilder) createExistsCondition(
+	attributeType string,
+	whereClause string,
+	arguments ...any,
+) string {
+	args := make([]any, 0, len(arguments)+2)
+	// Add 2 AtBlock args: for a (FROM_BLOCK/TO_BLOCK)
+	args = append(args, b.options.AtBlock, b.options.AtBlock)
+	args = append(args, arguments...)
+
+	tableName := "STRING_ATTRIBUTES"
+	if attributeType == "numeric" {
+		tableName = "NUMERIC_ATTRIBUTES"
+	}
+
+	// Build the WHERE clause with proper qualification
+	clause := strings.ReplaceAll(strings.ReplaceAll(whereClause, "a.annotation_key", "a.KEY"), "annotation_key", "a.KEY")
+	// Qualify unqualified KEY and VALUE with a.
+	clause = strings.ReplaceAll(clause, " KEY ", " a.KEY ")
+	clause = strings.ReplaceAll(clause, " VALUE ", " a.VALUE ")
+	if strings.HasPrefix(clause, "KEY ") {
+		clause = "a." + clause
+	}
+	if strings.HasPrefix(clause, "VALUE ") {
+		clause = "a." + clause
+	}
+
+	existsQuery := fmt.Sprintf(
+		"EXISTS (SELECT 1 FROM %s a WHERE a.ENTITY_KEY = e.ENTITY_KEY AND a.FROM_BLOCK = e.FROM_BLOCK AND a.FROM_BLOCK <= ? AND a.TO_BLOCK > ? AND %s)",
+		tableName,
+		clause,
+	)
 
 	b.args = append(b.args, args...)
 
-	return tableName
+	return existsQuery
 }
 
 type TopLevel struct {
@@ -343,15 +359,7 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		options:      *options,
 		tableBuilder: &tableBuilder,
 		args:         args,
-		needsComma:   false,
 		needsWhere:   true,
-	}
-
-	tableName := "PAYLOADS"
-	hasCTEs := false
-	if !t.All {
-		tableName = t.Expression.Evaluate(&builder)
-		hasCTEs = true
 	}
 
 	// Build SELECT clause with proper column mappings from PAYLOADS
@@ -397,35 +405,32 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		columnSelect = "1"
 	}
 
-	if hasCTEs {
-		// Join PAYLOADS when using CTEs (which return ENTITY_KEY and FROM_BLOCK)
-		builder.tableBuilder.WriteString(strings.Join(
-			[]string{
-				" SELECT DISTINCT",
-				columnSelect,
-				"FROM",
-				tableName,
-				"AS cte",
-				"INNER JOIN PAYLOADS AS e",
-				"ON cte.ENTITY_KEY = e.ENTITY_KEY",
-				"AND cte.FROM_BLOCK = e.FROM_BLOCK",
-			},
-			" ",
-		))
-	} else {
-		// Direct query on PAYLOADS
-		builder.tableBuilder.WriteString(strings.Join(
-			[]string{
-				" SELECT DISTINCT",
-				columnSelect,
-				"FROM",
-				tableName,
-				"AS e",
-			},
-			" ",
-		))
+	// Count how many AtBlock args we need for subqueries in SELECT (only for owner_address)
+	// These need to be added first since they appear in the SELECT clause
+	atBlockArgsCount := 0
+	for _, col := range columns {
+		if col == "owner_address" {
+			atBlockArgsCount += 2 // Each subquery needs 2 AtBlock args
+		}
+	}
+	// Add AtBlock args for subqueries in SELECT (before other args)
+	for i := 0; i < atBlockArgsCount; i++ {
+		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
 	}
 
+	// Always start from PAYLOADS
+	builder.tableBuilder.WriteString(strings.Join(
+		[]string{
+			"SELECT DISTINCT",
+			columnSelect,
+			"FROM",
+			"PAYLOADS",
+			"AS e",
+		},
+		" ",
+	))
+
+	// Add LEFT JOINs for sorting columns
 	for i, orderBy := range builder.options.OrderBy {
 		tableName := ""
 		switch orderBy.Type {
@@ -457,33 +462,24 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock, orderBy.Name)
 	}
 
-	builder.addPaginationArguments()
+	// Build WHERE clause
+	builder.tableBuilder.WriteString(" WHERE ")
 
-	if builder.needsWhere {
-		builder.tableBuilder.WriteString(" WHERE ")
-		builder.needsWhere = false
-	} else {
-		builder.tableBuilder.WriteString(" AND ")
-	}
-	builder.tableBuilder.WriteString(strings.Join(
-		[]string{
-			"e.FROM_BLOCK <= ?",
-			"AND e.TO_BLOCK > ?",
-		},
-		" ",
-	))
-	// Count how many AtBlock args we need for subqueries in SELECT (only for owner_address)
-	atBlockArgsCount := 0
-	for _, col := range columns {
-		if col == "owner_address" {
-			atBlockArgsCount += 2 // Each subquery needs 2 AtBlock args
+	// Add temporal block conditions first
+	builder.tableBuilder.WriteString("e.FROM_BLOCK <= ? AND e.TO_BLOCK > ?")
+	builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
+
+	// Add expression conditions if not querying all
+	if !t.All {
+		whereCond := t.Expression.Evaluate(&builder)
+		if whereCond != nil && whereCond.Condition != "" {
+			builder.tableBuilder.WriteString(" AND ")
+			builder.tableBuilder.WriteString(whereCond.Condition)
 		}
 	}
-	// Add AtBlock args for subqueries
-	for i := 0; i < atBlockArgsCount; i++ {
-		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
-	}
-	builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
+
+	// Add pagination conditions
+	builder.addPaginationArguments()
 
 	builder.tableBuilder.WriteString(" ORDER BY ")
 
@@ -547,8 +543,7 @@ func (e *Expression) invert() *Expression {
 	}
 }
 
-func (e *Expression) Evaluate(builder *QueryBuilder) string {
-	builder.tableBuilder.WriteString("WITH ")
+func (e *Expression) Evaluate(builder *QueryBuilder) *WhereCondition {
 	return e.Or.Evaluate(builder)
 }
 
@@ -599,30 +594,22 @@ func (e *OrExpression) invert() *AndExpression {
 	}
 }
 
-func (e *OrExpression) Evaluate(b *QueryBuilder) string {
-	leftTable := e.Left.Evaluate(b)
-	tableName := leftTable
+func (e *OrExpression) Evaluate(b *QueryBuilder) *WhereCondition {
+	leftCond := e.Left.Evaluate(b)
+	conditions := []string{leftCond.Condition}
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b)
-		tableName = b.nextTableName()
-
-		b.writeComma()
-
-		b.tableBuilder.WriteString(tableName)
-		b.tableBuilder.WriteString(" AS (")
-		b.tableBuilder.WriteString("SELECT * FROM ")
-		b.tableBuilder.WriteString(leftTable)
-		b.tableBuilder.WriteString(" UNION ")
-		b.tableBuilder.WriteString("SELECT * FROM ")
-		b.tableBuilder.WriteString(rightTable)
-		b.tableBuilder.WriteString(")")
-
-		// Carry forward the cumulative result of the UNION
-		leftTable = tableName
+		rightCond := rhs.Evaluate(b)
+		conditions = append(conditions, rightCond.Condition)
 	}
 
-	return tableName
+	// Combine OR conditions: (cond1) OR (cond2) OR ...
+	if len(conditions) == 1 {
+		return leftCond
+	}
+
+	combined := "(" + strings.Join(conditions, " OR ") + ")"
+	return &WhereCondition{Condition: combined}
 }
 
 // OrRHS represents the right-hand side of an OR.
@@ -649,7 +636,7 @@ func (e *OrRHS) invert() *AndRHS {
 	}
 }
 
-func (e *OrRHS) Evaluate(b *QueryBuilder) string {
+func (e *OrRHS) Evaluate(b *QueryBuilder) *WhereCondition {
 	return e.Expr.Evaluate(b)
 }
 
@@ -695,30 +682,22 @@ func (e *AndExpression) invert() *OrExpression {
 	}
 }
 
-func (e *AndExpression) Evaluate(b *QueryBuilder) string {
-	leftTable := e.Left.Evaluate(b)
-	tableName := leftTable
+func (e *AndExpression) Evaluate(b *QueryBuilder) *WhereCondition {
+	leftCond := e.Left.Evaluate(b)
+	conditions := []string{leftCond.Condition}
 
 	for _, rhs := range e.Right {
-		rightTable := rhs.Evaluate(b)
-		tableName = b.nextTableName()
-
-		b.writeComma()
-
-		b.tableBuilder.WriteString(tableName)
-		b.tableBuilder.WriteString(" AS (")
-		b.tableBuilder.WriteString("SELECT * FROM ")
-		b.tableBuilder.WriteString(leftTable)
-		b.tableBuilder.WriteString(" INTERSECT ")
-		b.tableBuilder.WriteString("SELECT * FROM ")
-		b.tableBuilder.WriteString(rightTable)
-		b.tableBuilder.WriteString(")")
-
-		// Carry forward the cumulative result of the INTERSECT
-		leftTable = tableName
+		rightCond := rhs.Evaluate(b)
+		conditions = append(conditions, rightCond.Condition)
 	}
 
-	return tableName
+	// Combine AND conditions: (cond1) AND (cond2) AND ...
+	if len(conditions) == 1 {
+		return leftCond
+	}
+
+	combined := "(" + strings.Join(conditions, " AND ") + ")"
+	return &WhereCondition{Condition: combined}
 }
 
 // AndRHS represents the right-hand side of an AND.
@@ -740,7 +719,7 @@ func (e *AndRHS) invert() *OrRHS {
 	}
 }
 
-func (e *AndRHS) Evaluate(b *QueryBuilder) string {
+func (e *AndRHS) Evaluate(b *QueryBuilder) *WhereCondition {
 	return e.Expr.Evaluate(b)
 }
 
@@ -814,7 +793,7 @@ func (e *EqualExpr) invert() *EqualExpr {
 	panic("This should not happen!")
 }
 
-func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
+func (e *EqualExpr) Evaluate(b *QueryBuilder) *WhereCondition {
 	if e.Paren != nil {
 		return e.Paren.Evaluate(b)
 	}
@@ -875,7 +854,7 @@ func (e *Paren) invert() *Paren {
 	}
 }
 
-func (e *Paren) Evaluate(b *QueryBuilder) string {
+func (e *Paren) Evaluate(b *QueryBuilder) *WhereCondition {
 	expr := e.Nested
 	// If we have a negation, we will push it down into the expression
 	if e.IsNot {
@@ -884,51 +863,6 @@ func (e *Paren) Evaluate(b *QueryBuilder) string {
 	// We don't have to do anything here regarding precedence, the parsing order
 	// is already taking care of precedence since the nested OR node will create a subquery
 	return expr.Or.Evaluate(b)
-}
-
-func (b *QueryBuilder) createAnnotationQuery(
-	attributeType string,
-	whereClause string,
-	arguments ...any,
-) string {
-	args := make([]any, 0, len(arguments)+2)
-	// Add 2 AtBlock args: for a (FROM_BLOCK/TO_BLOCK)
-	args = append(args, b.options.AtBlock, b.options.AtBlock)
-	args = append(args, arguments...)
-
-	tableName := "STRING_ATTRIBUTES"
-	if attributeType == "numeric" {
-		tableName = "NUMERIC_ATTRIBUTES"
-	}
-
-	return b.createLeafQuery(
-		strings.Join(
-			[]string{
-				"SELECT DISTINCT a.ENTITY_KEY, a.FROM_BLOCK FROM",
-				tableName,
-				"AS a",
-				"WHERE",
-				"a.FROM_BLOCK <= ?",
-				"AND a.TO_BLOCK > ?",
-				"AND",
-				func() string {
-					clause := strings.ReplaceAll(strings.ReplaceAll(whereClause, "a.annotation_key", "a.KEY"), "annotation_key", "a.KEY")
-					// Qualify unqualified KEY and VALUE with a.
-					clause = strings.ReplaceAll(clause, " KEY ", " a.KEY ")
-					clause = strings.ReplaceAll(clause, " VALUE ", " a.VALUE ")
-					if strings.HasPrefix(clause, "KEY ") {
-						clause = "a." + clause
-					}
-					if strings.HasPrefix(clause, "VALUE ") {
-						clause = "a." + clause
-					}
-					return clause
-				}(),
-			},
-			" ",
-		),
-		args...,
-	)
 }
 
 type Glob struct {
@@ -945,33 +879,35 @@ func (e *Glob) invert() *Glob {
 	}
 }
 
-func (e *Glob) Evaluate(b *QueryBuilder) string {
+func (e *Glob) Evaluate(b *QueryBuilder) *WhereCondition {
 	if !e.IsNot {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE GLOB ?",
+					"a.KEY = ?",
+					"AND a.VALUE GLOB ?",
 				},
 				" ",
 			),
 			e.Var,
 			e.Value,
 		)
+		return &WhereCondition{Condition: condition}
 	} else {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE NOT GLOB ?",
+					"a.KEY = ?",
+					"AND a.VALUE NOT GLOB ?",
 				},
 				" ",
 			),
 			e.Var,
 			e.Value,
 		)
+		return &WhereCondition{Condition: condition}
 	}
 }
 
@@ -987,33 +923,35 @@ func (e *LessThan) invert() *GreaterOrEqualThan {
 	}
 }
 
-func (e *LessThan) Evaluate(b *QueryBuilder) string {
+func (e *LessThan) Evaluate(b *QueryBuilder) *WhereCondition {
 	if e.Value.String != nil {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE < ?",
+					"a.KEY = ?",
+					"AND a.VALUE < ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.String,
 		)
+		return &WhereCondition{Condition: condition}
 	} else {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"numeric",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE < ?",
+					"a.KEY = ?",
+					"AND a.VALUE < ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.Number,
 		)
+		return &WhereCondition{Condition: condition}
 	}
 }
 
@@ -1029,33 +967,35 @@ func (e *LessOrEqualThan) invert() *GreaterThan {
 	}
 }
 
-func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
+func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) *WhereCondition {
 	if e.Value.String != nil {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE <= ?",
+					"a.KEY = ?",
+					"AND a.VALUE <= ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.String,
 		)
+		return &WhereCondition{Condition: condition}
 	} else {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"numeric",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE <= ?",
+					"a.KEY = ?",
+					"AND a.VALUE <= ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.Number,
 		)
+		return &WhereCondition{Condition: condition}
 	}
 }
 
@@ -1071,33 +1011,35 @@ func (e *GreaterThan) invert() *LessOrEqualThan {
 	}
 }
 
-func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
+func (e *GreaterThan) Evaluate(b *QueryBuilder) *WhereCondition {
 	if e.Value.String != nil {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE > ?",
+					"a.KEY = ?",
+					"AND a.VALUE > ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.String,
 		)
+		return &WhereCondition{Condition: condition}
 	} else {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"numeric",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE > ?",
+					"a.KEY = ?",
+					"AND a.VALUE > ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.Number,
 		)
+		return &WhereCondition{Condition: condition}
 	}
 }
 
@@ -1113,33 +1055,35 @@ func (e *GreaterOrEqualThan) invert() *LessThan {
 	}
 }
 
-func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
+func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) *WhereCondition {
 	if e.Value.String != nil {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE >= ?",
+					"a.KEY = ?",
+					"AND a.VALUE >= ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.String,
 		)
+		return &WhereCondition{Condition: condition}
 	} else {
-		return b.createAnnotationQuery(
+		condition := b.createExistsCondition(
 			"numeric",
 			strings.Join(
 				[]string{
-					"KEY = ?",
-					"AND VALUE >= ?",
+					"a.KEY = ?",
+					"AND a.VALUE >= ?",
 				},
 				" ",
 			),
 			e.Var,
 			*e.Value.Number,
 		)
+		return &WhereCondition{Condition: condition}
 	}
 }
 
@@ -1158,7 +1102,7 @@ func (e *Equality) invert() *Equality {
 	}
 }
 
-func (e *Equality) Evaluate(b *QueryBuilder) string {
+func (e *Equality) Evaluate(b *QueryBuilder) *WhereCondition {
 	if e.Value.String != nil {
 
 		value := *e.Value.String
@@ -1173,7 +1117,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 			condition = "a.VALUE != ?"
 		}
 
-		return b.createAnnotationQuery(
+		existsCondition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
@@ -1186,6 +1130,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 			e.Var,
 			value,
 		)
+		return &WhereCondition{Condition: existsCondition}
 
 	} else {
 
@@ -1194,7 +1139,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 			condition = "a.VALUE != ?"
 		}
 
-		return b.createAnnotationQuery(
+		existsCondition := b.createExistsCondition(
 			"numeric",
 			strings.Join(
 				[]string{
@@ -1207,6 +1152,7 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 			e.Var,
 			*e.Value.Number,
 		)
+		return &WhereCondition{Condition: existsCondition}
 
 	}
 }
@@ -1225,7 +1171,7 @@ func (e *Inclusion) invert() *Inclusion {
 	}
 }
 
-func (e *Inclusion) Evaluate(b *QueryBuilder) string {
+func (e *Inclusion) Evaluate(b *QueryBuilder) *WhereCondition {
 	if len(e.Values.Strings) > 0 {
 
 		values := make([]any, 0, len(e.Values.Strings)+1)
@@ -1247,7 +1193,7 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 			condition = fmt.Sprintf("a.VALUE NOT IN (%s)", paramStr)
 		}
 
-		return b.createAnnotationQuery(
+		existsCondition := b.createExistsCondition(
 			"string",
 			strings.Join(
 				[]string{
@@ -1259,6 +1205,7 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 			),
 			values...,
 		)
+		return &WhereCondition{Condition: existsCondition}
 
 	} else {
 
@@ -1275,7 +1222,7 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 			condition = fmt.Sprintf("a.VALUE NOT IN (%s)", paramStr)
 		}
 
-		return b.createAnnotationQuery(
+		existsCondition := b.createExistsCondition(
 			"numeric",
 			strings.Join(
 				[]string{
@@ -1287,6 +1234,7 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 			),
 			values...,
 		)
+		return &WhereCondition{Condition: existsCondition}
 
 	}
 }
