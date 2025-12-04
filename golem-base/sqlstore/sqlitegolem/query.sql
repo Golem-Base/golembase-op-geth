@@ -1,244 +1,111 @@
--- name: InsertEntity :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-VALUES (
-  ?, ?, ?, ?, ?,
-  ?, ?, ?,
-  ?, ?
-);
+-- name: InsertStringAttribute :exec
+INSERT INTO STRING_ATTRIBUTES (
+    ENTITY_KEY,
+    FROM_BLOCK,
+    TO_BLOCK,
+    KEY,
+    VALUE
+) VALUES (?, ?, ?, ?, ?);
 
--- name: InsertStringAnnotation :exec
-INSERT INTO string_annotations (
-  entity_key, entity_last_modified_at_block,
-  entity_transaction_index_in_block, entity_operation_index_in_transaction,
-  annotation_key, value
-) VALUES (
-  ?, ?,
-  ?, ?,
-  ?, ?
-);
+-- name: InsertNumericAttribute :exec
+INSERT INTO NUMERIC_ATTRIBUTES (
+    ENTITY_KEY,
+    FROM_BLOCK,
+    TO_BLOCK,
+    KEY,
+    VALUE
+) VALUES (?, ?, ?, ?, ?);
 
--- name: InsertNumericAnnotation :exec
-INSERT INTO numeric_annotations (
-  entity_key, entity_last_modified_at_block,
-  entity_transaction_index_in_block, entity_operation_index_in_transaction,
-  annotation_key, value
-) VALUES (
-  ?, ?,
-  ?, ?,
-  ?, ?
-);
+-- name: InsertPayload :exec
+INSERT INTO PAYLOADS (
+    ENTITY_KEY,
+    FROM_BLOCK,
+    TO_BLOCK,
+    PAYLOAD
+) VALUES (?, ?, ?, ?);
 
--- name: GetEntity :one
-SELECT e.expires_at, e.payload, e.owner_address, a.value AS creator_address , e.created_at_block
-FROM entities AS e
-INNER JOIN string_annotations AS a
-ON e.key = a.entity_key
-AND e.last_modified_at_block = a.entity_last_modified_at_block
-AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-AND a.annotation_key = "$creator"
-WHERE e.key = sqlc.arg(key)
-AND e.deleted = FALSE
-AND e.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-  -- There is a bug in sqlc currently with repeated named args,
-  -- so we resolve the named arg ourselves here.
-  -- See https://github.com/sqlc-dev/sqlc/issues/4110
-  AND e2.last_modified_at_block <= ?2
-);
+-- name: DeleteStringAttributesBeforeBlock :exec
+DELETE FROM STRING_ATTRIBUTES
+WHERE FROM_BLOCK < ?;
 
--- name: GetStringAnnotations :many
-SELECT a.annotation_key, a.value
-FROM string_annotations AS a INNER JOIN entities AS e
-  ON a.entity_key = e.key
-  AND a.entity_last_modified_at_block = e.last_modified_at_block
-  AND a.entity_transaction_index_in_block = e.transaction_index_in_block
-  AND a.entity_operation_index_in_transaction = e.operation_index_in_transaction
-  AND e.deleted = FALSE
-  AND e.last_modified_at_block <= sqlc.arg(block)
-  AND NOT EXISTS (
-    SELECT 1
-    FROM entities AS e2
-    WHERE e2.key = e.key
-    AND (
-      e2.last_modified_at_block > e.last_modified_at_block
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block > e.transaction_index_in_block
-      )
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block = e.transaction_index_in_block
-        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-      )
-    )
-    AND e2.last_modified_at_block <= ?2
-  )
-WHERE a.entity_key = ?1;
+-- name: DeleteNumericAttributesBeforeBlock :exec
+DELETE FROM NUMERIC_ATTRIBUTES
+WHERE FROM_BLOCK < ?;
 
--- name: GetNumericAnnotations :many
-SELECT a.annotation_key, a.value
-FROM numeric_annotations AS a INNER JOIN entities AS e
-  ON a.entity_key = e.key
-  AND a.entity_last_modified_at_block = e.last_modified_at_block
-  AND a.entity_transaction_index_in_block = e.transaction_index_in_block
-  AND a.entity_operation_index_in_transaction = e.operation_index_in_transaction
-  AND e.deleted = FALSE
-  AND e.last_modified_at_block <= sqlc.arg(block)
-  AND NOT EXISTS (
-    SELECT 1
-    FROM entities AS e2
-    WHERE e2.key = e.key
-    AND (
-      e2.last_modified_at_block > e.last_modified_at_block
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block > e.transaction_index_in_block
-      )
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block = e.transaction_index_in_block
-        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-      )
-    )
-    AND e2.last_modified_at_block <= ?2
-  )
-WHERE a.entity_key = ?1;
+-- name: DeletePayloadsBeforeBlock :exec
+DELETE FROM PAYLOADS
+WHERE FROM_BLOCK < ?;
 
--- name: DeleteEntity :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-SELECT
-    e.key,
-    e.expires_at,
-    e.payload,
-    e.content_type,
-    e.owner_address,
-    e.created_at_block,
-    sqlc.arg(last_modified_at_block) AS last_modified_at_block,
-    TRUE AS deleted,
-    sqlc.arg(transaction_index_in_block) AS transaction_index_in_block,
-    sqlc.arg(operation_index_in_transaction) AS operation_index_in_transaction
-FROM entities AS e
-WHERE e.key = sqlc.arg(key)
-AND e.deleted = FALSE
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-);
+-- name: UpsertLastBlock :exec
+INSERT INTO LAST_BLOCK (ID, BLOCK)
+VALUES (1, ?)
+ON CONFLICT (ID) DO UPDATE SET BLOCK = excluded.BLOCK;
 
--- name: UpdateEntityOwner :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-SELECT
-    e.key,
-    e.expires_at,
-    e.payload,
-    e.content_type,
-    sqlc.arg(owner_address),
-    e.created_at_block,
-    sqlc.arg(last_modified_at_block) AS last_modified_at_block,
-    e.deleted,
-    sqlc.arg(transaction_index_in_block) AS transaction_index_in_block,
-    sqlc.arg(operation_index_in_transaction) AS operation_index_in_transaction
-FROM entities AS e
-WHERE e.key = sqlc.arg(key)
-AND e.deleted = FALSE
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-);
+-- name: GetLastBlock :one
+SELECT BLOCK FROM LAST_BLOCK;
 
--- name: UpdateEntityExpiresAt :exec
-INSERT INTO entities (
-  key, expires_at, payload, content_type, owner_address,
-  created_at_block, last_modified_at_block, deleted,
-  transaction_index_in_block, operation_index_in_transaction
-)
-SELECT
-    e.key,
-    sqlc.arg(expires_at) AS expires_at,
-    e.payload,
-    e.content_type,
-    e.owner_address,
-    e.created_at_block,
-    sqlc.arg(last_modified_at_block) AS last_modified_at_block,
-    e.deleted,
-    sqlc.arg(transaction_index_in_block) AS transaction_index_in_block,
-    sqlc.arg(operation_index_in_transaction) AS operation_index_in_transaction
-FROM entities AS e
-WHERE e.key = sqlc.arg(key)
-AND e.deleted = FALSE
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND e2.last_modified_at_block > e.last_modified_at_block
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-);
+-- name: TerminatePayloadAtBlock :exec
+UPDATE PAYLOADS
+SET TO_BLOCK = ?2
+WHERE PAYLOADS.ENTITY_KEY = ?1 AND PAYLOADS.FROM_BLOCK <= ?2 AND PAYLOADS.TO_BLOCK > ?2;
 
+-- name: TerminateStringAttributesAtBlock :exec
+UPDATE STRING_ATTRIBUTES
+SET TO_BLOCK = ?2
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ?1 AND STRING_ATTRIBUTES.FROM_BLOCK <= ?2 AND STRING_ATTRIBUTES.TO_BLOCK > ?2;
+
+-- name: TerminateNumericAttributesAtBlock :exec
+UPDATE NUMERIC_ATTRIBUTES
+SET TO_BLOCK = ?2
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ?1 AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ?2 AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?2;
+
+-- name: GetCreator :one
+SELECT VALUE FROM STRING_ATTRIBUTES
+WHERE ENTITY_KEY = ? AND KEY = '$creator' AND FROM_BLOCK <= ?
+ORDER BY FROM_BLOCK DESC
+LIMIT 1;
+
+-- Helper queries for ChangeOwner operation
+-- name: GetPayloadForEntityAtBlock :one
+SELECT PAYLOADS.ENTITY_KEY, PAYLOADS.TO_BLOCK AS OLD_TO_BLOCK, PAYLOADS.PAYLOAD
+FROM PAYLOADS
+WHERE PAYLOADS.ENTITY_KEY = ? AND PAYLOADS.FROM_BLOCK <= ? AND PAYLOADS.TO_BLOCK > ?
+LIMIT 1;
+
+-- name: GetStringAttributesForEntityAtBlock :many
+SELECT STRING_ATTRIBUTES.ENTITY_KEY, STRING_ATTRIBUTES.TO_BLOCK AS OLD_TO_BLOCK, STRING_ATTRIBUTES.KEY, STRING_ATTRIBUTES.VALUE
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?;
+
+-- name: GetNumericAttributesForEntityAtBlock :many
+SELECT NUMERIC_ATTRIBUTES.ENTITY_KEY, NUMERIC_ATTRIBUTES.TO_BLOCK AS OLD_TO_BLOCK, NUMERIC_ATTRIBUTES.KEY, NUMERIC_ATTRIBUTES.VALUE
+FROM NUMERIC_ATTRIBUTES
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ? AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ? AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?;
+
+-- Helper query to get active string attributes at a block
+-- name: GetActiveStringAttributesAtBlock :many
+SELECT STRING_ATTRIBUTES.KEY, STRING_ATTRIBUTES.VALUE
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?;
+
+-- Helper queries for ChangeToBlock operation
+-- name: GetPayloadForEntityAtBlockSimple :one
+SELECT PAYLOADS.ENTITY_KEY, PAYLOADS.PAYLOAD
+FROM PAYLOADS
+WHERE PAYLOADS.ENTITY_KEY = ? AND PAYLOADS.FROM_BLOCK <= ? AND PAYLOADS.TO_BLOCK > ?
+LIMIT 1;
+
+-- name: GetStringAttributesForEntityAtBlockSimple :many
+SELECT STRING_ATTRIBUTES.ENTITY_KEY, STRING_ATTRIBUTES.KEY, STRING_ATTRIBUTES.VALUE
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?;
+
+-- name: GetNumericAttributesForEntityAtBlockSimple :many
+SELECT NUMERIC_ATTRIBUTES.ENTITY_KEY, NUMERIC_ATTRIBUTES.KEY, NUMERIC_ATTRIBUTES.VALUE
+FROM NUMERIC_ATTRIBUTES
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ? AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ? AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?;
+
+-- Processing status queries (kept for network tracking)
 -- name: GetProcessingStatus :one
 SELECT last_processed_block_number, last_processed_block_hash FROM processing_status WHERE network = ?;
 
@@ -257,235 +124,43 @@ SELECT COUNT(DISTINCT network) FROM processing_status;
 -- name: DeleteProcessingStatus :exec
 DELETE FROM processing_status WHERE network = ?;
 
--- name: DeleteAllEntities :exec
-DELETE FROM entities;
+-- Query operations for reading entities (adapted for temporal schema)
+-- name: GetStringAnnotations :many
+SELECT STRING_ATTRIBUTES.KEY AS annotation_key, STRING_ATTRIBUTES.VALUE AS value
+FROM STRING_ATTRIBUTES
+WHERE STRING_ATTRIBUTES.ENTITY_KEY = ? AND STRING_ATTRIBUTES.FROM_BLOCK <= ? AND STRING_ATTRIBUTES.TO_BLOCK > ?;
 
--- name: DeleteAllStringAnnotations :exec
-DELETE FROM string_annotations;
-
--- name: DeleteAllNumericAnnotations :exec
-DELETE FROM numeric_annotations;
-
--- name: DeleteAllProcessingStatus :exec
-DELETE FROM processing_status;
+-- name: GetNumericAnnotations :many
+SELECT NUMERIC_ATTRIBUTES.KEY AS annotation_key, NUMERIC_ATTRIBUTES.VALUE AS value
+FROM NUMERIC_ATTRIBUTES
+WHERE NUMERIC_ATTRIBUTES.ENTITY_KEY = ? AND NUMERIC_ATTRIBUTES.FROM_BLOCK <= ? AND NUMERIC_ATTRIBUTES.TO_BLOCK > ?;
 
 -- name: GetEntityCount :one
-SELECT COUNT(*)
-FROM entities AS e
-WHERE e.deleted = FALSE
-AND e.last_modified_at_block <= sqlc.arg(block)
-AND NOT EXISTS (
-  SELECT 1
-  FROM entities AS e2
-  WHERE e2.key = e.key
-  AND (
-    e2.last_modified_at_block > e.last_modified_at_block
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block > e.transaction_index_in_block
-    )
-    OR (
-      e2.last_modified_at_block = e.last_modified_at_block
-      AND e2.transaction_index_in_block = e.transaction_index_in_block
-      AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-    )
-  )
-  AND e2.last_modified_at_block <= ?1
-);
-
--- name: DeleteEntitiesUntilBlock :exec
-DELETE FROM entities AS e
-WHERE e.last_modified_at_block <= sqlc.arg(block)
-AND (
-  EXISTS (
-    SELECT 1
-    FROM entities AS e2
-    WHERE e2.key = e.key
-    AND (
-      e2.last_modified_at_block > e.last_modified_at_block
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block > e.transaction_index_in_block
-      )
-      OR (
-        e2.last_modified_at_block = e.last_modified_at_block
-        AND e2.transaction_index_in_block = e.transaction_index_in_block
-        AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-      )
-    )
-  )
-  OR e.deleted = TRUE
-);
-
--- name: DeleteStringAnnotationsUntilBlock :exec
-DELETE FROM string_annotations AS a
-WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
-AND (
-  EXISTS (
-    SELECT 1
-    FROM entities AS e
-    WHERE e.key = a.entity_key
-    AND (
-      -- either there is a more recent version of the entity that this annotation
-      -- belongs to
-      (
-        e.last_modified_at_block > a.entity_last_modified_at_block
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-        )
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-        )
-      )
-      -- or the entity that this annotation belongs to has been deleted
-      OR (
-        e.last_modified_at_block = a.entity_last_modified_at_block
-        AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-        AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-        AND e.deleted = TRUE
-      )
-    )
-  )
-);
-
--- name: DeleteNumericAnnotationsUntilBlock :exec
-DELETE FROM numeric_annotations AS a
-WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
-AND (
-  EXISTS (
-    SELECT 1
-    FROM entities AS e
-    WHERE e.key = a.entity_key
-    AND (
-      -- either there is a more recent version of the entity that this annotation
-      -- belongs to
-      (
-        e.last_modified_at_block > a.entity_last_modified_at_block
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-        )
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-        )
-      )
-      -- or the entity that this annotation belongs to has been deleted
-      OR (
-        e.last_modified_at_block = a.entity_last_modified_at_block
-        AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-        AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-        AND e.deleted = TRUE
-      )
-    )
-  )
-);
+SELECT COUNT(DISTINCT ENTITY_KEY)
+FROM PAYLOADS
+WHERE FROM_BLOCK <= ? AND TO_BLOCK > ?;
 
 -- name: GetGarbageCount :one
 SELECT
 (
   SELECT COUNT(1)
-  FROM entities AS e
-  WHERE e.last_modified_at_block <= sqlc.arg(block)
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM entities AS e2
-      WHERE e2.key = e.key
-      AND (
-        e2.last_modified_at_block > e.last_modified_at_block
-        OR (
-          e2.last_modified_at_block = e.last_modified_at_block
-          AND e2.transaction_index_in_block > e.transaction_index_in_block
-        )
-        OR (
-          e2.last_modified_at_block = e.last_modified_at_block
-          AND e2.transaction_index_in_block = e.transaction_index_in_block
-          AND e2.operation_index_in_transaction > e.operation_index_in_transaction
-        )
-      )
-    )
-    OR e.deleted = TRUE
-  )
-)
-+
-(
-SELECT COUNT(1)
-  FROM string_annotations AS a
-  WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM entities AS e
-      WHERE e.key = a.entity_key
-      AND (
-        -- either there is a more recent version of the entity that this annotation
-        -- belongs to
-        (
-          e.last_modified_at_block > a.entity_last_modified_at_block
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-          )
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-            AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-          )
-        )
-        -- or the entity that this annotation belongs to has been deleted
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-          AND e.deleted = TRUE
-        )
-      )
-    )
-  )
+  FROM PAYLOADS
+  WHERE PAYLOADS.TO_BLOCK <= ?
 )
 +
 (
   SELECT COUNT(1)
-  FROM numeric_annotations AS a
-  WHERE a.entity_last_modified_at_block <= sqlc.arg(block)
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM entities AS e
-      WHERE e.key = a.entity_key
-      AND (
-        -- either there is a more recent version of the entity that this annotation
-        -- belongs to
-        (
-          e.last_modified_at_block > a.entity_last_modified_at_block
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block > a.entity_transaction_index_in_block
-          )
-          OR (
-            e.last_modified_at_block = a.entity_last_modified_at_block
-            AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-            AND e.operation_index_in_transaction > a.entity_operation_index_in_transaction
-          )
-        )
-        -- or the entity that this annotation belongs to has been deleted
-        OR (
-          e.last_modified_at_block = a.entity_last_modified_at_block
-          AND e.transaction_index_in_block = a.entity_transaction_index_in_block
-          AND e.operation_index_in_transaction = a.entity_operation_index_in_transaction
-          AND e.deleted = TRUE
-        )
-      )
-    )
-  )
+  FROM STRING_ATTRIBUTES
+  WHERE STRING_ATTRIBUTES.TO_BLOCK <= ?
+)
++
+(
+  SELECT COUNT(1)
+  FROM NUMERIC_ATTRIBUTES
+  WHERE NUMERIC_ATTRIBUTES.TO_BLOCK <= ?
 );
 
 -- name: GetLastProcessedBlockNumber :one
 SELECT last_processed_block_number
 FROM processing_status
-LIMIT 1
+LIMIT 1;

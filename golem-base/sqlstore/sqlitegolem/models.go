@@ -4,30 +4,24 @@
 
 package sqlitegolem
 
-import (
-	"database/sql"
-)
-
-type Entity struct {
-	Key                         string
-	ExpiresAt                   int64
-	Payload                     []byte
-	ContentType                 string
-	CreatedAtBlock              int64
-	LastModifiedAtBlock         int64
-	Deleted                     bool
-	TransactionIndexInBlock     int64
-	OperationIndexInTransaction int64
-	OwnerAddress                string
+type LastBlock struct {
+	ID    int64
+	Block int64
 }
 
-type NumericAnnotation struct {
-	EntityKey                         string
-	EntityLastModifiedAtBlock         int64
-	EntityTransactionIndexInBlock     int64
-	EntityOperationIndexInTransaction int64
-	AnnotationKey                     string
-	Value                             int64
+type NumericAttribute struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+	Key       string
+	Value     int64
+}
+
+type Payload struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+	Payload   []byte
 }
 
 type ProcessingStatus struct {
@@ -36,16 +30,10 @@ type ProcessingStatus struct {
 	LastProcessedBlockHash   string
 }
 
-type SchemaVersion struct {
-	ID       int64
-	Entities sql.NullInt64
-}
-
-type StringAnnotation struct {
-	EntityKey                         string
-	EntityLastModifiedAtBlock         int64
-	EntityTransactionIndexInBlock     int64
-	EntityOperationIndexInTransaction int64
-	AnnotationKey                     string
-	Value                             string
+type StringAttribute struct {
+	EntityKey []byte
+	FromBlock int64
+	ToBlock   int64
+	Key       string
+	Value     string
 }

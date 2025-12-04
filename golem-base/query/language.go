@@ -347,29 +347,92 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		needsWhere:   true,
 	}
 
-	tableName := "entities"
+	tableName := "PAYLOADS"
+	hasCTEs := false
 	if !t.All {
 		tableName = t.Expression.Evaluate(&builder)
+		hasCTEs = true
 	}
 
-	builder.tableBuilder.WriteString(strings.Join(
-		[]string{
-			" SELECT DISTINCT",
-			builder.options.columnString(),
-			"FROM",
-			tableName,
-			"AS e",
-		},
-		" ",
-	))
+	// Build SELECT clause with proper column mappings from PAYLOADS
+	columns := builder.options.AllColumns()
+	selectParts := make([]string, 0, len(columns))
+	for _, col := range columns {
+		switch col {
+		case "key":
+			selectParts = append(selectParts, "lower(hex(e.ENTITY_KEY)) AS key")
+		case "last_modified_at_block":
+			selectParts = append(selectParts, "e.FROM_BLOCK AS last_modified_at_block")
+		case "expires_at":
+			selectParts = append(selectParts, "e.TO_BLOCK AS expires_at")
+		case "created_at_block":
+			selectParts = append(selectParts, "e.FROM_BLOCK AS created_at_block")
+		case "payload":
+			selectParts = append(selectParts, "e.PAYLOAD AS payload")
+		case "transaction_index_in_block":
+			selectParts = append(selectParts, "CAST(0 AS INTEGER) AS transaction_index_in_block")
+		case "operation_index_in_transaction":
+			selectParts = append(selectParts, "CAST(0 AS INTEGER) AS operation_index_in_transaction")
+		case "content_type":
+			// Default to application/octet-stream (content_type is not stored in temporal schema)
+			selectParts = append(selectParts, "CAST('application/octet-stream' AS TEXT) AS content_type")
+		case "owner_address":
+			// Get from $owner attribute
+			selectParts = append(selectParts, "(SELECT VALUE FROM STRING_ATTRIBUTES WHERE ENTITY_KEY = e.ENTITY_KEY AND FROM_BLOCK = e.FROM_BLOCK AND KEY = '$owner' AND FROM_BLOCK <= ? AND TO_BLOCK > ? LIMIT 1) AS owner_address")
+		default:
+			// Handle annotation sorting columns
+			if strings.HasPrefix(col, "arkiv_annotation_sorting") && strings.HasSuffix(col, ".value") {
+				// Use a valid alias without dots
+				alias := strings.ReplaceAll(col, ".", "_")
+				selectParts = append(selectParts, fmt.Sprintf("%s.VALUE AS %s", strings.TrimSuffix(col, ".value"), alias))
+			} else {
+				// Other columns (like from options.Columns)
+				selectParts = append(selectParts, col)
+			}
+		}
+	}
+
+	columnSelect := strings.Join(selectParts, ", ")
+	if columnSelect == "" {
+		columnSelect = "1"
+	}
+
+	if hasCTEs {
+		// Join PAYLOADS when using CTEs (which return ENTITY_KEY and FROM_BLOCK)
+		builder.tableBuilder.WriteString(strings.Join(
+			[]string{
+				" SELECT DISTINCT",
+				columnSelect,
+				"FROM",
+				tableName,
+				"AS cte",
+				"INNER JOIN PAYLOADS AS e",
+				"ON cte.ENTITY_KEY = e.ENTITY_KEY",
+				"AND cte.FROM_BLOCK = e.FROM_BLOCK",
+			},
+			" ",
+		))
+	} else {
+		// Direct query on PAYLOADS
+		builder.tableBuilder.WriteString(strings.Join(
+			[]string{
+				" SELECT DISTINCT",
+				columnSelect,
+				"FROM",
+				tableName,
+				"AS e",
+			},
+			" ",
+		))
+	}
 
 	for i, orderBy := range builder.options.OrderBy {
 		tableName := ""
 		switch orderBy.Type {
 		case "string":
-			tableName = "string_annotations"
+			tableName = "STRING_ATTRIBUTES"
 		case "numeric":
-			tableName = "numeric_annotations"
+			tableName = "NUMERIC_ATTRIBUTES"
 		default:
 			return nil, fmt.Errorf("a type of either 'string' or 'numeric' needs to be provided for the annotation '%s'", orderBy.Name)
 		}
@@ -377,17 +440,21 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		sortingTable := fmt.Sprintf("arkiv_annotation_sorting%d", i)
 		fmt.Fprintf(builder.tableBuilder,
 			" LEFT JOIN %s AS %s"+
-				" ON %s.entity_key = e.key"+
-				" AND %s.entity_last_modified_at_block = e.last_modified_at_block"+
-				" AND %s.annotation_key = ?",
+				" ON %s.ENTITY_KEY = e.ENTITY_KEY"+
+				" AND %s.FROM_BLOCK = e.FROM_BLOCK"+
+				" AND %s.FROM_BLOCK <= ?"+
+				" AND %s.TO_BLOCK > ?"+
+				" AND %s.KEY = ?",
 
 			tableName,
 			sortingTable,
 			sortingTable,
 			sortingTable,
 			sortingTable,
+			sortingTable,
+			sortingTable,
 		)
-		builder.args = append(builder.args, orderBy.Name)
+		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock, orderBy.Name)
 	}
 
 	builder.addPaginationArguments()
@@ -400,30 +467,22 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 	}
 	builder.tableBuilder.WriteString(strings.Join(
 		[]string{
-			"e.last_modified_at_block <= ?",
-			"AND e.deleted = FALSE",
-			"AND NOT EXISTS (",
-			"SELECT 1",
-			"FROM entities AS e2",
-			"INDEXED BY idx_entities_key_last_modified",
-			"WHERE e2.key = e.key",
-			"AND e2.last_modified_at_block <= ?",
-			"AND (",
-			"e2.last_modified_at_block > e.last_modified_at_block",
-			"OR (",
-			"e2.last_modified_at_block = e.last_modified_at_block",
-			"AND e2.transaction_index_in_block > e.transaction_index_in_block",
-			")",
-			"OR (",
-			"e2.last_modified_at_block = e.last_modified_at_block",
-			"AND e2.transaction_index_in_block = e.transaction_index_in_block",
-			"AND e2.operation_index_in_transaction > e.operation_index_in_transaction",
-			")",
-			")",
-			")",
+			"e.FROM_BLOCK <= ?",
+			"AND e.TO_BLOCK > ?",
 		},
 		" ",
 	))
+	// Count how many AtBlock args we need for subqueries in SELECT (only for owner_address)
+	atBlockArgsCount := 0
+	for _, col := range columns {
+		if col == "owner_address" {
+			atBlockArgsCount += 2 // Each subquery needs 2 AtBlock args
+		}
+	}
+	// Add AtBlock args for subqueries
+	for i := 0; i < atBlockArgsCount; i++ {
+		builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
+	}
 	builder.args = append(builder.args, builder.options.AtBlock, builder.options.AtBlock)
 
 	builder.tableBuilder.WriteString(" ORDER BY ")
@@ -434,7 +493,12 @@ func (t *TopLevel) Evaluate(options *QueryOptions) (*SelectQuery, error) {
 		if o.Descending {
 			suffix = " DESC"
 		}
-		orderColumns = append(orderColumns, o.Name+suffix)
+		// Fix column names for ORDER BY - replace .value with _value for aliases
+		orderCol := o.Name
+		if strings.HasPrefix(orderCol, "arkiv_annotation_sorting") && strings.Contains(orderCol, ".value") {
+			orderCol = strings.ReplaceAll(orderCol, ".", "_")
+		}
+		orderColumns = append(orderColumns, orderCol+suffix)
 	}
 	builder.tableBuilder.WriteString(strings.Join(orderColumns, ", "))
 
@@ -828,52 +892,38 @@ func (b *QueryBuilder) createAnnotationQuery(
 	arguments ...any,
 ) string {
 	args := make([]any, 0, len(arguments)+2)
+	// Add 2 AtBlock args: for a (FROM_BLOCK/TO_BLOCK)
 	args = append(args, b.options.AtBlock, b.options.AtBlock)
 	args = append(args, arguments...)
 
-	tableName := "string_annotations"
-	indexName := "idx_string_annotations_key_last_modified"
+	tableName := "STRING_ATTRIBUTES"
 	if attributeType == "numeric" {
-		tableName = "numeric_annotations"
-		indexName = "idx_numeric_annotations_key_last_modified"
+		tableName = "NUMERIC_ATTRIBUTES"
 	}
 
 	return b.createLeafQuery(
 		strings.Join(
 			[]string{
-				"SELECT e.* FROM",
+				"SELECT DISTINCT a.ENTITY_KEY, a.FROM_BLOCK FROM",
 				tableName,
-				"AS a INDEXED BY",
-				indexName,
-				"INNER JOIN entities AS e",
-				"INDEXED BY idx_entities_key_last_modified",
-				"ON a.entity_key = e.key",
-				"AND a.entity_last_modified_at_block = e.last_modified_at_block",
-				"AND a.entity_transaction_index_in_block = e.transaction_index_in_block",
-				"AND a.entity_operation_index_in_transaction = e.operation_index_in_transaction",
-				"AND e.last_modified_at_block <= ?",
-				"AND e.deleted = FALSE",
-				"AND NOT EXISTS (",
-				"SELECT 1",
-				"FROM entities AS e2",
-				"INDEXED BY idx_entities_key_last_modified",
-				"WHERE e2.key = e.key",
-				"AND e2.last_modified_at_block <= ?",
-				"AND (",
-				"e2.last_modified_at_block > e.last_modified_at_block",
-				"OR (",
-				"e2.last_modified_at_block = e.last_modified_at_block",
-				"AND e2.transaction_index_in_block > e.transaction_index_in_block",
-				")",
-				"OR (",
-				"e2.last_modified_at_block = e.last_modified_at_block",
-				"AND e2.transaction_index_in_block = e.transaction_index_in_block",
-				"AND e2.operation_index_in_transaction > e.operation_index_in_transaction",
-				")",
-				")",
-				")",
+				"AS a",
 				"WHERE",
-				whereClause,
+				"a.FROM_BLOCK <= ?",
+				"AND a.TO_BLOCK > ?",
+				"AND",
+				func() string {
+					clause := strings.ReplaceAll(strings.ReplaceAll(whereClause, "a.annotation_key", "a.KEY"), "annotation_key", "a.KEY")
+					// Qualify unqualified KEY and VALUE with a.
+					clause = strings.ReplaceAll(clause, " KEY ", " a.KEY ")
+					clause = strings.ReplaceAll(clause, " VALUE ", " a.VALUE ")
+					if strings.HasPrefix(clause, "KEY ") {
+						clause = "a." + clause
+					}
+					if strings.HasPrefix(clause, "VALUE ") {
+						clause = "a." + clause
+					}
+					return clause
+				}(),
 			},
 			" ",
 		),
@@ -901,8 +951,8 @@ func (e *Glob) Evaluate(b *QueryBuilder) string {
 			"string",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value GLOB ?",
+					"KEY = ?",
+					"AND VALUE GLOB ?",
 				},
 				" ",
 			),
@@ -914,8 +964,8 @@ func (e *Glob) Evaluate(b *QueryBuilder) string {
 			"string",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value NOT GLOB ?",
+					"KEY = ?",
+					"AND VALUE NOT GLOB ?",
 				},
 				" ",
 			),
@@ -943,8 +993,8 @@ func (e *LessThan) Evaluate(b *QueryBuilder) string {
 			"string",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value < ?",
+					"KEY = ?",
+					"AND VALUE < ?",
 				},
 				" ",
 			),
@@ -956,8 +1006,8 @@ func (e *LessThan) Evaluate(b *QueryBuilder) string {
 			"numeric",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value < ?",
+					"KEY = ?",
+					"AND VALUE < ?",
 				},
 				" ",
 			),
@@ -985,8 +1035,8 @@ func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
 			"string",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value <= ?",
+					"KEY = ?",
+					"AND VALUE <= ?",
 				},
 				" ",
 			),
@@ -998,8 +1048,8 @@ func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
 			"numeric",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value <= ?",
+					"KEY = ?",
+					"AND VALUE <= ?",
 				},
 				" ",
 			),
@@ -1027,8 +1077,8 @@ func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
 			"string",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value > ?",
+					"KEY = ?",
+					"AND VALUE > ?",
 				},
 				" ",
 			),
@@ -1040,8 +1090,8 @@ func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
 			"numeric",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value > ?",
+					"KEY = ?",
+					"AND VALUE > ?",
 				},
 				" ",
 			),
@@ -1069,8 +1119,8 @@ func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 			"string",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value >= ?",
+					"KEY = ?",
+					"AND VALUE >= ?",
 				},
 				" ",
 			),
@@ -1082,8 +1132,8 @@ func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
 			"numeric",
 			strings.Join(
 				[]string{
-					"annotation_key = ?",
-					"AND value >= ?",
+					"KEY = ?",
+					"AND VALUE >= ?",
 				},
 				" ",
 			),
@@ -1118,16 +1168,16 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 			value = strings.ToLower(value)
 		}
 
-		condition := "a.value = ?"
+		condition := "a.VALUE = ?"
 		if e.IsNot {
-			condition = "a.value != ?"
+			condition = "a.VALUE != ?"
 		}
 
 		return b.createAnnotationQuery(
 			"string",
 			strings.Join(
 				[]string{
-					"a.annotation_key = ?",
+					"a.KEY = ?",
 					"AND",
 					condition,
 				},
@@ -1139,16 +1189,16 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 
 	} else {
 
-		condition := "a.value = ?"
+		condition := "a.VALUE = ?"
 		if e.IsNot {
-			condition = "a.value != ?"
+			condition = "a.VALUE != ?"
 		}
 
 		return b.createAnnotationQuery(
 			"numeric",
 			strings.Join(
 				[]string{
-					"a.annotation_key = ?",
+					"a.KEY = ?",
 					"AND",
 					condition,
 				},
@@ -1192,16 +1242,16 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 
 		paramStr := strings.Join(slices.Repeat([]string{"?"}, len(e.Values.Strings)), ", ")
 
-		condition := fmt.Sprintf("a.value IN (%s)", paramStr)
+		condition := fmt.Sprintf("a.VALUE IN (%s)", paramStr)
 		if e.IsNot {
-			condition = fmt.Sprintf("a.value NOT IN (%s)", paramStr)
+			condition = fmt.Sprintf("a.VALUE NOT IN (%s)", paramStr)
 		}
 
 		return b.createAnnotationQuery(
 			"string",
 			strings.Join(
 				[]string{
-					"a.annotation_key = ?",
+					"a.KEY = ?",
 					"AND",
 					condition,
 				},
@@ -1220,16 +1270,16 @@ func (e *Inclusion) Evaluate(b *QueryBuilder) string {
 
 		paramStr := strings.Join(slices.Repeat([]string{"?"}, len(e.Values.Numbers)), ", ")
 
-		condition := fmt.Sprintf("a.value IN (%s)", paramStr)
+		condition := fmt.Sprintf("a.VALUE IN (%s)", paramStr)
 		if e.IsNot {
-			condition = fmt.Sprintf("a.value NOT IN (%s)", paramStr)
+			condition = fmt.Sprintf("a.VALUE NOT IN (%s)", paramStr)
 		}
 
 		return b.createAnnotationQuery(
 			"numeric",
 			strings.Join(
 				[]string{
-					"a.annotation_key = ?",
+					"a.KEY = ?",
 					"AND",
 					condition,
 				},
