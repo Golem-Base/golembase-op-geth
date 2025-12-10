@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"runtime"
@@ -30,6 +31,8 @@ import (
 
 	"github.com/holiman/uint256"
 	"golang.org/x/time/rate"
+
+	sqlitestore "github.com/Arkiv-Network/sqlite-store"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/arkiv/dbevents"
@@ -307,13 +310,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	overrides.ApplySuperchainUpgrades = config.ApplySuperchainUpgrades
 	options.Overrides = &overrides
 
-	// // eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
-	// log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
-	// sqlStateFile := stack.Config().GolemBaseSQLStateFile
+	// eth.blockchain, err = core.NewBlockChain(chainDb, config.Genesis, eth.engine, options)
+	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
+	sqlStateFile := stack.Config().GolemBaseSQLStateFile
 
-	// if sqlStateFile == "" {
-	// 	sqlStateFile = ":memory:"
-	// }
+	if sqlStateFile == "" {
+		sqlStateFile = ":memory:"
+	}
 
 	// st, err := sqlstore.NewStore(
 	// 	stack.Config().GolemBaseSQLStateFile,
@@ -324,11 +327,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// 	return nil, fmt.Errorf("failed to create SQLStore: %w", err)
 	// }
 
+	store, err := sqlitestore.NewSQLiteStore(
+		slog.Default(),
+		stack.Config().GolemBaseSQLStateFile,
+	)
+
 	batchIterator, onNewHead := dbevents.NewChainBatchIterator(chainDb, 0)
 
 	go func() {
-		for b := range batchIterator {
-			log.Info("arkiv new batch", "batch size", b.Batch.Blocks)
+		err := store.FollowEvents(context.Background(), batchIterator)
+		if err != nil {
+			log.Error("failed to follow events", "error", err)
 		}
 	}()
 
