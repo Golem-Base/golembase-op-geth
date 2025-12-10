@@ -20,7 +20,7 @@ type arkivAPI struct {
 
 func NewArkivAPI(eth *Ethereum, dbFile string) (*arkivAPI, error) {
 	logger := slog.New(log.Root().Handler())
-	store, err := sqlitestore.NewSQLiteStore(logger, "")
+	store, err := sqlitestore.NewSQLiteStore(logger, dbFile)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sqlite store: %w", err)
 	}
@@ -35,7 +35,14 @@ func (api *arkivAPI) Query(
 	req string,
 	op *queryapi.Options,
 ) (*queryapi.QueryResponse, error) {
-	response, err := api.store.QueryEntities(ctx, req, op)
+
+	last, err := api.store.GetLastBlock(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("api", "last_block", last)
+
+	response, err := api.store.QueryEntities(ctx, req, op, "sqlite")
 	if err != nil {
 		return nil, fmt.Errorf("error executing query: %w", err)
 	}
