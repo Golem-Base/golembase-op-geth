@@ -1,7 +1,7 @@
 {
   description = "Golem Base L3 Store Prototype";
   inputs = {
-    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
+    nixpkgs.url = "https://channels.nixos.org/nixos-25.11/nixexprs.tar.xz";
 
     systems.url = "github:nix-systems/default";
 
@@ -49,7 +49,7 @@
             ];
 
             proxyVendor = true;
-            vendorHash = "sha256-Jr0nsGer7AoPqRaQv226jC+ZBg1VIoDPW8abuFcQII8=";
+            vendorHash = "sha256-U+XPwzv1qtVcMzI8FO3hKjeKbs/VekpDgDC4dRp1GAw=";
 
             ldflags = [
               "-s"
