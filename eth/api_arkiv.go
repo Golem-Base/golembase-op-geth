@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
-	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -128,14 +127,12 @@ type internalQueryOptions struct {
 }
 
 type arkivAPI struct {
-	eth   *Ethereum
-	store *sqlstore.SQLStore
+	eth *Ethereum
 }
 
-func NewArkivAPI(eth *Ethereum, store *sqlstore.SQLStore) *arkivAPI {
+func NewArkivAPI(eth *Ethereum) *arkivAPI {
 	return &arkivAPI{
-		eth:   eth,
-		store: store,
+		eth: eth,
 	}
 }
 
@@ -146,11 +143,6 @@ func (api *arkivAPI) Query(
 ) (*arkivtype.QueryResponse, error) {
 
 	log.Info("query options", "options", op)
-
-	expr, err := query.Parse(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse query: %w", err)
-	}
 
 	options, err := op.toInternalQueryOptions()
 	if err != nil {
@@ -182,11 +174,6 @@ func (api *arkivAPI) Query(
 
 	queryOptions.AtBlock = block
 
-	query, err := expr.Evaluate(&queryOptions)
-	if err != nil {
-		return nil, err
-	}
-
 	response := &arkivtype.QueryResponse{
 		BlockNumber: block,
 		Data:        make([]json.RawMessage, 0),
@@ -212,19 +199,6 @@ func (api *arkivAPI) Query(
 		}
 	}
 
-	// 256 bytes is for the overhead of the 'envelope' around the entity data
-	// and the separator characters in between
-	responseSize := 256
-
-	// 512 kb
-	maxResponseSize := 512 * 1024 * 1024
-	maxResultsPerPage := 0
-
-	if op != nil {
-		maxResultsPerPage = int(op.ResultsPerPage)
-		log.Info("query max results per page", "value", maxResultsPerPage)
-	}
-
 	startTime := time.Now()
 
 	defer func() {
@@ -232,57 +206,14 @@ func (api *arkivAPI) Query(
 		log.Info("query execution time", "elapsed", elapsed)
 	}()
 
-	err = api.store.QueryEntitiesInternalIterator(
-		ctx,
-		query.Query,
-		query.Args,
-		queryOptions,
-		func(entity arkivtype.EntityData, cursor arkivtype.Cursor) error {
-
-			ed, err := json.Marshal(entity)
-			if err != nil {
-				return fmt.Errorf("failed to marshal entity: %w", err)
-			}
-
-			newLen := responseSize + len(ed) + 1
-			if newLen > maxResponseSize {
-				cursor, err := queryOptions.EncodeCursor(&cursor)
-				if err != nil {
-					return fmt.Errorf("could not encode offset: %w", err)
-				}
-				response.Cursor = &cursor
-				return sqlstore.ErrStopIteration
-			}
-			response.Data = append(response.Data, ed)
-
-			if maxResultsPerPage > 0 && len(response.Data) >= maxResultsPerPage {
-				cursor, err := queryOptions.EncodeCursor(&cursor)
-				if err != nil {
-					return fmt.Errorf("could not encode offset: %w", err)
-				}
-				response.Cursor = &cursor
-				return sqlstore.ErrStopIteration
-			}
-
-			return nil
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
-	}
-
 	log.Info("query number of results", "value", len(response.Data))
 	return response, nil
 }
 
 // GetEntityCount returns the total number of entities in the storage.
 func (api *arkivAPI) GetEntityCount(ctx context.Context) (uint64, error) {
-	count, err := api.store.GetEntityCount(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
-	if err != nil {
-		return 0, err
-	}
 
-	return count, nil
+	return 0, nil
 }
 
 func (api *arkivAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {
