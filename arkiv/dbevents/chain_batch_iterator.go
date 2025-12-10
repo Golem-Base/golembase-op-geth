@@ -91,10 +91,13 @@ func NewChainBatchIterator(db ethdb.Database, lastBlock uint64) (
 							return
 						}
 
-						batch.Batch.Blocks = append(batch.Batch.Blocks, events.Block{
-							Number:     blockNumber,
-							Operations: []events.Operation{},
-						})
+						batchBlock, err := blockToEvents(block, receiepts)
+						if err != nil {
+							log.Error("failed to convert block to events", "number", blockNumber, "hash", hash, "error", err)
+							return
+						}
+
+						batch.Batch.Blocks = append(batch.Batch.Blocks, *batchBlock)
 
 					}
 
