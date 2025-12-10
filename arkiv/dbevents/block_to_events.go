@@ -26,6 +26,9 @@ func blockToEvents(rawBlock *types.Block, rawReceipts []*types.Receipt) (*events
 	firstReceipt := rawReceipts[0]
 
 	for opIndex, log := range firstReceipt.Logs {
+		if len(log.Topics) == 0 {
+			continue
+		}
 		if log.Topics[0] == logs.ArkivEntityExpired && len(log.Data) >= 32 {
 			entityKey := common.BytesToHash(log.Data[:32])
 			expire := events.OPExpire(entityKey.Bytes())
