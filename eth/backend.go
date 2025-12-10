@@ -319,12 +319,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	// st, err := sqlstore.NewStore(
-	// 	stack.Config().GolemBaseSQLStateFile,
-	// 	stack.Config().ArkivHistoricBlocksFlag,
-	// 	stack.Config().ArkivDatabaseDisabled,
+	//	stack.Config().GolemBaseSQLStateFile,
+	//	stack.Config().ArkivHistoricBlocksFlag,
+	//	stack.Config().ArkivDatabaseDisabled,
 	// )
 	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to create SQLStore: %w", err)
+	//	return nil, fmt.Errorf("failed to create SQLStore: %w", err)
 	// }
 
 	store, err := sqlitestore.NewSQLiteStore(
@@ -471,11 +471,15 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Start the RPC service
 	eth.netRPCService = ethapi.NewNetAPI(eth.p2pServer, networkID)
 
+	arkivAPI, err := NewArkivAPI(eth, stack.Config().GolemBaseSQLStateFile)
+	if err != nil {
+		return nil, fmt.Errorf("error creating Arkiv API: %w", err)
+	}
 	// Register the backend on the node
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "arkiv",
-			Service:   NewArkivAPI(eth),
+			Service:   arkivAPI,
 		},
 	})
 	stack.RegisterAPIs(eth.APIs())

@@ -2,211 +2,44 @@ package eth
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
-	"time"
 
+	queryapi "github.com/Arkiv-Network/query-api/query"
+	sqlitestore "github.com/Arkiv-Network/sqlite-store"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
-	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type IncludeData struct {
-	Key                         bool `json:"key"`
-	Attributes                  bool `json:"attributes"`
-	SyntheticAttributes         bool `json:"syntheticAttributes"`
-	Payload                     bool `json:"payload"`
-	ContentType                 bool `json:"contentType"`
-	Expiration                  bool `json:"expiration"`
-	Owner                       bool `json:"owner"`
-	CreatedAtBlock              bool `json:"createdAtBlock"`
-	LastModifiedAtBlock         bool `json:"lastModifiedAtBlock"`
-	TransactionIndexInBlock     bool `json:"transactionIndexInBlock"`
-	OperationIndexInTransaction bool `json:"operationIndexInTransaction"`
-}
-
-type QueryOptions struct {
-	AtBlock        *uint64                       `json:"atBlock"`
-	IncludeData    *IncludeData                  `json:"includeData"`
-	OrderBy        []arkivtype.OrderByAnnotation `json:"orderBy"`
-	ResultsPerPage uint64                        `json:"resultsPerPage"`
-	Cursor         string                        `json:"cursor"`
-}
-
-var defaultColumns map[string]string
-
-func init() {
-	columns := []string{
-		arkivtype.GetColumnOrPanic("key"),
-		arkivtype.GetColumnOrPanic("expires_at"),
-		arkivtype.GetColumnOrPanic("owner_address"),
-		arkivtype.GetColumnOrPanic("payload"),
-		arkivtype.GetColumnOrPanic("content_type"),
-	}
-
-	defaultColumns = make(map[string]string, len(columns))
-	for _, column := range columns {
-		defaultColumns[column] = column
-	}
-}
-
-func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, error) {
-	switch {
-	case options == nil:
-		return &internalQueryOptions{
-			Columns:            defaultColumns,
-			IncludeAnnotations: true,
-		}, nil
-	case options.IncludeData == nil:
-		return &internalQueryOptions{
-			Columns:            defaultColumns,
-			IncludeAnnotations: true,
-			OrderBy:            options.OrderBy,
-			AtBlock:            options.AtBlock,
-			Cursor:             options.Cursor,
-		}, nil
-	default:
-		iq := internalQueryOptions{
-			Columns:                     map[string]string{},
-			OrderBy:                     options.OrderBy,
-			AtBlock:                     options.AtBlock,
-			Cursor:                      options.Cursor,
-			IncludeAnnotations:          options.IncludeData.Attributes,
-			IncludeSyntheticAnnotations: options.IncludeData.SyntheticAttributes,
-		}
-		if options.IncludeData.Payload {
-			column := arkivtype.GetColumnOrPanic("payload")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.ContentType {
-			column := arkivtype.GetColumnOrPanic("content_type")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.Expiration {
-			column := arkivtype.GetColumnOrPanic("expires_at")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.Owner {
-			column := arkivtype.GetColumnOrPanic("owner_address")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.Key {
-			column := arkivtype.GetColumnOrPanic("key")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.CreatedAtBlock {
-			column := arkivtype.GetColumnOrPanic("created_at_block")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.LastModifiedAtBlock {
-			column := arkivtype.GetColumnOrPanic("last_modified_at_block")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.TransactionIndexInBlock {
-			column := arkivtype.GetColumnOrPanic("transaction_index_in_block")
-			iq.Columns[column] = column
-		}
-		if options.IncludeData.OperationIndexInTransaction {
-			column := arkivtype.GetColumnOrPanic("operation_index_in_transaction")
-			iq.Columns[column] = column
-		}
-		return &iq, nil
-	}
-}
-
-type internalQueryOptions struct {
-	AtBlock                     *uint64                       `json:"atBlock"`
-	IncludeAnnotations          bool                          `json:"includeAnnotations"`
-	IncludeSyntheticAnnotations bool                          `json:"includeSyntheticAnnotations"`
-	Columns                     map[string]string             `json:"columns"`
-	OrderBy                     []arkivtype.OrderByAnnotation `json:"orderBy"`
-	Cursor                      string                        `json:"cursor"`
-}
-
 type arkivAPI struct {
-	eth *Ethereum
+	eth   *Ethereum
+	store *sqlitestore.SQLiteStore
 }
 
-func NewArkivAPI(eth *Ethereum) *arkivAPI {
-	return &arkivAPI{
-		eth: eth,
+func NewArkivAPI(eth *Ethereum, dbFile string) (*arkivAPI, error) {
+	logger := slog.New(log.Root().Handler())
+	store, err := sqlitestore.NewSQLiteStore(logger, "")
+	if err != nil {
+		return nil, fmt.Errorf("error creating sqlite store: %w", err)
 	}
+	return &arkivAPI{
+		eth:   eth,
+		store: store,
+	}, nil
 }
 
 func (api *arkivAPI) Query(
 	ctx context.Context,
 	req string,
-	op *QueryOptions,
-) (*arkivtype.QueryResponse, error) {
-
-	log.Info("query options", "options", op)
-
-	options, err := op.toInternalQueryOptions()
+	op *queryapi.Options,
+) (*queryapi.QueryResponse, error) {
+	response, err := api.store.QueryEntities(ctx, req, op)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error executing query: %w", err)
 	}
 
-	latestsHead := api.eth.blockchain.CurrentBlock()
-	block := latestsHead.Number.Uint64()
-
-	queryOptions := query.QueryOptions{
-		IncludeAnnotations:          options.IncludeAnnotations,
-		IncludeSyntheticAnnotations: options.IncludeSyntheticAnnotations,
-		Columns:                     options.Columns,
-		OrderBy:                     options.OrderBy,
-	}
-
-	if len(options.Cursor) != 0 {
-		offset, err := queryOptions.DecodeCursor(options.Cursor)
-		if err != nil {
-			return nil, err
-		}
-		block = offset.BlockNumber
-		queryOptions.Cursor = offset.ColumnValues
-	}
-
-	if options.AtBlock != nil {
-		block = *options.AtBlock
-	}
-
-	queryOptions.AtBlock = block
-
-	response := &arkivtype.QueryResponse{
-		BlockNumber: block,
-		Data:        make([]json.RawMessage, 0),
-	}
-
-	// In case the query should be run on a block that we don't have yet,
-	// we wait for a little bit to see if we receive the block.
-	if block > latestsHead.Number.Uint64() {
-		var cadence time.Duration
-		if latestsHead.Number.Uint64() <= 1 {
-			// For block 1, we cannot deduce the cadence, so we just assume 2 seconds
-			cadence = 2 * time.Second
-		} else {
-			cadence = time.Duration(
-				latestsHead.Time-api.eth.blockchain.GetHeaderByHash(latestsHead.ParentHash).Time,
-			) * time.Second
-		}
-
-		time.Sleep(2 * time.Duration(cadence) * time.Second)
-		latestsHead = api.eth.blockchain.CurrentBlock()
-		if block > latestsHead.Number.Uint64() {
-			return nil, fmt.Errorf("requested block is in the future")
-		}
-	}
-
-	startTime := time.Now()
-
-	defer func() {
-		elapsed := time.Since(startTime)
-		log.Info("query execution time", "elapsed", elapsed)
-	}()
-
-	log.Info("query number of results", "value", len(response.Data))
 	return response, nil
 }
 
