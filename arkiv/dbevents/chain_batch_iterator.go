@@ -62,7 +62,7 @@ func NewChainBatchIterator(db ethdb.Database, lastBlock uint64) (
 						return
 					}
 
-					batchSize := min(100, (lastBlock - newBlockNumber))
+					batchSize := min(100, (newBlockNumber - lastBlock))
 
 					log.Info("Arkiv reading batch", "size", batchSize)
 
