@@ -129,6 +129,15 @@ func blockToEvents(rawBlock *types.Block, rawReceipts []*types.Receipt) (*events
 			})
 
 		}
+		for opIndex, delete := range atx.Delete {
+			event := events.OPDelete(delete)
+
+			bl.Operations = append(bl.Operations, events.Operation{
+				TxIndex: uint64(i),
+				OpIndex: uint64(opIndex),
+				Delete:  &event,
+			})
+		}
 
 	}
 
