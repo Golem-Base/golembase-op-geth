@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Arkiv-Network/query-api/query"
 	queryapi "github.com/Arkiv-Network/query-api/query"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
@@ -454,7 +455,12 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		&e,
 		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
-		struct{}{},
+		query.Options{
+			IncludeData: &queryapi.IncludeData{
+				Key:     true,
+				Payload: true,
+			},
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
@@ -538,7 +544,13 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 		&entities,
 		"arkiv_query",
 		`test_key = "test_value"`,
-		struct{}{},
+		query.Options{
+			IncludeData: &queryapi.IncludeData{
+				Key:         true,
+				Payload:     true,
+				ContentType: true,
+			},
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities by string anotation: %w", err)
@@ -2431,7 +2443,13 @@ func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
 		&e,
 		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
-		struct{}{},
+		query.Options{
+			IncludeData: &queryapi.IncludeData{
+				Key:     true,
+				Payload: true,
+				Owner:   true,
+			},
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
