@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -1348,17 +1347,6 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	var entityKeys []common.Hash
-	if err := rpcClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys"); err != nil {
-		return fmt.Errorf("failed to get all entity keys: %w", err)
-	}
-
-	found := slices.Contains(entityKeys, w.CreatedEntityKey)
-
-	if !found {
-		return fmt.Errorf("entity with key %s not found in the list of all entities", w.CreatedEntityKey.Hex())
-	}
-
 	entities := queryapi.QueryResponse{}
 	if err := rpcClient.CallContext(
 		ctx,
@@ -1370,7 +1358,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
 
-	found = false
+	found := false
 	for _, entity := range entities.Data {
 
 		ed := queryapi.EntityData{}
@@ -1458,15 +1446,6 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
-
-	var ap entity.EntityMetaData
-	if err := rpcClient.CallContext(ctx, &ap, "golembase_getEntityMetaData", w.CreatedEntityKey.Hex()); err != nil {
-		return fmt.Errorf("failed to get entity metadata: %w", err)
-	}
-
-	if ap.Owner != w.FundedAccount.Address {
-		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ap.Owner.Hex())
-	}
 
 	entities := queryapi.QueryResponse{}
 	err := rpcClient.CallContext(
