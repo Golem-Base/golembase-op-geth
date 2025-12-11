@@ -1,7 +1,7 @@
 {
   description = "Golem Base L3 Store Prototype";
   inputs = {
-    nixpkgs.url = "https://channels.nixos.org/nixos-25.11/nixexprs.tar.xz";
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
 
     systems.url = "github:nix-systems/default";
 
@@ -49,7 +49,7 @@
             ];
 
             proxyVendor = true;
-            vendorHash = "sha256-U+XPwzv1qtVcMzI8FO3hKjeKbs/VekpDgDC4dRp1GAw=";
+            vendorHash = "sha256-wRvzDE+PW+3l6b6xlMU79tRHl4tiNz3CtUkY4be+YSM=";
 
             ldflags = [
               "-s"
@@ -68,7 +68,7 @@
             name = "golembase";
             src = ./.;
             subPackages = [ "cmd/golembase" ];
-            vendorHash = "sha256-WTu9FStwabZUf9fe07OLIRZbInsWhi4j3180D/KiFXU=";
+            vendorHash = "";
             meta = with lib; {
               description = "golembase CLI - Golem Base";
               homepage = "https://github.com/Golem-Base/golembase-op-geth";

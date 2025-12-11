@@ -88,15 +88,15 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1765311797,
-        "narHash": "sha256-3bKCEc1JWOn8aj48H1yHKU6WDw0eSU2t7cKCL3FC+Lo=",
-        "rev": "09eb77e94fa25202af8f3e81ddc7353d9970ac1b",
+        "lastModified": 1765186076,
+        "narHash": "sha256-fO54fp5kvvF8znmtV8QGwOsaBcB0NcFP41nC5Bhy/TM=",
+        "rev": "addf7cf5f383a3101ecfba091b98d0a1263dc9b8",
         "type": "tarball",
-        "url": "https://releases.nixos.org/nixos/25.11/nixos-25.11.1335.09eb77e94fa2/nixexprs.tar.xz"
+        "url": "https://releases.nixos.org/nixos/unstable/nixos-26.05pre908783.addf7cf5f383/nixexprs.tar.xz?lastModified=1765186076&rev=addf7cf5f383a3101ecfba091b98d0a1263dc9b8"
       },
       "original": {
         "type": "tarball",
-        "url": "https://channels.nixos.org/nixos-25.11/nixexprs.tar.xz"
+        "url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"
       }
     },
     "root": {
@@ -127,8 +127,8 @@
       },
       "original": {
         "owner": "Golem-Base",
-        "ref": "1021adbfc765d9c36d565907cda7e5e48c6b597b",
         "repo": "rpcplorer",
+        "rev": "1021adbfc765d9c36d565907cda7e5e48c6b597b",
         "type": "github"
       }
     },
