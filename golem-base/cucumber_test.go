@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Arkiv-Network/query-api/query"
 	queryapi "github.com/Arkiv-Network/query-api/query"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
@@ -305,7 +304,6 @@ func iSearchForAllEntities(ctx context.Context) error {
 		&response,
 		"arkiv_query",
 		`$all`,
-		queryapi.QueryOptions{},
 	)
 
 	w.LastError = err
@@ -454,10 +452,11 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		&e,
 		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
-		query.Options{
+		queryapi.Options{
 			IncludeData: &queryapi.IncludeData{
-				Key:     true,
-				Payload: true,
+				Key:         true,
+				Payload:     true,
+				ContentType: true,
 			},
 		},
 	)
@@ -505,7 +504,6 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 		&result,
 		"arkiv_query",
 		fmt.Sprintf("$expiration = %d", blockNumber256.Uint64()),
-		struct{}{},
 	)
 
 	if err != nil {
@@ -543,7 +541,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 		&entities,
 		"arkiv_query",
 		`test_key = "test_value"`,
-		query.Options{
+		queryapi.Options{
 			IncludeData: &queryapi.IncludeData{
 				Key:         true,
 				Payload:     true,
@@ -588,7 +586,6 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 		&entities,
 		"arkiv_query",
 		"test_number = 42",
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
@@ -691,10 +688,10 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 	w := testutil.GetWorld(ctx)
 	rcpClient := w.GethInstance.RPCClient
 
-	res2 := queryapi.QueryResponse{}
+	res := queryapi.QueryResponse{}
 	err := rcpClient.CallContext(
 		ctx,
-		&res2,
+		&res,
 		"arkiv_query",
 		fmt.Sprintf(`%s="%s"`, key, value),
 		queryapi.Options{
@@ -711,7 +708,7 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 	}
 
 	edList := []queryapi.EntityData{}
-	for _, d := range res2.Data {
+	for _, d := range res.Data {
 		ed := queryapi.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
@@ -776,19 +773,18 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 		return fmt.Errorf("failed to parse numeric value: %w", err)
 	}
 
-	res2 := queryapi.QueryResponse{}
+	res := queryapi.QueryResponse{}
 	if err = rcpClient.CallContext(
 		ctx,
-		&res2,
+		&res,
 		"arkiv_query",
 		fmt.Sprintf(`%s=%d`, key, value),
-		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
 	edList := []queryapi.EntityData{}
-	for _, d := range res2.Data {
+	for _, d := range res.Data {
 		ed := queryapi.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
@@ -906,7 +902,6 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 		&entities,
 		"arkiv_query",
 		fmt.Sprintf("$key = %s", w.CreatedEntityKey),
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
@@ -968,25 +963,24 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	res2 := queryapi.QueryResponse{}
+	res := queryapi.QueryResponse{}
 	err := rpcClient.CallContext(
 		ctx,
-		&res2,
+		&res,
 		"arkiv_query",
 		`test_key1="test_value1" && test_number1=43`,
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
-	if len(res2.Data) == 0 {
+	if len(res.Data) == 0 {
 		return fmt.Errorf("could not find any result when searching by new annotations")
 	}
 
 	ed := queryapi.EntityData{}
 
-	err = json.Unmarshal(res2.Data[0], &ed)
+	err = json.Unmarshal(res.Data[0], &ed)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
@@ -1086,7 +1080,6 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 		&entities,
 		"arkiv_query",
 		fmt.Sprintf("$expiration = %d", receipt.BlockNumber.Uint64()+200),
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities to expire: %w", err)
@@ -1155,20 +1148,19 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 	w := testutil.GetWorld(ctx)
 	rcpClient := w.GethInstance.RPCClient
 
-	res2 := queryapi.QueryResponse{}
+	res := queryapi.QueryResponse{}
 	err := rcpClient.CallContext(
 		ctx,
-		&res2,
+		&res,
 		"arkiv_query",
 		queryDoc.Content,
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
 	edList := []queryapi.EntityData{}
-	for _, d := range res2.Data {
+	for _, d := range res.Data {
 		ed := queryapi.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
@@ -1329,7 +1321,6 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 		&entities,
 		"arkiv_query",
 		"$all",
-		struct{}{},
 	)
 
 	if err != nil {
@@ -1353,7 +1344,6 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 		&entities,
 		"arkiv_query",
 		"$all",
-		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
@@ -1390,7 +1380,6 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 		&entities,
 		"arkiv_query",
 		"$all",
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
@@ -1416,7 +1405,6 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 			"$owner = %s",
 			w.FundedAccount.Address,
 		),
-		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
@@ -1456,7 +1444,6 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 			"$key = %s",
 			w.CreatedEntityKey.Hex(),
 		),
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
@@ -1493,7 +1480,6 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 			"$owner = %s",
 			w.FundedAccount.Address,
 		),
-		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
@@ -1665,7 +1651,6 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 		&arkivEntities,
 		"arkiv_query",
 		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address),
-		struct{}{},
 	); err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
@@ -1681,20 +1666,19 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	res2 := queryapi.QueryResponse{}
+	res := queryapi.QueryResponse{}
 	err := w.GethInstance.RPCClient.CallContext(
 		ctx,
-		&res2,
+		&res,
 		"arkiv_query",
 		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address.Hex()),
-		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
 	edList := []queryapi.EntityData{}
-	for _, d := range res2.Data {
+	for _, d := range res.Data {
 		ed := queryapi.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
@@ -2422,7 +2406,7 @@ func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
 		&e,
 		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
-		query.Options{
+		queryapi.Options{
 			IncludeData: &queryapi.IncludeData{
 				Key:     true,
 				Payload: true,
