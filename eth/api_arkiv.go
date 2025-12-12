@@ -36,11 +36,16 @@ func (api *arkivAPI) Query(
 	op *queryapi.Options,
 ) (*queryapi.QueryResponse, error) {
 
-	last, err := api.store.GetLastBlock(ctx)
-	if err != nil {
-		return nil, err
+	lastBlock := api.eth.blockchain.CurrentHeader().Number.Uint64()
+
+	log.Info("api", "last_block", lastBlock)
+
+	if op == nil {
+		op = &queryapi.Options{}
 	}
-	log.Info("api", "last_block", last)
+	if op.AtBlock == nil {
+		op.AtBlock = &lastBlock
+	}
 
 	response, err := api.store.QueryEntities(ctx, req, op, "sqlite")
 	if err != nil {
