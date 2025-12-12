@@ -127,8 +127,8 @@
       },
       "original": {
         "owner": "Golem-Base",
+        "ref": "1021adbfc765d9c36d565907cda7e5e48c6b597b",
         "repo": "rpcplorer",
-        "rev": "1021adbfc765d9c36d565907cda7e5e48c6b597b",
         "type": "github"
       }
     },
