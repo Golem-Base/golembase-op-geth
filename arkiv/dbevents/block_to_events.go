@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
 func blockToEvents(rawBlock *types.Block, rawReceipts []*types.Receipt) (*events.Block, error) {
@@ -155,7 +154,7 @@ func createdEntities(r *types.Receipt) []common.Hash {
 	return entities
 }
 
-func stringAnnotationsToMap(annotations []entity.StringAnnotation) map[string]string {
+func stringAnnotationsToMap(annotations []storagetx.StringAnnotation) map[string]string {
 	annotationsMap := make(map[string]string)
 	for _, annotation := range annotations {
 		annotationsMap[annotation.Key] = annotation.Value
@@ -163,7 +162,7 @@ func stringAnnotationsToMap(annotations []entity.StringAnnotation) map[string]st
 	return annotationsMap
 }
 
-func numericAnnotationsToMap(annotations []entity.NumericAnnotation) map[string]uint64 {
+func numericAnnotationsToMap(annotations []storagetx.NumericAnnotation) map[string]uint64 {
 	annotationsMap := make(map[string]uint64)
 	for _, annotation := range annotations {
 		annotationsMap[annotation.Key] = annotation.Value
