@@ -328,14 +328,20 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// }
 
 	store, err := sqlitestore.NewSQLiteStore(
-		slog.Default(),
+		slog.New(log.Root().Handler()),
 		sqlStateFile,
+		7,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sql store: %w", err)
 	}
 
-	batchIterator, onNewHead := dbevents.NewChainBatchIterator(chainDb, 0)
+	lastBlock, err := store.GetLastBlock(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last block from store: %w", err)
+	}
+
+	batchIterator, onNewHead := dbevents.NewChainBatchIterator(chainDb, uint64(lastBlock))
 
 	go func() {
 		err := store.FollowEvents(context.Background(), batchIterator)

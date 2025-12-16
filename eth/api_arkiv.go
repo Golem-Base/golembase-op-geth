@@ -20,7 +20,7 @@ type arkivAPI struct {
 
 func NewArkivAPI(eth *Ethereum, dbFile string) (*arkivAPI, error) {
 	logger := slog.New(log.Root().Handler())
-	store, err := sqlitestore.NewSQLiteStore(logger, dbFile)
+	store, err := sqlitestore.NewSQLiteStore(logger, dbFile, 7)
 	if err != nil {
 		return nil, fmt.Errorf("error creating sqlite store: %w", err)
 	}

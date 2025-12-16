@@ -67,9 +67,9 @@ func NewChainBatchIterator(db ethdb.Database, lastBlock uint64) (
 					log.Info("Arkiv reading batch", "size", batchSize)
 
 					for i := range batchSize {
-						log.Info("Arkiv reading block", "number", lastBlock+i)
 
 						blockNumber := lastBlock + i + 1
+						log.Info("Arkiv reading block", "number", blockNumber)
 
 						hash := rawdb.ReadCanonicalHash(db, blockNumber)
 						if hash == (common.Hash{}) {
