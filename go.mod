@@ -4,8 +4,8 @@ go 1.25.4
 
 require (
 	github.com/Arkiv-Network/arkiv-events v0.0.1
-	github.com/Arkiv-Network/query-api v0.0.13
-	github.com/Arkiv-Network/sqlite-store v0.0.12
+	github.com/Arkiv-Network/query-api v0.0.14
+	github.com/Arkiv-Network/sqlite-store v0.0.13
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
 	github.com/BurntSushi/toml v1.5.0
 	github.com/Microsoft/go-winio v0.6.2

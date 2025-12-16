@@ -1,9 +1,9 @@
 github.com/Arkiv-Network/arkiv-events v0.0.1 h1:iBj3eM8EPzbBH3luADfBzFfKjiYGioyXaiyDLnq6FsY=
 github.com/Arkiv-Network/arkiv-events v0.0.1/go.mod h1:3AYdobmFln6Dk5riTAFLNRAt5MQWN6mwV6MhbFGu8x8=
-github.com/Arkiv-Network/query-api v0.0.13 h1:2kx77Ccg+iTwCNSFxgLmUDWLYU1ef9e6owYR7AULyuA=
-github.com/Arkiv-Network/query-api v0.0.13/go.mod h1:BzKrZgpLKMmyOVDZvBqIfCBii8BnTx9C+44ejBDLQho=
-github.com/Arkiv-Network/sqlite-store v0.0.12 h1:YCnDm8lyiGJAlkBbxOuUtXSTJe87VjUUUzjRHPA5gAk=
-github.com/Arkiv-Network/sqlite-store v0.0.12/go.mod h1:hnEwCxDFX4Ryr0RvZSKE2sLFJx7yY7s0bTMsy/wPw1I=
+github.com/Arkiv-Network/query-api v0.0.14 h1:8TesOG7pMYRu6A48my57duRK+8xlbAvtK6X4Il6OZbQ=
+github.com/Arkiv-Network/query-api v0.0.14/go.mod h1:BzKrZgpLKMmyOVDZvBqIfCBii8BnTx9C+44ejBDLQho=
+github.com/Arkiv-Network/sqlite-store v0.0.13 h1:CjPoOjbDuGNucM1x8i++mxO3+jOGSRVnOu9nWfIWI0s=
+github.com/Arkiv-Network/sqlite-store v0.0.13/go.mod h1:8q2cAkd8zV1YPYa2NVNg+M1doc/PiPEQY7WFaFR/p78=
 github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.0 h1:8q4SaHjFsClSvuVne0ID/5Ka8u3fcIHyqkLjcFpNRHQ=
 github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.0/go.mod h1:bjGvMhVMb+EEm3VRNQawDMUyMMjo+S5ewNjflkep/0Q=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0 h1:vcYCAze6p19qBW7MhZybIsqD8sMV8js0NyQM8JDnVtg=
