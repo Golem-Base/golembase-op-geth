@@ -3,7 +3,6 @@ package eth
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math/big"
 
 	queryapi "github.com/Arkiv-Network/query-api/query"
@@ -18,12 +17,7 @@ type arkivAPI struct {
 	store *sqlitestore.SQLiteStore
 }
 
-func NewArkivAPI(eth *Ethereum, dbFile string) (*arkivAPI, error) {
-	logger := slog.New(log.Root().Handler())
-	store, err := sqlitestore.NewSQLiteStore(logger, dbFile, 7)
-	if err != nil {
-		return nil, fmt.Errorf("error creating sqlite store: %w", err)
-	}
+func NewArkivAPI(eth *Ethereum, store *sqlitestore.SQLiteStore) (*arkivAPI, error) {
 	return &arkivAPI{
 		eth:   eth,
 		store: store,
