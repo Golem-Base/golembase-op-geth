@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	"os"
 	"os/exec"
@@ -37,7 +38,7 @@ var opts = godog.Options{
 	Output:      colors.Uncolored(os.Stdout),
 	Format:      "progress",
 	Strict:      true,
-	Concurrency: runtime.NumCPU(),
+	Concurrency: int(math.Max(float64(runtime.NumCPU()/2), 1)),
 
 	Paths: []string{"features"},
 }
