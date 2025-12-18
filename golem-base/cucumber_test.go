@@ -53,7 +53,7 @@ func init() {
 }
 
 func compileGeth() (string, func(), error) {
-	td, err := os.MkdirTemp("", "golem-base")
+	td, err := os.MkdirTemp("", "arkiv-cucumber-compiled-geth-")
 	if err != nil {
 		panic(fmt.Errorf("failed to create temp dir: %w", err))
 	}

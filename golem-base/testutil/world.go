@@ -32,7 +32,7 @@ type World struct {
 }
 
 func NewWorld(ctx context.Context, gethPath string) (*World, error) {
-	td, err := os.MkdirTemp("", "golem-base")
+	td, err := os.MkdirTemp("", "arkiv-cucumber-")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
