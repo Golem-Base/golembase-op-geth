@@ -32,7 +32,6 @@ type GethInstance struct {
 	ETHClient   *ethclient.Client
 	RPCClient   *rpc.Client
 	RPCEndpoint string
-	WALDir      string
 }
 
 type gethProcess struct {
@@ -44,13 +43,6 @@ type gethProcess struct {
 
 func startGethInstance(ctx context.Context, gethPath string, tempDir string) (_ *GethInstance, err error) {
 	// Start geth in dev mode
-
-	td, err := os.MkdirTemp("", "geth-dev-wal")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp dir: %w", err)
-	}
-
-	walDir := filepath.Join(td, "geth-dev-wal")
 
 	geth, err := startGethWithPath(
 		ctx,
@@ -118,7 +110,6 @@ func startGethInstance(ctx context.Context, gethPath string, tempDir string) (_ 
 		RPCClient:   rpcClient,
 		RPCEndpoint: endpoint,
 		shutdown:    cleanup,
-		WALDir:      walDir,
 	}
 
 	return gi, nil
