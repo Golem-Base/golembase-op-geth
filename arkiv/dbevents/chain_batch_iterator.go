@@ -18,18 +18,17 @@ func NewChainBatchIterator(db ethdb.Database, lastBlock uint64) (
 	func(cc *params.ChainConfig, block *types.Block) error,
 ) {
 
-	mu := &sync.Mutex{}
-	cond := sync.NewCond(mu)
+	cond := sync.NewCond(&sync.Mutex{})
 	var block *types.Block
 
 	var chainConfig *params.ChainConfig
 
 	onNewHead := func(cc *params.ChainConfig, bl *types.Block) error {
-		mu.Lock()
+		cond.L.Lock()
 		block = bl
 		chainConfig = cc
 		cond.Signal()
-		mu.Unlock()
+		cond.L.Unlock()
 		log.Info("Arkiv new head", "number", bl.Number, "hash", bl.Hash())
 		return nil
 	}
@@ -45,7 +44,7 @@ func NewChainBatchIterator(db ethdb.Database, lastBlock uint64) (
 				}
 
 				func() {
-					mu.Lock()
+					cond.L.Lock()
 
 					for block == nil {
 						cond.Wait()
@@ -54,7 +53,7 @@ func NewChainBatchIterator(db ethdb.Database, lastBlock uint64) (
 
 					block = nil
 
-					mu.Unlock()
+					cond.L.Unlock()
 
 					log.Info("Arkiv new head", "number", newBlockNumber)
 
