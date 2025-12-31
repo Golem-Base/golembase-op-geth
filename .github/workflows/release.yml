@@ -1,0 +1,116 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      op-geth-version:
+        description: "The latest op-geth version in the commit history"
+        required: true
+      golembase-version:
+        description: "Golem-specific patch/suffix (e.g. 1.2)"
+        required: true
+
+env:
+  PACKAGE_PREFIX: golembase-op-geth
+  TAG: v${{ github.event.inputs.op-geth-version }}-${{ github.event.inputs.golembase-version }}
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ""
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            ext: ""
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            ext: ""
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            ext: ""
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: ".exe"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.0"
+
+      - name: Build binaries
+        run: |
+          mkdir -p build
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -o build/geth${{ matrix.ext }} ./cmd/geth
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -o build/golembase${{ matrix.ext }} ./cmd/golembase
+
+      - name: Package archive
+        run: |
+          pkg="${PACKAGE_PREFIX}-${TAG#v}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir -p dist/$pkg
+          cp build/* dist/$pkg/
+
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            (cd dist && zip -r "${pkg}.zip" "$pkg")
+          else
+            (cd dist && tar -czvf "${pkg}.tar.gz" "$pkg")
+          fi
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          for f in *.{tar.gz,zip}; do
+            if command -v sha256sum &> /dev/null; then
+              sha256sum "$f" > "$f.sha256"
+            else
+              shasum -a 256 "$f" | awk '{print $1}' > "$f.sha256"
+            fi
+          done
+
+      - name: Upload tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ matrix.goos }}-${{ matrix.goarch }}"
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-binaries
+
+      - name: Create Git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --tags
+          git tag $TAG
+          git push origin $TAG
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.TAG }}
+          release_name: ${{ env.TAG }}
+          generate_release_notes: true
+          draft: true
+          files: release-binaries/**/*
