@@ -103,6 +103,9 @@ jobs:
         with:
           path: release-binaries
 
+      - name: List artifacts
+        run: ls -lsa release-binaries
+
       - name: Create Git tag
         run: |
           git config user.name "github-actions[bot]"
@@ -120,4 +123,4 @@ jobs:
           release_name: ${{ env.TAG }}
           generate_release_notes: true
           draft: true
-          files: release-binaries/**/*
+          files: release-binaries/*/*
