@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	sqlitestore "github.com/Arkiv-Network/sqlite-store"
-	queryapi "github.com/Arkiv-Network/sqlite-store/query"
+	sqlitestore "github.com/Arkiv-Network/sqlite-bitmap-store"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/log"
@@ -27,15 +26,15 @@ func NewArkivAPI(eth *Ethereum, store *sqlitestore.SQLiteStore) (*arkivAPI, erro
 func (api *arkivAPI) Query(
 	ctx context.Context,
 	req string,
-	op *queryapi.Options,
-) (*queryapi.QueryResponse, error) {
+	op *sqlitestore.Options,
+) (*sqlitestore.QueryResponse, error) {
 
 	lastBlock := api.eth.blockchain.CurrentHeader().Number.Uint64()
 
 	log.Info("api", "last_block", lastBlock)
 
 	if op == nil {
-		op = &queryapi.Options{}
+		op = &sqlitestore.Options{}
 	}
 	if op.AtBlock == nil {
 		op.AtBlock = &lastBlock

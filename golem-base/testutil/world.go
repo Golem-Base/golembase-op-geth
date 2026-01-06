@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	queryapi "github.com/Arkiv-Network/sqlite-store/query"
+	sqlitestore "github.com/Arkiv-Network/sqlite-bitmap-store"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
@@ -18,7 +18,7 @@ type World struct {
 	FundedAccount          *FundedAccount
 	SecondFundedAccount    *FundedAccount
 	LastReceipt            *types.Receipt
-	ArkivSearchResult      []queryapi.EntityData
+	ArkivSearchResult      []sqlitestore.EntityData
 	CreatedEntityKey       common.Hash
 	SecondCreatedEntityKey common.Hash
 	LastError              error

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	queryapi "github.com/Arkiv-Network/sqlite-store/query"
+	sqlitestore "github.com/Arkiv-Network/sqlite-bitmap-store"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
 	"github.com/ethereum/go-ethereum/arkiv/compression"
@@ -266,22 +266,22 @@ func iShouldSeeAnErrorContaining(ctx context.Context, expectedSubstring string) 
 func iSearchForEntitiesWithoutColumns(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	response := queryapi.QueryResponse{}
+	response := sqlitestore.QueryResponse{}
 	err := w.GethInstance.RPCClient.CallContext(
 		ctx,
 		&response,
 		"arkiv_query",
 		`foo = "bar"`,
-		queryapi.QueryOptions{
-			IncludeData: &queryapi.IncludeData{},
+		sqlitestore.Options{
+			IncludeData: &sqlitestore.IncludeData{},
 		},
 	)
 
 	w.LastError = err
 
-	edList := []queryapi.EntityData{}
+	edList := []sqlitestore.EntityData{}
 	for _, d := range response.Data {
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
 		if err != nil {
@@ -298,7 +298,7 @@ func iSearchForEntitiesWithoutColumns(ctx context.Context) error {
 func iSearchForAllEntities(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	response := queryapi.QueryResponse{}
+	response := sqlitestore.QueryResponse{}
 	err := w.GethInstance.RPCClient.CallContext(
 		ctx,
 		&response,
@@ -308,9 +308,9 @@ func iSearchForAllEntities(ctx context.Context) error {
 
 	w.LastError = err
 
-	edList := []queryapi.EntityData{}
+	edList := []sqlitestore.EntityData{}
 	for _, d := range response.Data {
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
 		if err != nil {
@@ -446,14 +446,14 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	rcpClient := w.GethInstance.RPCClient
 
-	var e queryapi.QueryResponse
+	var e sqlitestore.QueryResponse
 	err := rcpClient.CallContext(
 		ctx,
 		&e,
 		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
-		queryapi.Options{
-			IncludeData: &queryapi.IncludeData{
+		sqlitestore.Options{
+			IncludeData: &sqlitestore.IncludeData{
 				Key:         true,
 				Payload:     true,
 				ContentType: true,
@@ -464,7 +464,7 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(e.Data[0], &ed)
 	if err != nil {
@@ -497,7 +497,7 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 
 	key := receipt.Logs[0].Topics[1]
 
-	var result queryapi.QueryResponse
+	var result sqlitestore.QueryResponse
 
 	err := rcpClient.CallContext(
 		ctx,
@@ -514,7 +514,7 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(result.Data))
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(result.Data[0], &ed)
 	if err != nil {
@@ -535,14 +535,14 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 
 	rcpClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	err := rcpClient.CallContext(
 		ctx,
 		&entities,
 		"arkiv_query",
 		`test_key = "test_value"`,
-		queryapi.Options{
-			IncludeData: &queryapi.IncludeData{
+		sqlitestore.Options{
+			IncludeData: &sqlitestore.IncludeData{
 				Key:         true,
 				Payload:     true,
 				ContentType: true,
@@ -557,7 +557,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(entities.Data[0], &ed)
 	if err != nil {
@@ -580,7 +580,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 	key := receipt.Logs[0].Topics[1]
 	rcpClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	err := rcpClient.CallContext(
 		ctx,
 		&entities,
@@ -595,7 +595,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(entities.Data[0], &ed)
 	if err != nil {
@@ -688,28 +688,20 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 	w := testutil.GetWorld(ctx)
 	rcpClient := w.GethInstance.RPCClient
 
-	res := queryapi.QueryResponse{}
+	res := sqlitestore.QueryResponse{}
 	err := rcpClient.CallContext(
 		ctx,
 		&res,
 		"arkiv_query",
 		fmt.Sprintf(`%s="%s"`, key, value),
-		queryapi.Options{
-			OrderBy: []queryapi.OrderByAnnotation{
-				{
-					Name: key,
-					Type: "string",
-				},
-			},
-		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
-	edList := []queryapi.EntityData{}
+	edList := []sqlitestore.EntityData{}
 	for _, d := range res.Data {
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
 		if err != nil {
@@ -773,7 +765,7 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 		return fmt.Errorf("failed to parse numeric value: %w", err)
 	}
 
-	res := queryapi.QueryResponse{}
+	res := sqlitestore.QueryResponse{}
 	if err = rcpClient.CallContext(
 		ctx,
 		&res,
@@ -783,9 +775,9 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
-	edList := []queryapi.EntityData{}
+	edList := []sqlitestore.EntityData{}
 	for _, d := range res.Data {
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
 		if err != nil {
@@ -896,7 +888,7 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -911,7 +903,7 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(entities.Data[0], &ed)
 	if err != nil {
@@ -963,7 +955,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	res := queryapi.QueryResponse{}
+	res := sqlitestore.QueryResponse{}
 	err := rpcClient.CallContext(
 		ctx,
 		&res,
@@ -978,7 +970,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("could not find any result when searching by new annotations")
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(res.Data[0], &ed)
 	if err != nil {
@@ -996,7 +988,7 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	res := queryapi.QueryResponse{}
+	res := sqlitestore.QueryResponse{}
 
 	block, err := w.GethInstance.ETHClient.BlockNumber(ctx)
 	if err != nil {
@@ -1009,7 +1001,7 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 		&res,
 		"arkiv_query",
 		`test_key = "test_value" && test_number=42`,
-		queryapi.Options{
+		sqlitestore.Options{
 			AtBlock: &atBlock,
 		},
 	)
@@ -1018,10 +1010,10 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 	}
 
 	if len(res.Data) == 0 {
-		return fmt.Errorf("could not find any result when searching by new annotations")
+		return fmt.Errorf("could not find any result when searching by annotations at the previous block")
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(res.Data[0], &ed)
 	if err != nil {
@@ -1074,7 +1066,7 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 	key := receipt.Logs[0].Topics[1]
 	rcpClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	err := rcpClient.CallContext(
 		ctx,
 		&entities,
@@ -1089,7 +1081,7 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(entities.Data))
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(entities.Data[0], &ed)
 	if err != nil {
@@ -1148,7 +1140,7 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 	w := testutil.GetWorld(ctx)
 	rcpClient := w.GethInstance.RPCClient
 
-	res := queryapi.QueryResponse{}
+	res := sqlitestore.QueryResponse{}
 	err := rcpClient.CallContext(
 		ctx,
 		&res,
@@ -1159,9 +1151,9 @@ func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocStri
 		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
-	edList := []queryapi.EntityData{}
+	edList := []sqlitestore.EntityData{}
 	for _, d := range res.Data {
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
 		if err != nil {
@@ -1315,7 +1307,7 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1338,7 +1330,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1351,7 +1343,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 	found := false
 	for _, entity := range entities.Data {
 
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err := json.Unmarshal(entity, &ed)
 		if err != nil {
@@ -1374,7 +1366,7 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1396,7 +1388,7 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1412,7 +1404,7 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 	found := false
 	for _, entity := range entities.Data {
 
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err := json.Unmarshal(entity, &ed)
 		if err != nil {
@@ -1435,7 +1427,7 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1453,7 +1445,7 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(entities.Data[0], &ed)
 	if err != nil {
@@ -1471,7 +1463,7 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	rpcClient := w.GethInstance.RPCClient
 
-	entities := queryapi.QueryResponse{}
+	entities := sqlitestore.QueryResponse{}
 	if err := rpcClient.CallContext(
 		ctx,
 		&entities,
@@ -1644,7 +1636,7 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 
 	rcpClient := w.GethInstance.RPCClient
 
-	arkivEntities := queryapi.QueryResponse{}
+	arkivEntities := sqlitestore.QueryResponse{}
 
 	if err := rcpClient.CallContext(
 		ctx,
@@ -1666,7 +1658,7 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
-	res := queryapi.QueryResponse{}
+	res := sqlitestore.QueryResponse{}
 	err := w.GethInstance.RPCClient.CallContext(
 		ctx,
 		&res,
@@ -1677,9 +1669,9 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
-	edList := []queryapi.EntityData{}
+	edList := []sqlitestore.EntityData{}
 	for _, d := range res.Data {
-		ed := queryapi.EntityData{}
+		ed := sqlitestore.EntityData{}
 
 		err = json.Unmarshal(d, &ed)
 		if err != nil {
@@ -2400,14 +2392,14 @@ func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	key := w.CreatedEntityKey
 
-	var e queryapi.QueryResponse
+	var e sqlitestore.QueryResponse
 	err := rcpClient.CallContext(
 		ctx,
 		&e,
 		"arkiv_query",
 		fmt.Sprintf(`$key = %s`, key.Hex()),
-		queryapi.Options{
-			IncludeData: &queryapi.IncludeData{
+		sqlitestore.Options{
+			IncludeData: &sqlitestore.IncludeData{
 				Key:     true,
 				Payload: true,
 				Owner:   true,
@@ -2418,7 +2410,7 @@ func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
-	ed := queryapi.EntityData{}
+	ed := sqlitestore.EntityData{}
 
 	err = json.Unmarshal(e.Data[0], &ed)
 	if err != nil {
