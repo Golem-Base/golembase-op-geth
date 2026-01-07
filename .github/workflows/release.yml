@@ -13,6 +13,10 @@ on:
         description: "Whether to set the `--force` option for `git tag`"
         type: boolean
         default: 'false'
+      make-latest:
+        description: "Set this as the latest release on the homepage"
+        type: boolean
+        default: 'true'
 
 env:
   PACKAGE_PREFIX: golembase-op-geth
@@ -127,5 +131,6 @@ jobs:
           tag: ${{ env.TAG }}
           allowUpdates: true
           generateReleaseNotes: true
+          makeLatest: ${{ github.event.inputs.make-latest == 'true' && true || false }}
           artifacts: release-assets/*/*.tar.gz,release-assets/*/*.tar.gz.sha256
           draft: true
