@@ -16,7 +16,6 @@ on:
 
 env:
   PACKAGE_PREFIX: golembase-op-geth
-  TAG: v${{ github.event.inputs.op-geth-version }}-${{ github.event.inputs.golembase-version }}
 
 jobs:
   build:
@@ -49,6 +48,13 @@ jobs:
             ext: ".exe"
 
     steps:
+      - name: Determine release tag
+        run: |
+          op_geth_version="${{ github.event.inputs.op-geth-version }}"
+          golembase_version="${{ github.event.inputs.golembase-version }}"
+          tag="$(echo -n "v$op_geth_version-$golembase_version" | sed 's/^v*\(.*\)/v\1/')"
+          echo "TAG=$tag" >> $GITHUB_ENV
+
       - name: Checkout repo
         uses: actions/checkout@v4
 
