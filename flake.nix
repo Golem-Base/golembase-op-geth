@@ -68,7 +68,7 @@
             name = "golembase";
             src = ./.;
             subPackages = [ "cmd/golembase" ];
-            vendorHash = "sha256-yjVBOQ/dnR/Us6gfSAWHsOUB1fT7jh7/IhHPz7sPi68=";
+            vendorHash = "sha256-bUaVatBLFJCwnH+RbL96vSCpcHtSibdXsI0wIdSpRAE=";
             meta = with lib; {
               description = "golembase CLI - Golem Base";
               homepage = "https://github.com/Golem-Base/golembase-op-geth";
