@@ -1,18 +1,11 @@
 name: Create Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      op-geth-version:
-        description: "The latest op-geth version in the commit history"
-        required: true
-      golembase-version:
-        description: "Golem-specific patch/suffix (e.g. 1.2)"
-        required: true
+  push:
+    tags: [ "v*" ]
 
 env:
   PACKAGE_PREFIX: golembase-op-geth
-  TAG: v${{ github.event.inputs.op-geth-version }}-${{ github.event.inputs.golembase-version }}
 
 jobs:
   build:
@@ -46,25 +39,25 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
-          go-version: "1.23.0"
+          go-version: "1.25.5"
 
       - name: Build binaries
         run: |
           mkdir -p build
-            go build -o build/geth${{ matrix.ext }} ./cmd/geth
-            go build -o build/golembase${{ matrix.ext }} ./cmd/golembase
+          go build -o build/geth${{ matrix.ext }} ./cmd/geth
+          go build -o build/golembase${{ matrix.ext }} ./cmd/golembase
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
 
       - name: Package archive
         run: |
-          pkg="${PACKAGE_PREFIX}-${TAG}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          pkg="${PACKAGE_PREFIX}-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           mkdir -p dist/$pkg
           cp build/geth* dist/$pkg/
           cp build/golembase* dist/$pkg/
@@ -86,7 +79,7 @@ jobs:
           fi
 
       - name: Upload tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: "${{ matrix.goos }}-${{ matrix.goarch }}"
           path: dist/*
@@ -96,141 +89,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           path: release-assets
 
-      - name: List assets
-        run: ls -lhaR release-assets
-
-      - name: Create Git tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch --tags
-          git tag $TAG
-          git push origin $TAG
-
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.TAG }}
-          release_name: ${{ env.TAG }}
-          draft: true
-
-      - name: Upload darwin-amd64 tarball
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: darwin-amd64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_content_type: application/gzip
-      
-      - name: Upload darwin-amd64 checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: darwin-amd64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_content_type: text/plain
-      
-      - name: Upload darwin-arm64 tarball
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: darwin-arm64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_content_type: application/gzip
-      
-      - name: Upload darwin-arm64 checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: darwin-arm64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_content_type: text/plain
-      
-      - name: Upload linux-amd64 tarball
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: linux-amd64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_content_type: application/gzip
-      
-      - name: Upload linux-amd64 checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: linux-amd64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_content_type: text/plain
-      
-      - name: Upload linux-arm64 tarball
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: linux-arm64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_content_type: application/gzip
-      
-      - name: Upload linux-arm64 checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: linux-arm64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_content_type: text/plain
-      
-      - name: Upload windows-amd64 tarball
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: windows-amd64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz
-          asset_content_type: application/gzip
-      
-      - name: Upload windows-amd64 checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_PLATFORM: windows-amd64
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-assets/${{ env.TARGET_PLATFORM }}/${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_name: ${{ env.PACKAGE_PREFIX }}-${{ env.TAG }}-${{ env.TARGET_PLATFORM }}.tar.gz.sha256
-          asset_content_type: text/plain
-            
+          generate_release_notes: true
+          append_body: true
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/*/*.tar.gz
+            release-assets/*/*.tar.gz.sha256
